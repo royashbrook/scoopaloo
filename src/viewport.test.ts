@@ -13,6 +13,16 @@ describe('shared viewport (#13)', () => {
     expect(view.originY).toBeLessThan(0)
   })
 
+  it('reserves the phone home-indicator area without changing the shared transform', () => {
+    const view = computeViewport(420, 912, 3, 34)
+    expect(view.scale).toBeCloseTo(420 / PORTRAIT_LANE_WIDTH)
+    expect(worldToClient(view, { x: WORLD.width / 2, y: WORLD.height }).y).toBeLessThan(912 - 34)
+    const client = worldToClient(view, { x: 480, y: 880 })
+    const world = clientToWorld(view, client.x, client.y)
+    expect(world.x).toBeCloseTo(480)
+    expect(world.y).toBeCloseTo(880)
+  })
+
   it('landscape wider than 3:2: extra world left and right, centered', () => {
     const view = computeViewport(1440, 900, 1)
     expect(view.scale).toBeCloseTo(900 / WORLD.height)
@@ -29,8 +39,8 @@ describe('shared viewport (#13)', () => {
   })
 
   it('round trips client to world to client at both aspect branches', () => {
-    for (const [w, h] of [[390, 844], [1440, 900], [768, 1024]]) {
-      const view = computeViewport(w, h, 2)
+    for (const [w, h, bottom] of [[390, 844, 34], [420, 912, 34], [1440, 900, 0], [768, 1024, 0]]) {
+      const view = computeViewport(w, h, 2, bottom)
       for (const point of [{ x: 10, y: 10 }, { x: w / 2, y: h / 2 }, { x: w - 1, y: h - 1 }]) {
         const world = clientToWorld(view, point.x, point.y)
         const back = worldToClient(view, world)

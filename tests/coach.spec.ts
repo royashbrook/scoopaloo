@@ -8,7 +8,7 @@ test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion:
 
 const READY_COPY = 'DRAG ANYWHERE TO MOVE · WALK INTO DASHED INGREDIENT RINGS TO PICK UP'
 const MOVE_COPY = 'DRAG ANYWHERE TO MOVE'
-const RING_COPY = 'WALK INTO INGREDIENT RING'
+const RING_COPY = 'WALK INTO VANILLA RING'
 const CANVAS_LABEL = 'Scoopaloo ice cream stand game. Drag anywhere to move, or use W A S D or arrow keys. Walk into dashed ingredient rings to pick up ingredients automatically. Hold at prep until complete.'
 const DEFAULT_SAVE = defaultSave(skinData as GameSkin)
 const PROGRESSED_SAVES = [

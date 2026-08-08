@@ -70,9 +70,14 @@ canvas.addEventListener('keydown', () => sound.unlock())
 
 // The one current viewport (#13): rendering and input both read this object and
 // nothing else, so a resize cannot leave the two disagreeing about the world.
-let viewport = computeViewport(innerWidth, innerHeight, devicePixelRatio)
+function cssPixels(name: string): number {
+  const value = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name))
+  return Number.isFinite(value) ? Math.max(0, value) : 0
+}
+
+let viewport = computeViewport(innerWidth, innerHeight, devicePixelRatio, cssPixels('--safe-bottom'))
 function fitViewport(): void {
-  viewport = computeViewport(innerWidth, innerHeight, devicePixelRatio)
+  viewport = computeViewport(innerWidth, innerHeight, devicePixelRatio, cssPixels('--safe-bottom'))
   const backing = backingSize(viewport)
   if (canvas.width !== backing.width) canvas.width = backing.width
   if (canvas.height !== backing.height) canvas.height = backing.height
@@ -227,7 +232,7 @@ function updateShiftUi(): void {
       const missing = steps.filter(step => step.have < step.need).map(step => step.label)
       recipe = {
         instruction: coachStep === 'move' ? 'DRAG ANYWHERE TO MOVE'
-          : coachStep === 'ring' ? 'WALK\u202fINTO\u202fINGREDIENT\u202fRING'
+          : coachStep === 'ring' ? `WALK INTO ${missing[0] ?? 'INGREDIENT'} RING`
             : carrying ? 'DELIVER TO COUNTER'
               : ready ? 'READY AT PREP'
                 : working ? prep.job?.assisted && progress === 0
