@@ -56,7 +56,6 @@ export type Customer = {
 }
 
 export type FlyingCoin = Point & {
-  id: number
   vx: number
   vy: number
   age: number
@@ -541,7 +540,6 @@ function updateCustomers(state: GameState, dt: number): void {
       for (let i = 0; i < 4; i++) {
         const angle = -2.7 + i * .45
         state.flyingCoins.push({
-          id: state.time * 1000 + i,
           x: register.x,
           y: register.y - 35,
           vx: Math.cos(angle) * (80 + i * 12),

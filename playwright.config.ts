@@ -7,7 +7,7 @@ export default defineConfig({
   workers: 1,
   use: { baseURL: `http://127.0.0.1:${port}` },
   webServer: {
-    command: `npm run build && npm run preview -- --port ${port}`,
+    command: `npm run build -- --mode test && npm run preview -- --port ${port}`,
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,
   },
