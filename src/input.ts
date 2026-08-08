@@ -1,6 +1,12 @@
 import type { Input, Point } from './engine'
 import { clientToWorld, type Viewport } from './viewport'
 
+const MOVEMENT_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'])
+
+function isEditable(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && (target.isContentEditable || target.matches('input, textarea, select'))
+}
+
 export class Controls {
   readonly vector: Input = { x: 0, y: 0 }
   readonly joystick = { active: false, origin: { x: 0, y: 0 }, current: { x: 0, y: 0 } }
@@ -8,8 +14,15 @@ export class Controls {
   private pointer: number | null = null
 
   constructor(private canvas: HTMLCanvasElement, private view: () => Viewport) {
-    addEventListener('keydown', event => { this.keys.add(event.key.toLowerCase()); this.readKeys(); event.preventDefault() })
+    addEventListener('keydown', event => {
+      const key = event.key.toLowerCase()
+      if (event.metaKey || event.ctrlKey || event.altKey || !MOVEMENT_KEYS.has(key) || isEditable(event.target)) return
+      this.keys.add(key)
+      this.readKeys()
+      event.preventDefault()
+    })
     addEventListener('keyup', event => { this.keys.delete(event.key.toLowerCase()); this.readKeys() })
+    addEventListener('blur', () => { this.keys.clear(); this.readKeys() })
     canvas.addEventListener('pointerdown', event => this.down(event))
     canvas.addEventListener('pointermove', event => this.move(event))
     canvas.addEventListener('pointerup', event => this.up(event))
