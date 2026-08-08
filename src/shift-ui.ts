@@ -19,6 +19,7 @@ export type ShiftUiState = {
     quantity: number
     price: number
     patience: number
+    icon?: string
   } | null
 }
 
@@ -43,7 +44,7 @@ export class ShiftUi {
       <aside class="order-ticket" data-field="ticket" aria-label="Current order" hidden>
         <div class="ticket-heading"><span>ORDER</span><strong data-field="order-quantity">×1</strong></div>
         <div class="ticket-body">
-          <div class="ticket-icon" aria-hidden="true"></div>
+          <img class="ticket-icon" data-field="order-icon" src="/assets/items/vanilla-cone.svg" alt="" />
           <strong data-field="order-label">VANILLA CONE</strong>
           <b data-field="order-price">$6</b>
         </div>
@@ -117,6 +118,8 @@ export class ShiftUi {
     this.set('order-label', state.order.label)
     this.set('order-quantity', `×${state.order.quantity}`)
     this.set('order-price', `$${state.order.price}`)
+    const icon = this.fields['order-icon'] as HTMLImageElement
+    if (state.order.icon && icon.getAttribute('src') !== state.order.icon) icon.src = state.order.icon
     const position = `translate3d(${Math.round(state.order.x)}px, ${Math.round(state.order.y)}px, 0)`
     if (ticket.style.transform !== position) ticket.style.transform = position
     this.fields.patience.style.width = `${Math.round(Math.max(0, Math.min(1, state.order.patience)) * 100)}%`

@@ -118,10 +118,7 @@ canvas {
 .ticket-icon {
   width: 42px;
   height: 55px;
-  background-image: url('/assets/scoopaloo-atlas.png');
-  background-repeat: no-repeat;
-  background-position: -17px -154px;
-  background-size: 277px 277px;
+  object-fit: contain;
 }
 .patience-track { height: 8px; background: rgb(74 59 69 / .16); }
 .patience-track i {
