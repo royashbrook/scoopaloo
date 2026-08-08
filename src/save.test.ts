@@ -68,7 +68,7 @@ describe('save v1', () => {
       unlockedStations: [
         skin.progression.startingStation,
         legacyUnlock,
-        skin.progression.startingStations[1],
+        ...skin.progression.startingStations.slice(1),
       ],
       upgrades: { shoes: 1, tray: 0, machine: 0, patience: 0 },
       skin: skin.id,

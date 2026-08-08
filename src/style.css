@@ -108,8 +108,8 @@ canvas {
   grid-template-columns: 42px 1fr auto;
   align-items: center;
   gap: .45rem;
-  min-height: 62px;
-  padding: .28rem .6rem;
+  min-height: 54px;
+  padding: .18rem .6rem;
   font-size: 14px;
   line-height: 1.05;
 }
@@ -117,7 +117,7 @@ canvas {
 .ticket-body > b { font-size: 18px; color: #13856f; }
 .ticket-icon {
   width: 42px;
-  height: 55px;
+  height: 47px;
   object-fit: contain;
 }
 .patience-track { height: 8px; background: rgb(74 59 69 / .16); }
@@ -129,27 +129,68 @@ canvas {
   transition: width .1s linear;
 }
 .order-ticket.is-wrong { border-color: #d63e64; animation: ticket-wrong .16s ease-in-out 2; }
-.ticket-warning {
-  padding: .38rem .6rem;
-  color: #fff3e6;
-  background: #d63e64;
-  font-size: 14px;
+.ticket-guidance {
+  position: relative;
+  display: grid;
+  min-height: 32px;
+  place-items: center;
+  overflow: hidden;
+  padding: .3rem .55rem .4rem;
+  color: #4a3b45;
+  background: #ffd45e;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: .055em;
   text-align: center;
 }
+.order-ticket.is-wrong .ticket-guidance { color: #fff3e6; background: #d63e64; }
+.prep-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: #13856f;
+}
+.recipe-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 47px;
+  margin: 0;
+  padding: .28rem .4rem;
+  gap: .3rem;
+  border-top: 1px solid rgb(74 59 69 / .14);
+  list-style: none;
+}
+.recipe-list li {
+  display: grid;
+  grid-template-columns: 23px minmax(0, 1fr) auto;
+  align-items: center;
+  min-width: 0;
+  gap: .2rem;
+  padding: .15rem .25rem;
+  border: 2px solid rgb(74 59 69 / .18);
+  border-radius: .55rem;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+.recipe-list li.is-current { border-color: #d39400; background: rgb(255 212 94 / .22); }
+.recipe-list li.is-done { border-color: #13856f; background: rgb(99 205 180 / .18); }
+.recipe-list img { width: 23px; height: 27px; object-fit: contain; }
+.recipe-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recipe-list b { font-size: 11px; }
 .inventory-readout { border-top: 2px solid rgb(74 59 69 / .18); }
 .inventory-readout > div {
   display: grid;
   grid-template-columns: 4.4rem 1fr;
   align-items: center;
-  min-height: 34px;
-  padding: .2rem .55rem;
+  min-height: 30px;
+  padding: .12rem .55rem;
 }
 .inventory-readout > div + div { border-top: 1px solid rgb(74 59 69 / .14); }
 .inventory-readout span { font-size: 13px; font-weight: 900; letter-spacing: .055em; }
 .inventory-readout [data-inventory] { display: flex; align-items: center; justify-content: flex-end; gap: .18rem; min-width: 0; }
-.inventory-readout img { width: 25px; height: 25px; object-fit: contain; }
+.inventory-readout img { width: 23px; height: 23px; object-fit: contain; }
 .inventory-readout b { margin-right: .28rem; font-size: 14px; }
 .inventory-readout em { font-size: 12px; font-style: normal; font-weight: 800; opacity: .55; }
 @keyframes ticket-wrong {

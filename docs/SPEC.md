@@ -39,20 +39,22 @@ toca-boca-adjacent kawaii, from the approved concept board:
 
 ## the loop
 
-1. the soft-serve machine produces cones over time (visible swirl-pour animation).
-2. player walks into the dashed circle by the machine; cones hop one-by-one onto the tray
-   (squash-stretch hop, tray dips under the weight).
-3. carry to the counter; cones slide off to the display.
-4. customers walk in with readable order tickets and patience, queue at the counter, and get
+1. three sources produce scoops, cone shells, and sundae cups over time.
+2. player collects the shared scoop plus the correct vessel shown in the recipe checklist.
+3. carry both components to the prep station and hold in its ring. an exact recipe consumes
+   atomically, visibly fills a short progress ring, and buffers the finished item for pickup.
+   incomplete or wrong ingredients remain recoverable; raw components cannot be sold.
+4. carry the finished cone or sundae to the counter; it slides into the display.
+5. customers walk in with readable order tickets and patience, queue at the counter, and get
    served only by matching stock. a walkout is visible and resets the service streak.
-5. payment: base price plus a remaining-patience tip appears as a number; coins fountain out and
+6. payment: base price plus a remaining-patience tip appears as a number; coins fountain out and
    lie on the floor near the register. the player collects by
    walking near (small magnet radius, coins fly to the player with a pop).
-6. a timed shift shows its cash goal, clock, served, missed, and streak. results show revenue,
+7. a timed shift shows its cash goal, clock, served, missed, and streak. results show revenue,
    goal, best streak, and 1-3 stars before retry, upgrade, or next day.
-7. spend between shifts to choose: more flavors, a second machine, faster machine, bigger tray,
+8. spend between shifts to choose: faster prep, faster movement, bigger tray,
    more patience, or better tips.
-8. helpers eventually automate one leg (machine→counter) so the game becomes gently idle. player is always
+9. helpers eventually automate one leg (source→prep) so the game becomes gently idle. player is always
    strictly faster than a helper, so playing beats watching.
 
 progression = shifts, order deck, goals, station graph, and upgrade values defined by the skin.
@@ -82,8 +84,9 @@ easing: everything springs or ease-out-backs. nothing moves linearly. respect
 
 ## sound
 
-- short procedural cues confirm start, production, pickup/drop, payment, wrong items, results,
-  upgrades, and day changes. cues support the numeric/visual feedback; they never replace it.
+- short procedural cues confirm start, production, pickup/drop, prep start/ready, blocked raw
+  delivery, payment, wrong items, results, upgrades, and day changes. cues support the
+  numeric/visual feedback; they never replace it.
 - web audio unlocks on the first tap for mobile autoplay rules. sound defaults on; one fixed
   button outside the portrait play lane mutes it, and that choice persists across reloads.
 - no streamed audio or sound asset requests. sound failure is silent and never blocks play.

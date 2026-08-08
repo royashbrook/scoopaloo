@@ -29,29 +29,35 @@ test('rejects wrong stock, recovers, and completes the deterministic mixed deck'
   const wrong = await page.evaluate(() => {
     const game = window.__scoopaloo
     const moveTo = (target: { x: number; y: number }) => {
-      while (game.snapshot().phase === 'playing') {
-        const player = game.snapshot().player
-        const dx = target.x - player.x
-        const dy = target.y - player.y
-        const distance = Math.hypot(dx, dy)
-        if (distance < 20) break
-        game.advance(.05, { x: dx / distance, y: dy / distance })
-      }
+      game.movePlayer(target)
     }
     const point = (values: number[]) => ({ x: values[0], y: values[1] })
+    const prepareOne = (item: string) => {
+      const recipe = game.snapshot().skin.items[item].recipe!
+      for (const [input, quantity] of Object.entries(recipe.inputs)) {
+        const current = game.snapshot()
+        const producer = Object.values(current.skin.producers).find(candidate => candidate.item === input)!
+        const target = (current.player.trayItems[input] ?? 0) + quantity
+        moveTo(point(producer.interaction))
+        for (let tick = 0; tick < 100 && game.snapshot().phase === 'playing'
+          && (game.snapshot().player.trayItems[input] ?? 0) < target; tick++) game.advance(.2)
+      }
+      const before = game.snapshot().player.trayItems[item] ?? 0
+      moveTo(point(game.snapshot().skin.prepStations[recipe.station].interaction))
+      for (let tick = 0; tick < 100 && game.snapshot().phase === 'playing'
+        && (game.snapshot().player.trayItems[item] ?? 0) <= before; tick++) game.advance(.2)
+    }
     const serveFront = () => {
       const state = game.snapshot()
       const front = state.customers.find(customer => !customer.served && !customer.missed)!
-      const source = state.skin.items[front.order.item].recipe.source
-      moveTo(point(state.skin.producers[source].interaction))
-      while (game.snapshot().phase === 'playing') {
-        const current = game.snapshot()
-        const active = current.customers.find(customer => customer.id === front.id && !customer.served && !customer.missed)
-        if (!active || (current.player.trayItems[front.order.item] ?? 0) >= front.order.quantity) break
-        game.advance(.2)
+      for (let made = 0; made < front.order.quantity && game.snapshot().phase === 'playing'; made++) {
+        prepareOne(front.order.item)
+        const carried = game.snapshot().player.trayItems[front.order.item] ?? 0
+        moveTo(point(state.skin.stations.counter.interaction))
+        for (let tick = 0; tick < 20 && game.snapshot().phase === 'playing'
+          && (game.snapshot().player.trayItems[front.order.item] ?? 0) >= carried; tick++) game.advance(.1)
       }
-      moveTo(point(state.skin.stations.counter.interaction))
-      game.advance(1.4)
+      game.advance(1)
     }
 
     game.advance(4)
@@ -59,17 +65,15 @@ test('rejects wrong stock, recovers, and completes the deterministic mixed deck'
     serveFront()
     const mixed = game.snapshot()
     const front = mixed.customers.find(customer => !customer.served && !customer.missed)!
-    const wrongItem = Object.keys(mixed.skin.items).find(item => item !== front.order.item)!
-    const wrongSource = mixed.skin.items[wrongItem].recipe.source
-    moveTo(point(mixed.skin.producers[wrongSource].interaction))
-    for (let tick = 0; tick < 100 && game.snapshot().phase === 'playing'
-      && (game.snapshot().player.trayItems[wrongItem] ?? 0) < 1; tick++) game.advance(.2)
+    const wrongItem = Object.keys(mixed.skin.items)
+      .find(item => item !== front.order.item && mixed.skin.items[item].recipe)!
+    prepareOne(wrongItem)
 
-    // Route around the other producer so the tray contains only the deliberate
-    // wrong product when proximity delivery begins.
-    moveTo({ x: 420, y: 560 })
+    // Leave every interaction ring before measuring the deliberate wrong drop.
+    moveTo({ x: 480, y: 880 })
     const before = game.snapshot()
     moveTo(point(mixed.skin.stations.counter.interaction))
+    for (let tick = 0; tick < 20 && (game.snapshot().counter.items[wrongItem] ?? 0) < 1; tick++) game.advance(.1)
     const after = game.snapshot()
     const active = after.customers.find(customer => !customer.served && !customer.missed)!
     return {
@@ -77,8 +81,6 @@ test('rejects wrong stock, recovers, and completes the deterministic mixed deck'
       after: { time: after.time, patience: active.patience, served: after.shift.served },
       frontId: front.id,
       activeId: active.id,
-      expectedItem: front.order.item,
-      wrongItem,
       wrongStock: after.counter.items[wrongItem] ?? 0,
     }
   })
@@ -90,33 +92,39 @@ test('rejects wrong stock, recovers, and completes the deterministic mixed deck'
   await expect(page.getByText('WRONG ITEM', { exact: true })).toBeVisible()
   await page.screenshot({ path: 'test-results/orders-phone-wrong.png' })
 
-  const result = await page.evaluate(({ expectedItem, wrongItem }) => {
+  const result = await page.evaluate(() => {
     const game = window.__scoopaloo
     const point = (values: number[]) => ({ x: values[0], y: values[1] })
     const moveTo = (target: { x: number; y: number }) => {
-      while (game.snapshot().phase === 'playing') {
-        const player = game.snapshot().player
-        const dx = target.x - player.x
-        const dy = target.y - player.y
-        const distance = Math.hypot(dx, dy)
-        if (distance < 20) break
-        game.advance(.05, { x: dx / distance, y: dy / distance })
+      game.movePlayer(target)
+    }
+    const prepareOne = (item: string) => {
+      const recipe = game.snapshot().skin.items[item].recipe!
+      for (const [input, quantity] of Object.entries(recipe.inputs)) {
+        const current = game.snapshot()
+        const producer = Object.values(current.skin.producers).find(candidate => candidate.item === input)!
+        const target = (current.player.trayItems[input] ?? 0) + quantity
+        moveTo(point(producer.interaction))
+        for (let tick = 0; tick < 100 && game.snapshot().phase === 'playing'
+          && (game.snapshot().player.trayItems[input] ?? 0) < target; tick++) game.advance(.2)
       }
+      const before = game.snapshot().player.trayItems[item] ?? 0
+      moveTo(point(game.snapshot().skin.prepStations[recipe.station].interaction))
+      for (let tick = 0; tick < 100 && game.snapshot().phase === 'playing'
+        && (game.snapshot().player.trayItems[item] ?? 0) <= before; tick++) game.advance(.2)
     }
     const serveFront = () => {
       const state = game.snapshot()
       const front = state.customers.find(customer => !customer.served && !customer.missed)
       if (!front) { game.advance(.1); return }
-      const source = state.skin.items[front.order.item].recipe.source
-      moveTo(point(state.skin.producers[source].interaction))
-      while (game.snapshot().phase === 'playing') {
-        const current = game.snapshot()
-        const active = current.customers.find(customer => customer.id === front.id && !customer.served && !customer.missed)
-        if (!active || (current.player.trayItems[front.order.item] ?? 0) >= front.order.quantity) break
-        game.advance(.2)
+      for (let made = 0; made < front.order.quantity && game.snapshot().phase === 'playing'; made++) {
+        prepareOne(front.order.item)
+        const carried = game.snapshot().player.trayItems[front.order.item] ?? 0
+        moveTo(point(state.skin.stations.counter.interaction))
+        for (let tick = 0; tick < 20 && game.snapshot().phase === 'playing'
+          && (game.snapshot().player.trayItems[front.order.item] ?? 0) >= carried; tick++) game.advance(.1)
       }
-      moveTo(point(state.skin.stations.counter.interaction))
-      game.advance(1.4)
+      game.advance(1)
     }
 
     const servedBefore = game.snapshot().shift.served
@@ -127,18 +135,15 @@ test('rejects wrong stock, recovers, and completes the deterministic mixed deck'
     return {
       recoveredServed: recovered.shift.served,
       servedBefore,
-      wrongStillStored: recovered.counter.items[wrongItem] ?? 0,
-      requested: expectedItem,
       phase: finished.phase,
       revenue: finished.shift.revenue,
       goal: finished.skin.days[finished.save.currentDay].cashGoal,
       served: finished.shift.served,
       stars: finished.shift.stars,
     }
-  }, { expectedItem: wrong.expectedItem, wrongItem: wrong.wrongItem })
+  })
 
   expect(result.recoveredServed).toBeGreaterThan(result.servedBefore)
-  expect(result.wrongStillStored).toBeGreaterThanOrEqual(1)
   expect(result.phase).toBe('results')
   expect(result.revenue).toBeGreaterThanOrEqual(result.goal)
   expect(result.served).toBeGreaterThanOrEqual(6)
@@ -156,27 +161,28 @@ test('shows typed tray and counter stock without status overlap at every target 
     game.advance(4)
     const state = game.snapshot()
     const point = (values: number[]) => ({ x: values[0], y: values[1] })
-    const moveTo = (target: { x: number; y: number }) => {
-      while (game.snapshot().phase === 'playing') {
-        const player = game.snapshot().player
-        const dx = target.x - player.x
-        const dy = target.y - player.y
-        const distance = Math.hypot(dx, dy)
-        if (distance < 20) break
-        game.advance(.05, { x: dx / distance, y: dy / distance })
+    const prepareOne = (item: string) => {
+      const recipe = game.snapshot().skin.items[item].recipe!
+      for (const [input, quantity] of Object.entries(recipe.inputs)) {
+        const current = game.snapshot()
+        const producer = Object.values(current.skin.producers).find(candidate => candidate.item === input)!
+        const target = (current.player.trayItems[input] ?? 0) + quantity
+        game.movePlayer(point(producer.interaction))
+        for (let tick = 0; tick < 100 && game.snapshot().phase === 'playing'
+          && (game.snapshot().player.trayItems[input] ?? 0) < target; tick++) game.advance(.2)
       }
-    }
-    const itemIds = Object.keys(state.skin.items)
-    for (const item of itemIds) {
-      const source = state.skin.items[item].recipe.source
-      moveTo(point(state.skin.producers[source].interaction))
+      const before = game.snapshot().player.trayItems[item] ?? 0
+      game.movePlayer(point(game.snapshot().skin.prepStations[recipe.station].interaction))
       for (let tick = 0; tick < 100 && game.snapshot().phase === 'playing'
-        && (game.snapshot().player.trayItems[item] ?? 0) < 1; tick++) game.advance(.2)
-      game.movePlayer({ x: 420, y: 560 })
-      game.advance(.05)
+        && (game.snapshot().player.trayItems[item] ?? 0) <= before; tick++) game.advance(.2)
     }
-    moveTo(point(state.skin.stations.counter.interaction))
-    game.movePlayer({ x: 480, y: 520 })
+    const front = state.customers.find(customer => !customer.served && !customer.missed)!
+    const wrong = Object.keys(state.skin.items).find(item => item !== front.order.item && state.skin.items[item].recipe)!
+    prepareOne(wrong)
+    game.movePlayer(point(state.skin.stations.counter.interaction))
+    for (let tick = 0; tick < 20 && (game.snapshot().player.trayItems[wrong] ?? 0) > 0; tick++) game.advance(.1)
+    prepareOne(front.order.item)
+    game.movePlayer({ x: 480, y: 880 })
     game.advance(.05)
   })
   await page.waitForTimeout(100)

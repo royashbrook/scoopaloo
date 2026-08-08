@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <title>Sundae cup</title>
+  <path d="M26 32h76l-9 61a15 15 0 0 1-15 13H50a15 15 0 0 1-15-13L26 32Z" fill="#fff3e6" stroke="#4a3b45" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M32 58h64l-5 34a13 13 0 0 1-13 11H50a13 13 0 0 1-13-11l-5-34Z" fill="#63cdb4" opacity=".35"/>
+  <path d="M23 32h82" stroke="#ff8fab" stroke-width="9" stroke-linecap="round"/>
+  <path d="M45 117h38" stroke="#4a3b45" stroke-width="6" stroke-linecap="round"/>
+</svg>

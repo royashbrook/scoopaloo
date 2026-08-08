@@ -14,7 +14,11 @@ async function expectInsideViewport(page: Page, selector: string): Promise<void>
 test('shows a readable order, times out, and freezes a missed goal', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('img', { name: 'Scoopaloo' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: '$60 GOAL' })).toBeVisible()
+  const goal = await page.evaluate(() => {
+    const state = window.__scoopaloo.snapshot()
+    return state.skin.days[state.save.currentDay].cashGoal
+  })
+  await expect(page.getByRole('heading', { name: `$${goal} GOAL` })).toBeVisible()
   const start = page.getByRole('button', { name: 'START SHIFT' })
   await expect(start).toBeVisible()
   expect((await start.boundingBox())!.height).toBeGreaterThanOrEqual(44)
@@ -25,7 +29,8 @@ test('shows a readable order, times out, and freezes a missed goal', async ({ pa
   await page.evaluate(() => window.__scoopaloo.pause(true))
   await expect(page.getByLabel('Shift status')).toBeVisible()
   await expect(page.getByLabel('Current order')).toContainText('VANILLA CONE')
-  await expect(page.getByLabel('Current order')).toContainText('$6')
+  const price = await page.evaluate(() => window.__scoopaloo.snapshot().customers[0].order.price)
+  await expect(page.getByLabel('Current order')).toContainText(`$${price}`)
   await expect(page.getByText('1:30', { exact: true })).toBeVisible()
   await expectInsideViewport(page, '.shift-hud')
   await expectInsideViewport(page, '.order-ticket')
@@ -58,16 +63,31 @@ test('earns a real goal and keeps results readable at every target size', async 
       const [x, y] = game.snapshot().skin.stations[key].interaction
       return { x, y }
     }
+    const prepare = (item: string) => {
+      const recipe = game.snapshot().skin.items[item].recipe!
+      for (const [input, quantity] of Object.entries(recipe.inputs)) {
+        const state = game.snapshot()
+        const producer = Object.values(state.skin.producers).find(candidate => candidate.item === input)!
+        const target = (state.player.trayItems[input] ?? 0) + quantity
+        game.movePlayer({ x: producer.interaction[0], y: producer.interaction[1] })
+        for (let tick = 0; tick < 100 && (game.snapshot().player.trayItems[input] ?? 0) < target; tick++) game.advance(.2)
+      }
+      const before = game.snapshot().player.trayItems[item] ?? 0
+      const prep = game.snapshot().skin.prepStations[recipe.station].interaction
+      game.movePlayer({ x: prep[0], y: prep[1] })
+      for (let tick = 0; tick < 100 && (game.snapshot().player.trayItems[item] ?? 0) <= before; tick++) game.advance(.2)
+    }
     for (let round = 0; round < 12 && game.snapshot().shift.revenue < game.snapshot().skin.days[game.snapshot().save.currentDay].cashGoal; round++) {
       const state = game.snapshot()
       const front = state.customers.find(customer => !customer.served && !customer.missed)
       if (!front) { game.advance(.1); continue }
-      const source = state.skin.items[front.order.item].recipe.source
-      const [x, y] = state.skin.producers[source].interaction
-      game.movePlayer({ x, y })
-      game.advance(4)
-      game.movePlayer(station('counter'))
-      game.advance(2)
+      for (let item = 0; item < front.order.quantity; item++) {
+        prepare(front.order.item)
+        const carried = game.snapshot().player.trayItems[front.order.item] ?? 0
+        game.movePlayer(station('counter'))
+        for (let tick = 0; tick < 20 && (game.snapshot().player.trayItems[front.order.item] ?? 0) >= carried; tick++) game.advance(.1)
+      }
+      game.advance(1)
       game.movePlayer(station('register'))
       game.advance(3)
     }

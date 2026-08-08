@@ -1,10 +1,9 @@
 import type { Point } from './engine'
 import { WORLD } from './engine'
 
-// One shared camera for rendering and input (#13). A single uniform scale fits
-// the 960x640 world into whatever CSS viewport exists; the extra axis exposes
-// MORE world (portrait above/below, wide screens left/right) instead of
-// stretching sprites or letterboxing. Pure math, no DOM: main.ts owns the DOM.
+// One shared camera for rendering and input (#13). Portrait zooms into the
+// central 600-unit play lane; landscape fits the full shop. Both branches use
+// one uniform transform, so touch and drawing cannot drift apart.
 export type Viewport = {
   cssWidth: number
   cssHeight: number
@@ -17,11 +16,15 @@ export type Viewport = {
 }
 
 export const DPR_CAP = 2
+export const PORTRAIT_LANE_WIDTH = 600
 
 export function computeViewport(cssWidth: number, cssHeight: number, devicePixelRatio = 1): Viewport {
-  const scale = Math.min(cssWidth / WORLD.width, cssHeight / WORLD.height)
+  const portrait = cssHeight >= cssWidth * 1.25
+  const frameWidth = portrait ? PORTRAIT_LANE_WIDTH : WORLD.width
+  const scale = Math.min(cssWidth / frameWidth, cssHeight / WORLD.height)
   const viewWidth = cssWidth / scale
   const viewHeight = cssHeight / scale
+  const extraHeight = Math.max(0, viewHeight - WORLD.height)
   return {
     cssWidth,
     cssHeight,
@@ -29,7 +32,10 @@ export function computeViewport(cssWidth: number, cssHeight: number, devicePixel
     viewWidth,
     viewHeight,
     originX: (WORLD.width - viewWidth) / 2,
-    originY: (WORLD.height - viewHeight) / 2,
+    // On a tall phone, bias the shop down into the lower thumb zone while the
+    // wall remains behind the DOM HUD/ticket. Tablets that fit the whole shop
+    // need no bias.
+    originY: (WORLD.height - viewHeight) / 2 - extraHeight / 3,
     dpr: Math.min(devicePixelRatio, DPR_CAP),
   }
 }

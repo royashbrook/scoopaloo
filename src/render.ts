@@ -1,7 +1,7 @@
 import { byDepth, depthScale } from './depth'
-import { inventoryTotal, type GameEvent, type GameState, type Point } from './engine'
+import { inventoryTotal, prepSeconds, type GameEvent, type GameState, type Point } from './engine'
 import type { GameSkin } from './skin'
-import { producerPoint, stationPoint } from './skin'
+import { prepPoint, producerPoint, stationPoint } from './skin'
 import type { Viewport } from './viewport'
 import { worldToClient } from './viewport'
 
@@ -48,6 +48,10 @@ export class Renderer {
       ...Object.entries(this.skin.producers).map(([source, producer]) => ({
         anchor: { x: producerPoint(this.skin, source).x, y: producer.depth },
         draw: () => this.drawProducer(state, source),
+      })),
+      ...Object.entries(this.skin.prepStations).map(([station, prep]) => ({
+        anchor: { x: prepPoint(this.skin, station).x, y: prep.depth },
+        draw: () => this.drawPrepStation(state, station),
       })),
       {
         anchor: { x: stationPoint(this.skin, 'counter').x, y: this.skin.stations.counter.depth },
@@ -169,6 +173,30 @@ export class Renderer {
     }
   }
 
+  private drawPrepStation(state: GameState, stationId: string): void {
+    const station = this.skin.prepStations[stationId]
+    const prep = state.prepStations[stationId]
+    const [x, y, width, height] = station.draw
+    const [column, row] = station.sprite
+    const point = prepPoint(this.skin, stationId)
+    this.shadow(point.x, point.y + 8, width * .42, 20)
+    this.sprite(column, row, x, y, width, height)
+    const { origin, step, size } = station.outputDisplay
+    inventoryItems(prep.outputs).slice(0, station.capacity).forEach((item, index) =>
+      this.drawItem(item, origin[0] + step[0] * index, origin[1] + step[1] * index, size[0], size[1]))
+    if (prep.job) {
+      const progress = 1 - prep.job.remaining / prepSeconds(state, prep.job.item)
+      const ctx = this.context
+      ctx.strokeStyle = this.skin.palette.mint
+      ctx.lineWidth = 9
+      ctx.beginPath()
+      ctx.arc(point.x, point.y - 92, 31, -.5 * Math.PI, (-.5 + Math.max(0, Math.min(1, progress)) * 2) * Math.PI)
+      ctx.stroke()
+      this.drawItem(prep.job.item, point.x - 18, point.y - 115, 36, 45)
+    }
+    this.pickupRing(point.x, point.y + 34, state.time)
+  }
+
   private drawPlayer(state: GameState): void {
     const player = state.player
     const stride = player.moving && !this.reducedMotion ? Math.sin(state.time * 13) : 0
@@ -234,6 +262,13 @@ export class Renderer {
       const direction = kind === 'pickup' ? -1 : 1
       const arcY = y - 45 - Math.sin(t * Math.PI) * 45 * direction
       this.drawItem(event.item, x - 22 + t * 20 * direction, arcY, 44, 52)
+    } else if (kind === 'prep-ready' && event.item) {
+      this.drawItem(event.item, x - 24, y - 95 - Math.sin(t * Math.PI) * 24, 48, 58)
+      const [column, row] = this.skin.sprites.sparkle
+      for (let i = 0; i < 3; i++) {
+        const angle = i * Math.PI * 2 / 3
+        this.sprite(column, row, x - 12 + Math.cos(angle) * (30 + 24 * t), y - 80 + Math.sin(angle) * (22 + 20 * t), 24, 24)
+      }
     } else if (kind === 'pay') {
       const [column, row] = this.skin.sprites.coin
       for (let i = 0; i < 4; i++) this.sprite(column, row, x - 14 + Math.cos(i * 2) * t * 65, y - 40 - Math.sin(t * Math.PI) * (40 + i * 5), 28, 28)

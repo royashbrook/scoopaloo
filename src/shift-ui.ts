@@ -20,6 +20,12 @@ export type ShiftUiState = {
   finalDay?: boolean
   upgrades?: UpgradeUiItem[]
   wrongItem?: boolean
+  warning?: string
+  recipe?: {
+    instruction: string
+    progress?: number | null
+    steps: { label: string; icon: string; have: number; need: number }[]
+  } | null
   trayItems?: InventoryUiItem[]
   counterItems?: InventoryUiItem[]
   order?: {
@@ -78,7 +84,11 @@ export class ShiftUi {
           <b data-field="order-price">$6</b>
         </div>
         <div class="patience-track" aria-label="Customer patience"><i data-field="patience"></i></div>
-        <div class="ticket-warning" data-field="ticket-warning" aria-live="assertive" hidden>WRONG ITEM</div>
+        <div class="ticket-guidance">
+          <span data-field="ticket-guidance" role="status" aria-live="polite" aria-atomic="true">GET THE INGREDIENTS</span>
+          <i class="prep-progress" data-field="prep-progress" role="progressbar" aria-label="Preparation progress" aria-valuemin="0" aria-valuemax="100" hidden></i>
+        </div>
+        <ol class="recipe-list" data-field="recipe-list" aria-label="Recipe"></ol>
         <div class="inventory-readout">
           <div><span>TRAY</span><div data-inventory="tray"></div></div>
           <div><span>COUNTER</span><div data-inventory="counter"></div></div>
@@ -203,8 +213,19 @@ export class ShiftUi {
     const ticket = this.fields.ticket
     const showTicket = state.phase === 'playing' && Boolean(state.order)
     ticket.hidden = !showTicket
-    ticket.classList.toggle('is-wrong', Boolean(state.wrongItem))
-    this.fields['ticket-warning'].hidden = !state.wrongItem
+    const warning = state.warning ?? (state.wrongItem ? 'WRONG ITEM' : '')
+    ticket.classList.toggle('is-wrong', Boolean(warning))
+    this.set('ticket-guidance', warning || state.recipe?.instruction || 'GET THE INGREDIENTS')
+    this.renderRecipe(state.recipe?.steps ?? [], state.order?.label ?? '')
+    const progress = state.recipe?.progress
+    const progressBar = this.fields['prep-progress']
+    progressBar.hidden = progress == null
+    if (progress != null) {
+      const percent = Math.round(Math.max(0, Math.min(1, progress)) * 100)
+      progressBar.style.width = `${percent}%`
+      progressBar.setAttribute('aria-valuenow', String(percent))
+      progressBar.setAttribute('aria-valuetext', `${percent}% prepared`)
+    }
     this.renderInventory('tray', state.trayItems ?? [])
     this.renderInventory('counter', state.counterItems ?? [])
     if (!state.order) return
@@ -293,6 +314,34 @@ export class ShiftUi {
       const count = document.createElement('b')
       count.textContent = `×${item.count}`
       return [icon, count]
+    }))
+  }
+
+  private renderRecipe(steps: NonNullable<ShiftUiState['recipe']>['steps'], label: string): void {
+    const target = this.fields['recipe-list']
+    const signature = steps.map(step => `${step.label}:${step.have}:${step.need}`).join('|')
+    if (target.dataset.signature === signature) return
+    target.dataset.signature = signature
+    target.setAttribute('aria-label', label ? `Recipe for ${label}` : 'Recipe')
+    let current = false
+    target.replaceChildren(...steps.map(step => {
+      const item = document.createElement('li')
+      const done = step.have >= step.need
+      if (done) item.className = 'is-done'
+      else if (!current) {
+        current = true
+        item.className = 'is-current'
+        item.ariaCurrent = 'step'
+      }
+      const icon = document.createElement('img')
+      icon.src = step.icon
+      icon.alt = ''
+      const name = document.createElement('span')
+      name.textContent = step.label
+      const count = document.createElement('b')
+      count.textContent = `${Math.min(step.have, step.need)}/${step.need}`
+      item.append(icon, name, count)
+      return item
     }))
   }
 }

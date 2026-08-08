@@ -8,6 +8,8 @@ const SIZES = [
   { name: 'desktop', width: 1440, height: 900 },
 ]
 
+test.use({ reducedMotion: 'reduce' })
+
 async function assertSize(page: Page, name: string): Promise<void> {
   await page.waitForTimeout(250) // let ResizeObserver + rAF settle
   const checks = await page.evaluate(() => {
@@ -16,9 +18,37 @@ async function assertSize(page: Page, name: string): Promise<void> {
     const canvas = document.querySelector('canvas')!
     const rect = canvas.getBoundingClientRect()
     const skin = game.snapshot().skin
-    const stations = Object.values(skin.stations).map(station => station.interaction)
+    const points = [
+      ...Object.values(skin.producers).map(station => ({ kind: 'source', at: station.interaction })),
+      ...Object.values(skin.prepStations).map(station => ({ kind: 'prep', at: station.interaction })),
+      ...Object.values(skin.stations).map(station => ({ kind: 'service', at: station.interaction })),
+    ].filter((point, index, all) => all.findIndex(candidate => candidate.at.join(',') === point.at.join(',')) === index)
     const dpr = Math.min(devicePixelRatio, 2)
-    const save = document.querySelector('#save-button')!.getBoundingClientRect()
+    const boxes = ['.shift-hud', '.order-ticket', '#save-button', '#sound-button'].map(selector =>
+      document.querySelector(selector)!.getBoundingClientRect())
+    const inside = (box: { left: number; top: number; right: number; bottom: number }) =>
+      box.left >= 0 && box.top >= 0 && box.right <= innerWidth && box.bottom <= innerHeight
+    const client = ([x, y]: number[]) => ({ x: (x - view.originX) * view.scale, y: (y - view.originY) * view.scale })
+    const overlapsPoint = (box: DOMRect, point: { x: number; y: number }) =>
+      point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom
+    const worldRect = (left: number, top: number, right: number, bottom: number) => ({
+      left: client([left, top]).x,
+      top: client([left, top]).y,
+      right: client([right, bottom]).x,
+      bottom: client([right, bottom]).y,
+    })
+    const counter = skin.stations.counter
+    const [counterX, counterY] = counter.interaction
+    const [drawX, drawY, drawWidth, drawHeight] = counter.draw
+    const visuals = [
+      // Includes the sprite, stock shelf, shadow, and the service progress ring.
+      worldRect(Math.min(drawX, counterX - 92), Math.min(drawY, counterY - 113),
+        Math.max(drawX + drawWidth, counterX + 70), Math.max(drawY + drawHeight, counterY + 30)),
+      // Four-person queue envelope, including each 116x132 customer sprite.
+      worldRect(counterX - 8, counterY - 117, counterX + 180, counterY + 90),
+    ]
+    const overlaps = (a: { left: number; top: number; right: number; bottom: number }, b: DOMRect) =>
+      a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
     const opaque = (x: number, y: number) => {
       const ctx = canvas.getContext('2d')!
       return ctx.getImageData(x, y, 1, 1).data[3] === 255
@@ -32,21 +62,42 @@ async function assertSize(page: Page, name: string): Promise<void> {
         opaque(0, 0), opaque(canvas.width - 1, 0),
         opaque(0, canvas.height - 1), opaque(canvas.width - 1, canvas.height - 1),
       ],
-      stationsInView: stations.every(([x, y]) =>
+      stationsInView: points.every(({ at: [x, y] }) =>
         x >= view.originX && x <= view.originX + view.viewWidth &&
         y >= view.originY && y <= view.originY + view.viewHeight),
-      saveInView: save.left >= 0 && save.top >= 0 && save.right <= innerWidth && save.bottom <= innerHeight,
+      uiInside: boxes.every(inside),
+      stationsClear: points.every(point => boxes.every(box => !overlapsPoint(box, client(point.at)))),
+      serviceVisualsInside: visuals.every(inside),
+      serviceVisualsClear: visuals.every(visual => boxes.every(box => !overlaps(visual, box))),
+      yLegs: {
+        serviceToPrep: Math.min(...points.filter(point => point.kind === 'prep').flatMap(prep =>
+          points.filter(point => point.kind === 'service').map(service => Math.abs(client(prep.at).y - client(service.at).y)))),
+        prepToSource: Math.min(...points.filter(point => point.kind === 'prep').flatMap(prep =>
+          points.filter(point => point.kind === 'source').map(source => Math.abs(client(prep.at).y - client(source.at).y)))),
+      },
     }
   })
   expect(checks.canvasBox, name).toEqual({ w: checks.window.w, h: checks.window.h })
   expect(checks.backing, name).toEqual(checks.expectedBacking)
   expect(checks.corners, name).toEqual([true, true, true, true])
   expect(checks.stationsInView, name).toBe(true)
-  expect(checks.saveInView, name).toBe(true)
+  expect(checks.uiInside, name).toBe(true)
+  expect(checks.stationsClear, name).toBe(true)
+  expect(checks.serviceVisualsInside, name).toBe(true)
+  expect(checks.serviceVisualsClear, name).toBe(true)
+  if (name === 'phone') {
+    expect(checks.yLegs.serviceToPrep).toBeGreaterThanOrEqual(120)
+    expect(checks.yLegs.prepToSource).toBeGreaterThanOrEqual(120)
+  }
 
   // the real pointer path: press each station's world point, the joystick origin
   // must land on that same world point through the live viewport
-  const stations = await page.evaluate(() => Object.values(window.__scoopaloo.snapshot().skin.stations).map(s => s.interaction))
+  const stations = await page.evaluate(() => {
+    const skin = window.__scoopaloo.snapshot().skin
+    return [...Object.values(skin.producers), ...Object.values(skin.prepStations), ...Object.values(skin.stations)]
+      .map(station => station.interaction)
+      .filter((point, index, all) => all.findIndex(candidate => candidate.join(',') === point.join(',')) === index)
+  })
   for (const [wx, wy] of stations) {
     const client = await page.evaluate(([x, y]) => {
       const view = window.__scoopaloo.viewport()
@@ -69,7 +120,7 @@ test('fills phone, tablet, and desktop with one live-resized page', async ({ pag
   await page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height })
   await page.goto('/')
   await expect(page.locator('canvas')).toBeVisible()
-  await page.evaluate(() => window.__scoopaloo.startShift())
+  await page.evaluate(() => { window.__scoopaloo.startShift(); window.__scoopaloo.pause(true) })
   for (const size of SIZES) {
     await page.setViewportSize({ width: size.width, height: size.height })
     await assertSize(page, size.name)

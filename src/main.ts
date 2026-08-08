@@ -9,6 +9,7 @@ import {
   leaveShop,
   nextDay,
   purchaseUpgrade,
+  prepSeconds,
   retryShift,
   runFor,
   startShift,
@@ -132,14 +133,16 @@ function updateSound(): void {
   for (const event of state.events) {
     if (heardEvents.has(event)) continue
     heardEvents.add(event)
-    sound.play(event.kind)
+    sound.play(event.kind === 'reject' && event.reason !== 'wrong-item' ? 'blocked' : event.kind)
   }
 }
 
 function updateShiftUi(): void {
   const day = currentDay(state)
   const front = state.customers.find(customer => !customer.served && !customer.missed)
+  const rejection = [...state.events].reverse().find(event => event.kind === 'reject')
   let order = null
+  let recipe = null
   if (front) {
     order = {
       label: front.order.label,
@@ -147,6 +150,32 @@ function updateShiftUi(): void {
       price: front.order.price,
       patience: front.patience / customerPatience(state),
       icon: front.order.icon,
+    }
+    const definition = skin.items[front.order.item]
+    const itemRecipe = definition.recipe
+    if (itemRecipe) {
+      const prep = state.prepStations[itemRecipe.station]
+      const working = prep?.job?.item === front.order.item
+      const ready = (prep?.outputs[front.order.item] ?? 0) > 0
+      const carrying = (state.player.trayItems[front.order.item] ?? 0) > 0
+      const progress = working && prep.job
+        ? 1 - prep.job.remaining / prepSeconds(state, front.order.item)
+        : null
+      const steps = Object.entries(itemRecipe.inputs).map(([item, need]) => ({
+        label: skin.items[item].label,
+        icon: skin.items[item].icon,
+        have: working || ready || carrying ? need : state.player.trayItems[item] ?? 0,
+        need,
+      }))
+      const missing = steps.filter(step => step.have < step.need).map(step => step.label)
+      recipe = {
+        instruction: carrying ? 'DELIVER TO COUNTER'
+          : ready ? 'READY AT PREP'
+            : working ? `MAKING ${front.order.label}`
+              : missing.length ? `GET ${missing.join(' + ')}` : 'HOLD AT PREP',
+        progress,
+        steps,
+      }
     }
   }
   shiftUi.update({
@@ -167,7 +196,10 @@ function updateShiftUi(): void {
     canAdvance: goalMet(state),
     finalDay: state.save.currentDay === state.skin.days.length - 1,
     upgrades: skin.upgrades.map(upgrade => upgradeUi(upgrade, day.customerPatience)),
-    wrongItem: state.events.some(event => event.kind === 'reject'),
+    warning: rejection?.reason === 'returned-raw' ? 'EXTRA RETURNED TO SOURCE'
+      : rejection?.reason === 'needs-prep' ? 'FINISH IT AT PREP'
+        : rejection ? 'WRONG ITEM' : '',
+    recipe,
     trayItems: inventoryUi(state.player.trayItems),
     counterItems: inventoryUi(state.counter.items),
     order,

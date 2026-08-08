@@ -4,6 +4,9 @@ export type SoundCue =
   | 'pour'
   | 'pay'
   | 'reject'
+  | 'prep-start'
+  | 'prep-ready'
+  | 'blocked'
   | 'start'
   | 'success'
   | 'fail'
@@ -25,6 +28,9 @@ const cues: Record<SoundCue, readonly Note[]> = {
   pour: [[420, 0, .1], [360, .07, .12]],
   pay: [[740, 0, .08, 'triangle'], [990, .07, .12, 'triangle']],
   reject: [[150, 0, .16, 'sawtooth'], [120, .12, .16, 'sawtooth']],
+  'prep-start': [[440, 0, .08, 'triangle'], [560, .07, .1, 'triangle']],
+  'prep-ready': [[523, 0, .08], [659, .06, .08], [784, .12, .14]],
+  blocked: [[190, 0, .12, 'triangle']],
   start: [[330, 0, .08], [440, .07, .08], [660, .14, .13]],
   success: [[523, 0, .1], [659, .08, .1], [784, .16, .18]],
   fail: [[330, 0, .12], [247, .1, .12], [196, .2, .18]],

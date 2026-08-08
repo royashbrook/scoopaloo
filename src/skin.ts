@@ -1,14 +1,19 @@
 import type { Point } from './engine'
 
-export type StationKey = 'machine' | 'counter' | 'register'
+export type StationKey = 'counter' | 'register'
 export type UpgradeKind = 'walkSpeed' | 'trayCapacity' | 'churnTime' | 'customerPatience'
 export type SkinOrder = { item: string; quantity: number }
+export type SkinRecipe = {
+  station: string
+  inputs: Record<string, number>
+  seconds: number
+}
 export type SkinItem = {
   label: string
   price: number
   icon: string
   color: string
-  recipe: { source: string }
+  recipe?: SkinRecipe
 }
 export type CustomerOrder = SkinOrder & Pick<SkinItem, 'label' | 'icon' | 'color'> & { price: number }
 export type SkinDay = {
@@ -24,12 +29,22 @@ export type SkinDay = {
   orderDeck: SkinOrder[]
 }
 export type ProducerStation = {
+  item: string
   interaction: number[]
   depth: number
   draw: number[]
   sprite: number[]
   stockDisplay: { origin: number[]; step: number[]; size: number[] }
   interval: number
+  capacity: number
+}
+export type PrepStation = {
+  label: string
+  interaction: number[]
+  depth: number
+  draw: number[]
+  sprite: number[]
+  outputDisplay: { origin: number[]; step: number[]; size: number[] }
   capacity: number
 }
 export type SkinUpgrade = {
@@ -46,6 +61,7 @@ export type GameSkin = {
   days: SkinDay[]
   items: Record<string, SkinItem>
   producers: Record<string, ProducerStation>
+  prepStations: Record<string, PrepStation>
   progression: { startingStation: string; startingStations: string[] }
   upgrades: SkinUpgrade[]
   palette: {
@@ -80,6 +96,11 @@ export function stationPoint(skin: GameSkin, key: StationKey): Point {
 
 export function producerPoint(skin: GameSkin, source: string): Point {
   const [x, y] = skin.producers[source].interaction
+  return { x, y }
+}
+
+export function prepPoint(skin: GameSkin, station: string): Point {
+  const [x, y] = skin.prepStations[station].interaction
   return { x, y }
 }
 

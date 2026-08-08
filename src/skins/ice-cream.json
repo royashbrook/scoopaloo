@@ -8,10 +8,10 @@
       "challenge": "OPENING DAY",
       "unlockBanner": "THE UPGRADE SHOP IS OPEN",
       "duration": 90,
-      "cashGoal": 60,
-      "starThresholds": [60, 75, 90],
-      "customerPatience": 24,
-      "spawnInterval": 3.8,
+      "cashGoal": 45,
+      "starThresholds": [45, 60, 75],
+      "customerPatience": 50,
+      "spawnInterval": 10,
       "orderDeck": [
         { "item": "vanilla-cone", "quantity": 1 },
         { "item": "vanilla-cone", "quantity": 1 },
@@ -29,10 +29,10 @@
       "challenge": "DOUBLE-SCOOP DASH",
       "unlockBanner": "FINAL DAY UNLOCKED",
       "duration": 90,
-      "cashGoal": 100,
-      "starThresholds": [100, 140, 180],
-      "customerPatience": 20,
-      "spawnInterval": 3.2,
+      "cashGoal": 60,
+      "starThresholds": [60, 75, 90],
+      "customerPatience": 42,
+      "spawnInterval": 8.5,
       "orderDeck": [
         { "item": "vanilla-cone", "quantity": 1 },
         { "item": "sundae", "quantity": 1 },
@@ -49,11 +49,11 @@
       "label": "DAY 3",
       "challenge": "SCOOP STORM",
       "unlockBanner": "SCORE CHASE UNLOCKED",
-      "duration": 90,
-      "cashGoal": 130,
-      "starThresholds": [130, 220, 310],
-      "customerPatience": 17,
-      "spawnInterval": 2.8,
+      "duration": 150,
+      "cashGoal": 70,
+      "starThresholds": [70, 85, 100],
+      "customerPatience": 40,
+      "spawnInterval": 16,
       "orderDeck": [
         { "item": "sundae", "quantity": 2 },
         { "item": "vanilla-cone", "quantity": 2 },
@@ -69,54 +69,113 @@
   "items": {
     "vanilla-cone": {
       "label": "VANILLA CONE",
-      "price": 6,
+      "price": 10,
       "icon": "/assets/items/vanilla-cone.svg",
       "color": "#FF8FAB",
       "recipe": {
-        "source": "soft-serve"
+        "station": "build-station",
+        "inputs": {
+          "soft-scoop": 1,
+          "cone-shell": 1
+        },
+        "seconds": 1
       }
     },
     "sundae": {
       "label": "SUNDAE",
-      "price": 8,
+      "price": 13,
       "icon": "/assets/items/sundae.svg",
       "color": "#63CDB4",
       "recipe": {
-        "source": "sundae-cart"
+        "station": "build-station",
+        "inputs": {
+          "soft-scoop": 1,
+          "sundae-cup": 1
+        },
+        "seconds": 1.25
       }
+    },
+    "soft-scoop": {
+      "label": "SOFT SCOOP",
+      "price": 0,
+      "icon": "/assets/items/soft-scoop.svg",
+      "color": "#FFF3E6"
+    },
+    "cone-shell": {
+      "label": "EMPTY CONE",
+      "price": 0,
+      "icon": "/assets/items/cone-shell.svg",
+      "color": "#FFD9B8"
+    },
+    "sundae-cup": {
+      "label": "SUNDAE CUP",
+      "price": 0,
+      "icon": "/assets/items/sundae-cup.svg",
+      "color": "#63CDB4"
     }
   },
   "producers": {
-    "soft-serve": {
-      "interaction": [190, 260],
-      "depth": 266,
-      "draw": [100, 105, 175, 190],
+    "soft-scoop": {
+      "item": "soft-scoop",
+      "interaction": [220, 1030],
+      "depth": 1036,
+      "draw": [130, 875, 175, 190],
       "sprite": [1, 2],
       "stockDisplay": {
-        "origin": [145, 273],
+        "origin": [175, 1043],
         "step": [34, -3],
         "size": [48, 58]
       },
       "interval": 1.7,
       "capacity": 3
     },
-    "sundae-cart": {
-      "interaction": [620, 335],
-      "depth": 352,
-      "draw": [525, 200, 245, 195],
+    "cone-shell": {
+      "item": "cone-shell",
+      "interaction": [480, 1030],
+      "depth": 1036,
+      "draw": [390, 875, 175, 190],
       "sprite": [2, 2],
       "stockDisplay": {
-        "origin": [598, 245],
-        "step": [45, 0],
-        "size": [39, 47]
+        "origin": [435, 1043],
+        "step": [34, -3],
+        "size": [48, 58]
       },
-      "interval": 2.1,
+      "interval": 1.5,
+      "capacity": 3
+    },
+    "sundae-cup": {
+      "item": "sundae-cup",
+      "interaction": [740, 1030],
+      "depth": 1036,
+      "draw": [650, 875, 175, 190],
+      "sprite": [2, 2],
+      "stockDisplay": {
+        "origin": [695, 1043],
+        "step": [34, -3],
+        "size": [48, 58]
+      },
+      "interval": 1.8,
       "capacity": 3
     }
   },
+  "prepStations": {
+    "build-station": {
+      "label": "BUILD STATION",
+      "interaction": [480, 730],
+      "depth": 740,
+      "draw": [358, 575, 245, 195],
+      "sprite": [2, 2],
+      "outputDisplay": {
+        "origin": [458, 640],
+        "step": [42, 0],
+        "size": [42, 52]
+      },
+      "capacity": 2
+    }
+  },
   "progression": {
-    "startingStation": "soft-serve",
-    "startingStations": ["soft-serve", "sundae-cart"]
+    "startingStation": "soft-scoop",
+    "startingStations": ["soft-scoop", "cone-shell", "sundae-cup", "build-station"]
   },
   "palette": {
     "strawberry": "#FF8FAB",
@@ -287,32 +346,15 @@
     ]
   },
   "stations": {
-    "machine": {
-      "interaction": [
-        190,
-        260
-      ],
-      "depth": 266,
-      "draw": [
-        100,
-        105,
-        175,
-        190
-      ],
-      "sprite": [
-        1,
-        2
-      ]
-    },
     "counter": {
       "interaction": [
-        760,
-        335
+        560,
+        545
       ],
-      "depth": 340,
+      "depth": 555,
       "draw": [
-        704,
-        235,
+        504,
+        445,
         110,
         105
       ],
@@ -323,13 +365,13 @@
     },
     "register": {
       "interaction": [
-        760,
-        335
+        560,
+        545
       ],
-      "depth": 265,
+      "depth": 480,
       "draw": [
-        704,
-        235,
+        504,
+        445,
         110,
         105
       ],
@@ -346,9 +388,9 @@
       "kind": "walkSpeed",
       "unit": "RUN SPEED",
       "levels": [
-        { "price": 35, "effect": 25 },
-        { "price": 85, "effect": 50 },
-        { "price": 150, "effect": 75 }
+        { "price": 25, "effect": 60 },
+        { "price": 35, "effect": 110 },
+        { "price": 75, "effect": 160 }
       ]
     },
     {
@@ -368,9 +410,9 @@
       "kind": "churnTime",
       "unit": "SECONDS FASTER",
       "levels": [
-        { "price": 80, "effect": 0.45 },
-        { "price": 145, "effect": 0.75 },
-        { "price": 230, "effect": 1 }
+        { "price": 80, "effect": 0.65 },
+        { "price": 145, "effect": 0.8 },
+        { "price": 230, "effect": 0.9 }
       ]
     },
     {
@@ -379,9 +421,9 @@
       "kind": "customerPatience",
       "unit": "PATIENCE (SEC)",
       "levels": [
-        { "price": 120, "effect": 1.5 },
-        { "price": 190, "effect": 3 },
-        { "price": 280, "effect": 5 }
+        { "price": 20, "effect": 8 },
+        { "price": 30, "effect": 16 },
+        { "price": 80, "effect": 24 }
       ]
     }
   ]
