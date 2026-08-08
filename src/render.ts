@@ -134,13 +134,22 @@ export class Renderer {
     ctx.lineWidth = 5
     ctx.setLineDash([12, 10])
     ctx.beginPath(); ctx.ellipse(spot.x, spot.y - 4, 82 * pulse, 34 * pulse, 0, 0, Math.PI * 2); ctx.stroke()
-    // ghost coins: one per 2 price, faded and outlined, never pulsing like real ones
+    // ghost coins: exactly ONE per coin of price, because in a zero-text economy the
+    // coins ARE the price tag and a rounded count is a lie. concentric rings pack up
+    // to 22 (the dearest declared upgrade); a pricier future skin should rethink the
+    // marker before this draws misleadingly.
     ctx.globalAlpha = .35
-    const ghosts = Math.max(3, Math.round(upgrade.price / 2))
     const [column, row] = this.skin.sprites.coin
-    for (let i = 0; i < ghosts; i++) {
-      const angle = i / ghosts * Math.PI * 2
-      this.sprite(column, row, spot.x + Math.cos(angle) * 53 - 11, spot.y - 8 + Math.sin(angle) * 23 - 11, 22, 22)
+    const rings = [{ n: 12, r: 53 }, { n: 7, r: 33 }, { n: 3, r: 14 }]
+    let remaining = Math.min(upgrade.price, 22)
+    for (const ring of rings) {
+      const count = Math.min(remaining, ring.n)
+      for (let i = 0; i < count; i++) {
+        const angle = i / count * Math.PI * 2
+        this.sprite(column, row, spot.x + Math.cos(angle) * ring.r - 10, spot.y - 8 + Math.sin(angle) * ring.r * .42 - 10, 20, 20)
+      }
+      remaining -= count
+      if (remaining === 0) break
     }
     ctx.restore()
   }

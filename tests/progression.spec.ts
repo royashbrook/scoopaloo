@@ -43,19 +43,34 @@ test('completes the wordless purchase path with all three effects', async ({ pag
     game.advance(10)
     const trayLoad = game.snapshot().player.tray
 
+    // interval: the timer only re-arms on a refill tick, and at full stock it just
+    // counts down forever, so a "less than" check on a full machine passes even
+    // with the upgrade broken. force a refill (drain one item, tick once) and read
+    // the freshly re-armed value, before and after the machine purchase.
+    const rearmedInterval = () => {
+      game.movePlayer({ x: counterSpot[0], y: counterSpot[1] })
+      game.advance(3) // empty the tray so the machine has somewhere to go
+      game.movePlayer({ x: machineSpot[0], y: machineSpot[1] })
+      game.advance(.1) // pick one item: stock drops below full
+      game.movePlayer({ x: 480, y: 600 })
+      game.advance(.05) // exactly one tick: the refill fires and re-arms the timer
+      return game.snapshot().machine.timer
+    }
+    const intervalBefore = rearmedInterval()
+
     buy(machine.spot, machine.price)
-    // interval: the timer is re-armed to the upgraded interval after a pour
-    game.movePlayer({ x: 480, y: 600 })
-    game.advance(5)
-    const timer = game.snapshot().machine.timer
+    const timer = rearmedInterval()
 
     const save = game.snapshot().save
-    return { speedBefore, speedAfter, trayLoad, timer, upgrades: save.upgrades, stations: save.unlockedStations }
+    return { speedBefore, speedAfter, trayLoad, intervalBefore, timer, upgrades: save.upgrades, stations: save.unlockedStations }
   })
 
   expect(result.upgrades).toEqual({ shoes: 1, tray: 1, machine: 1 })
   expect(result.speedAfter).toBeGreaterThan(result.speedBefore + 15) // +25 speed, tolerance for clamp
   expect(result.trayLoad).toBe(3) // capacity 2 + 1
-  expect(result.timer).toBeLessThanOrEqual(1.7 - 0.45 + 0.01)
+  // both readings are freshly re-armed values, so the delta IS the upgrade
+  expect(result.intervalBefore).toBeGreaterThan(1.6)
+  expect(result.timer).toBeGreaterThan(1.0)
+  expect(result.timer).toBeLessThanOrEqual(1.26)
   expect(result.stations).toContain('turbo-churner')
 })
