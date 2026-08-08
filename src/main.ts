@@ -17,6 +17,8 @@ declare global {
       viewport: () => Viewport
       joystickOrigin: () => Point | null
       pause: (on: boolean) => void
+      setTime: (seconds: number) => void
+      atlasReady: () => boolean
     }
   }
 }
@@ -114,4 +116,8 @@ window.__scoopaloo = {
   viewport: () => ({ ...viewport }),
   joystickOrigin: () => (controls.joystick.active ? { ...controls.joystick.origin } : null),
   pause: on => { paused = on },
+  // fixed-time control (#14): the display clock drives dash offsets and idle
+  // wiggles, so deterministic captures pin it to a chosen instant
+  setTime: seconds => { state.time = seconds },
+  atlasReady: () => renderer.atlas.complete && renderer.atlas.naturalWidth > 0,
 }

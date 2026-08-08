@@ -9,7 +9,16 @@ test.use({ reducedMotion: 'reduce' })
 test('depth scale, overlap boundary, and native-anchor interaction', async ({ page }) => {
   await page.goto('/')
   await expect(page.locator('canvas')).toBeVisible()
+  // deterministic scene (#14): pause the real clock immediately, wait for the
+  // atlas, then advance SIM time far enough that every spawned customer has
+  // converged onto its queue target, and pin the display clock to one instant.
+  // from here identical runs produce identical pixels.
   await page.evaluate(() => window.__scoopaloo.pause(true))
+  await page.waitForFunction(() => window.__scoopaloo.atlasReady())
+  await page.evaluate(() => {
+    window.__scoopaloo.advance(24)
+    window.__scoopaloo.setTime(1)
+  })
 
   // scale endpoints through the same exported helpers the renderer uses
   expect(depthScale(210)).toBe(FAR_SCALE)
@@ -18,7 +27,10 @@ test('depth scale, overlap boundary, and native-anchor interaction', async ({ pa
   const counterDepth = await page.evaluate(() => window.__scoopaloo.snapshot().skin.stations.counter.depth)
 
   const capture = async (name: string, x: number, y: number) => {
-    await page.evaluate(([px, py]) => window.__scoopaloo.movePlayer({ x: px, y: py }), [x, y])
+    await page.evaluate(([px, py]) => {
+      window.__scoopaloo.movePlayer({ x: px, y: py })
+      window.__scoopaloo.setTime(1) // re-pin: nothing between captures may drift the clock
+    }, [x, y])
     await page.waitForTimeout(120) // two frames: paused loop still renders
     await page.screenshot({ path: `test-results/depth-${name}.png` })
   }
