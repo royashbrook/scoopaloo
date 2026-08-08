@@ -16,6 +16,7 @@ declare global {
       advance: (seconds: number, input?: Point) => void
       viewport: () => Viewport
       joystickOrigin: () => Point | null
+      pause: (on: boolean) => void
     }
   }
 }
@@ -45,10 +46,14 @@ const renderer = new Renderer(canvas, skin)
 let previous = performance.now()
 let saveClock = 0
 
+// paused = deterministic evidence mode (#14): the loop keeps RENDERING so
+// captures show the live scene, but the engine only steps via the advance hook
+let paused = false
+
 function frame(now: number): void {
   const elapsed = Math.min(.05, (now - previous) / 1000)
   previous = now
-  step(state, elapsed, controls.vector)
+  if (!paused) step(state, elapsed, controls.vector)
   renderer.draw(state, controls.joystick, viewport)
   saveClock += elapsed
   if (saveClock >= 1) {
@@ -108,4 +113,5 @@ window.__scoopaloo = {
   advance: (seconds, input) => runFor(state, seconds, input),
   viewport: () => ({ ...viewport }),
   joystickOrigin: () => (controls.joystick.active ? { ...controls.joystick.origin } : null),
+  pause: on => { paused = on },
 }
