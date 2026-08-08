@@ -1,10 +1,11 @@
+import { byDepth, depthScale } from './depth'
 import type { GameState, Point } from './engine'
 import type { GameSkin, SkinUpgrade } from './skin'
 import { nextUpgrade, stationPoint, upgradeSpot } from './skin'
 import type { Viewport } from './viewport'
 
 type Joystick = { active: boolean; origin: Point; current: Point }
-type Drawable = { y: number; draw: () => void }
+type Drawable = { anchor: Point; draw: () => void }
 
 export class Renderer {
   readonly context: CanvasRenderingContext2D
@@ -28,18 +29,36 @@ export class Renderer {
     ctx.setTransform(k, 0, 0, k, -view.originX * k, -view.originY * k)
     this.drawRoom(state.time, view)
 
-    const things: Drawable[] = [
-      { y: this.skin.stations.machine.depth, draw: () => this.drawMachine(state) },
-      { y: this.skin.stations.counter.depth, draw: () => this.drawCounter(state) },
+    // every drawable is one grounded unit (#14): sprite, shadow, stock, rings all
+    // scale together around the unit's ground-contact anchor. byDepth is the ONLY
+    // ordering rule; ties keep this list's order (stations, spots, creatures).
+    const machineAnchor = { x: stationPoint(this.skin, 'machine').x, y: this.skin.stations.machine.depth }
+    const counterAnchor = { x: stationPoint(this.skin, 'counter').x, y: this.skin.stations.counter.depth }
+    const things: (Drawable & { anchor: Point })[] = [
+      { anchor: machineAnchor, draw: () => this.drawMachine(state) },
+      { anchor: counterAnchor, draw: () => this.drawCounter(state) },
       ...this.upgradeSpots(state),
-      ...state.customers.map(customer => ({ y: customer.y, draw: () => this.drawCustomer(customer.look, customer.x, customer.y, customer.served, state.time) })),
-      { y: state.player.y, draw: () => this.drawPlayer(state) },
+      ...state.customers.map(customer => ({ anchor: { x: customer.x, y: customer.y }, draw: () => this.drawCustomer(customer.look, customer.x, customer.y, customer.served, state.time) })),
+      { anchor: { x: state.player.x, y: state.player.y }, draw: () => this.drawPlayer(state) },
     ]
-    things.sort((a, b) => a.y - b.y).forEach(item => item.draw())
-    state.flyingCoins.forEach(coin => this.drawCoin(coin.x, coin.y, coin.age))
-    state.events.forEach(event => this.drawEvent(event.kind, event.x, event.y, event.age))
+    things.sort(byDepth).forEach(item => this.grounded(item.anchor, item.draw))
+    state.flyingCoins.forEach(coin => this.grounded({ x: coin.x, y: coin.y }, () => this.drawCoin(coin.x, coin.y, coin.age)))
+    state.events.forEach(event => this.grounded({ x: event.x, y: event.y }, () => this.drawEvent(event.kind, event.x, event.y, event.age)))
     this.drawHud(state, view)
     if (joystick.active) this.drawJoystick(joystick)
+  }
+
+  // translate to the ground anchor, scale by its depth, translate back, draw the
+  // whole unit. gameplay coordinates never see this transform.
+  private grounded(anchor: Point, draw: () => void): void {
+    const ctx = this.context
+    const scale = depthScale(anchor.y)
+    ctx.save()
+    ctx.translate(anchor.x, anchor.y)
+    ctx.scale(scale, scale)
+    ctx.translate(-anchor.x, -anchor.y)
+    draw()
+    ctx.restore()
   }
 
   private drawRoom(time: number, view: Viewport): void {
@@ -54,13 +73,21 @@ export class Renderer {
     ctx.fillRect(left, top, view.viewWidth, view.viewHeight)
     ctx.fillStyle = '#ffe7ca'
     ctx.fillRect(left, top, view.viewWidth, 165 - top)
+    // perspective floor (#14): rays converge on one vanishing point at the center
+    // of the wall/floor seam, rows compress toward the seam, so walking down the
+    // screen reads as walking TOWARD the counter instead of across a flat sheet.
     ctx.strokeStyle = 'rgba(255,143,171,.16)'
     ctx.lineWidth = 2
-    for (let x = Math.floor(left / 64) * 64 - 640; x < right + 640; x += 64) {
-      ctx.beginPath(); ctx.moveTo(x, 165); ctx.lineTo(x + (bottom - 165) * 1.1, bottom); ctx.stroke()
+    const vanish = { x: left + view.viewWidth / 2, y: 165 }
+    for (let footX = left - view.viewWidth; footX <= right + view.viewWidth; footX += 96) {
+      ctx.beginPath(); ctx.moveTo(vanish.x, vanish.y); ctx.lineTo(footX, bottom); ctx.stroke()
     }
-    for (let y = 165; y < bottom; y += 54) {
-      ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke()
+    let rowY = 165
+    let gap = 9
+    while (rowY < bottom) {
+      rowY += gap
+      gap *= 1.22
+      ctx.beginPath(); ctx.moveTo(left, rowY); ctx.lineTo(right, rowY); ctx.stroke()
     }
     ctx.fillStyle = this.skin.palette.strawberry
     rounded(ctx, 295, 35, 370, 92, 42)
@@ -113,12 +140,12 @@ export class Renderer {
     }
   }
 
-  private upgradeSpots(state: GameState): { y: number; draw: () => void }[] {
+  private upgradeSpots(state: GameState): Drawable[] {
     const next = nextUpgrade(this.skin, state.save.upgrades)
     return this.skin.upgrades
       .filter(upgrade => state.save.upgrades[upgrade.id] > 0 || upgrade === next)
       .map(upgrade => ({
-        y: upgradeSpot(upgrade).y,
+        anchor: upgradeSpot(upgrade),
         draw: () => this.drawUpgradeSpot(state, upgrade, state.save.upgrades[upgrade.id] > 0),
       }))
   }
