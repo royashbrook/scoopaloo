@@ -7,6 +7,7 @@ import {
   defaultSave,
   enterShop,
   goalMet,
+  helperInterval,
   inventoryTotal,
   leaveShop,
   machineInterval,
@@ -163,7 +164,7 @@ describe('kinetic service state (#16)', () => {
 })
 
 describe('three-day shop campaign (#25)', () => {
-  it('keeps days and all twelve cumulative upgrade levels in skin data', () => {
+  it('keeps days and all fifteen cumulative upgrade levels in skin data', () => {
     expect(skin.days).toHaveLength(3)
     expect(skin.days.map(day => day.cashGoal)).toEqual([45, 60, 70])
     expect(skin.days.map(day => day.customerPatience)).toEqual([50, 32, 60])
@@ -186,16 +187,16 @@ describe('three-day shop campaign (#25)', () => {
       { item: 'chocolate-sundae', quantity: 2 },
       { item: 'sundae', quantity: 2 },
     ])
-    expect(skin.upgrades.map(upgrade => upgrade.levels.length)).toEqual([3, 3, 3, 3])
-    expect(skin.upgrades.map(upgrade => upgrade.levels[0].price)).toEqual([25, 40, 80, 20])
+    expect(skin.upgrades.map(upgrade => upgrade.levels.length)).toEqual([3, 3, 3, 3, 3])
+    expect(skin.upgrades.map(upgrade => upgrade.levels[0].price)).toEqual([25, 40, 80, 20, 180])
   })
 
   it('offers independent cards and purchases only inside the shop', () => {
     const game = createGame(skin)
     game.save.coins = 48
-    const [shoes, tray, machine, patience] = skin.upgrades
-    expect([shoes, tray, machine, patience].map(upgrade => upgradeOffer(game, upgrade).affordable))
-      .toEqual([true, true, false, true])
+    const [shoes, tray, machine, patience, helper] = skin.upgrades
+    expect([shoes, tray, machine, patience, helper].map(upgrade => upgradeOffer(game, upgrade).affordable))
+      .toEqual([true, true, false, true, false])
     expect(purchaseUpgrade(game, shoes.id)).toBe(false)
 
     finishAt(game, currentDay(game).cashGoal)
@@ -667,6 +668,311 @@ describe('manual typed preparation', () => {
   })
 })
 
+describe('Pip source-to-prep helper (#34)', () => {
+  const started = (level = 1, day = 2) => {
+    const save = defaultSave(skin)
+    save.currentDay = day
+    save.upgrades.helper = level
+    const game = createGame(skin, save)
+    for (const source of Object.values(game.sources)) source.timer = 999
+    startShift(game)
+    step(game, .05)
+    return game
+  }
+
+  const setFront = (game: GameState, item: string, quantity = 1) => {
+    const product = itemFor(skin, item)
+    game.customers[0].order = {
+      item, quantity, label: product.label, price: product.price * quantity,
+      icon: product.icon, color: product.color,
+    }
+  }
+
+  const stockRecipe = (game: GameState, item: string) => {
+    const recipe = itemFor(skin, item).recipe!
+    for (const [ingredient, quantity] of Object.entries(recipe.inputs)) {
+      const source = Object.values(game.sources).find(candidate => candidate.item === ingredient)
+      if (!source) throw new Error(`locked helper ingredient: ${ingredient}`)
+      source.stock = quantity
+    }
+  }
+
+  const walkTo = (game: GameState, target: Point) => {
+    while (game.phase === 'playing') {
+      const dx = target.x - game.player.x
+      const dy = target.y - game.player.y
+      const distance = Math.hypot(dx, dy)
+      if (distance < 20) return
+      step(game, .05, { x: dx / distance, y: dy / distance })
+    }
+  }
+
+  it('keeps the helper data-driven at 0, 2, 3, and 4 batches per minute', () => {
+    expect(skin.helper).toEqual({
+      name: 'PIP', image: '/assets/helpers/pip-prep-pal.svg',
+      draw: [678, 622, 64, 78], status: [640, 588, 128, 30],
+      prepStation: 'build-station', upgradeId: 'helper',
+    })
+    expect(skin.upgrades.at(-1)).toEqual({
+      id: 'helper', name: 'PIP HELPER', kind: 'helperRate', unit: 'STAGES / MIN',
+      levels: [
+        { price: 180, effect: 2 },
+        { price: 360, effect: 3 },
+        { price: 720, effect: 4 },
+      ],
+    })
+    expect([0, 1, 2, 3].map(level => {
+      const save = defaultSave(skin)
+      save.upgrades.helper = level
+      return helperInterval(createGame(skin, save))
+    })).toEqual([null, 30, 20, 15])
+  })
+
+  it('stays inert when the selected skin has no helper', () => {
+    const custom = structuredClone(skin)
+    delete custom.helper
+    const save = defaultSave(custom)
+    save.currentDay = 2
+    save.upgrades.helper = 3
+    const game = createGame(custom, save)
+    for (const source of Object.values(game.sources)) {
+      source.stock = source.item === 'chocolate-scoop' || source.item === 'sundae-cup' ? 2 : 0
+      source.timer = 999
+    }
+    expect(helperInterval(game)).toBeNull()
+    expect(game.helper).toEqual({ targetCustomerId: null, remaining: 0 })
+
+    startShift(game)
+    runFor(game, 16)
+    expect(game.prepStations['build-station'].job).toBeNull()
+    expect(game.events.some(event => event.source === 'helper')).toBe(false)
+  })
+
+  it('ignores front recipes owned by another prep station', () => {
+    const custom = structuredClone(skin)
+    custom.prepStations['other-station'] = structuredClone(custom.prepStations['build-station'])
+    custom.items['vanilla-cone'].recipe!.station = 'other-station'
+    const save = defaultSave(custom)
+    save.upgrades.helper = 3
+    const game = createGame(custom, save)
+    for (const source of Object.values(game.sources)) source.timer = 999
+    game.sources['soft-scoop'].stock = 1
+    game.sources['cone-shell'].stock = 1
+
+    startShift(game)
+    runFor(game, 16)
+    expect(helperInterval(game)).toBe(15)
+    expect(game.helper).toEqual({ targetCustomerId: null, remaining: 15 })
+    expect(game.prepStations['build-station'].job).toBeNull()
+    expect(game.prepStations['other-station'].job).toBeNull()
+    expect([game.sources['soft-scoop'].stock, game.sources['cone-shell'].stock]).toEqual([1, 1])
+  })
+
+  it('pins a full countdown to the actual front customer id', () => {
+    const game = started()
+    const first = game.customers[0]
+    const second = { ...first, id: 99, order: { ...first.order } }
+    game.customers.push(second)
+    expect(game.helper).toEqual({ targetCustomerId: first.id, remaining: 30 })
+
+    runFor(game, 5)
+    expect(game.helper.remaining).toBeCloseTo(25)
+    first.missed = true
+    step(game, .05)
+    expect(game.helper).toEqual({ targetCustomerId: second.id, remaining: 30 })
+  })
+
+  it('atomically moves source stock into one paused assisted prep job', () => {
+    const game = started(3)
+    setFront(game, 'vanilla-cone')
+    stockRecipe(game, 'vanilla-cone')
+    game.helper.remaining = .05
+
+    step(game, .05)
+
+    expect(game.prepStations['build-station'].job).toEqual({
+      item: 'vanilla-cone', remaining: prepSeconds(game, 'vanilla-cone'), assisted: true,
+    })
+    expect(game.sources['soft-scoop'].stock).toBe(0)
+    expect(game.sources['cone-shell'].stock).toBe(0)
+    expect(game.helper).toEqual({ targetCustomerId: game.customers[0].id, remaining: 15 })
+    expect(game.events).toContainEqual(expect.objectContaining({
+      kind: 'prep-start', item: 'vanilla-cone', station: 'build-station', source: 'helper',
+    }))
+
+    const remaining = game.prepStations['build-station'].job!.remaining
+    runFor(game, .5)
+    expect(game.prepStations['build-station'].job?.remaining).toBe(remaining)
+    Object.assign(game.player, prepPoint(skin, 'build-station'))
+    runFor(game, remaining + .7)
+    expect(game.prepStations['build-station'].job).toBeNull()
+    expect(game.player.trayItems['vanilla-cone']).toBe(1)
+  })
+
+  it('waits at ready without partial consumption, catch-up credit, or manual preemption', () => {
+    const short = started(3)
+    setFront(short, 'vanilla-cone')
+    short.sources['soft-scoop'].stock = 1
+    short.sources['cone-shell'].stock = 0
+    short.helper.remaining = 0
+    runFor(short, 1)
+    expect(short.prepStations['build-station'].job).toBeNull()
+    expect(short.sources['soft-scoop'].stock).toBe(1)
+    expect(short.helper.remaining).toBe(0)
+    expect(Object.values(short.sources).every(source => source.stock >= 0)).toBe(true)
+
+    short.sources['cone-shell'].stock = 2
+    step(short, .05)
+    expect(short.prepStations['build-station'].job?.assisted).toBe(true)
+    expect(short.sources['cone-shell'].stock).toBe(1)
+    expect(short.helper.remaining).toBe(15)
+
+    const partial = started(3)
+    setFront(partial, 'vanilla-cone')
+    stockRecipe(partial, 'vanilla-cone')
+    partial.player.trayItems['soft-scoop'] = 1
+    partial.player.tray = 1
+    partial.helper.remaining = 0
+    step(partial, .05)
+    expect(partial.prepStations['build-station'].job?.assisted).toBe(true)
+    expect(partial.player.trayItems['soft-scoop']).toBe(1)
+    expect(Object.values(partial.sources).every(source => source.stock >= 0)).toBe(true)
+
+    const manual = started(3)
+    setFront(manual, 'vanilla-cone')
+    stockRecipe(manual, 'vanilla-cone')
+    Object.assign(manual.player.trayItems, { 'soft-scoop': 1, 'cone-shell': 1 })
+    manual.player.tray = 2
+    manual.helper.remaining = 0
+    step(manual, .05)
+    expect(manual.prepStations['build-station'].job).toBeNull()
+    expect(manual.sources['soft-scoop'].stock).toBe(1)
+    expect(manual.sources['cone-shell'].stock).toBe(1)
+
+    Object.assign(manual.player, prepPoint(skin, 'build-station'))
+    step(manual, .05)
+    expect(manual.prepStations['build-station'].job).toEqual({ item: 'vanilla-cone', remaining: 1 })
+    expect(manual.events.filter(event => event.kind === 'prep-start').at(-1)?.source).toBeUndefined()
+  })
+
+  it('starts a real base-speed manual job before the fastest helper', () => {
+    const game = started(3)
+    setFront(game, 'vanilla-cone')
+    stockRecipe(game, 'vanilla-cone')
+
+    walkTo(game, producerPoint(skin, 'soft-scoop'))
+    walkTo(game, producerPoint(skin, 'cone-shell'))
+    walkTo(game, prepPoint(skin, 'build-station'))
+
+    expect(walkSpeed(game)).toBe(185)
+    expect(game.time).toBeLessThan(helperInterval(game)!)
+    expect(game.prepStations['build-station'].job).toMatchObject({ item: 'vanilla-cone' })
+    expect(game.prepStations['build-station'].job?.assisted).toBeUndefined()
+    expect(game.events.filter(event => event.kind === 'prep-start').at(-1)?.source).toBeUndefined()
+  })
+
+  it('keeps staged work through a walkout and resets helper state on retry', () => {
+    const game = started(3)
+    setFront(game, 'vanilla-cone')
+    stockRecipe(game, 'vanilla-cone')
+    const front = game.customers[0]
+    game.customers.push({ ...front, id: 99, order: { ...front.order } })
+    game.helper.remaining = .05
+    step(game, .05)
+    const staged = structuredClone(game.prepStations['build-station'].job)
+
+    front.patience = .05
+    step(game, .05)
+    expect(front.missed).toBe(true)
+    expect(game.prepStations['build-station'].job).toEqual(staged)
+    expect(game.helper).toEqual({ targetCustomerId: 99, remaining: 15 })
+
+    finishAt(game, game.rules.cashGoal)
+    expect(retryShift(game)).toBe(true)
+    expect(game.helper).toEqual({ targetCustomerId: null, remaining: 15 })
+    expect(game.prepStations['build-station'].job).toBeNull()
+  })
+
+  it('counts staged quantity and respects busy, full, and locked prep paths', () => {
+    const staged = started(3)
+    setFront(staged, 'vanilla-cone', 2)
+    stockRecipe(staged, 'vanilla-cone')
+    staged.player.trayItems['vanilla-cone'] = 1
+    staged.player.tray = 1
+    staged.counter.items['vanilla-cone'] = 1
+    staged.counter.stock = 1
+    staged.helper.remaining = 0
+    step(staged, .05)
+    expect(staged.prepStations['build-station'].job).toBeNull()
+    expect(staged.sources['soft-scoop'].stock).toBe(1)
+    staged.customers[0].order.quantity = 3
+    step(staged, .05)
+    expect(staged.prepStations['build-station'].job?.assisted).toBe(true)
+
+    const busy = started(3)
+    setFront(busy, 'vanilla-cone')
+    stockRecipe(busy, 'vanilla-cone')
+    busy.prepStations['build-station'].job = { item: 'sundae', remaining: 1 }
+    busy.helper.remaining = 0
+    step(busy, .05)
+    expect(busy.sources['soft-scoop'].stock).toBe(1)
+    expect(busy.prepStations['build-station'].job?.item).toBe('sundae')
+
+    const full = started(3)
+    setFront(full, 'vanilla-cone')
+    stockRecipe(full, 'vanilla-cone')
+    full.prepStations['build-station'].outputs.sundae = 2
+    full.helper.remaining = 0
+    step(full, .05)
+    expect(full.sources['soft-scoop'].stock).toBe(1)
+    expect(full.prepStations['build-station'].job).toBeNull()
+
+    const locked = started(3, 0)
+    setFront(locked, 'chocolate-cone')
+    locked.sources['cone-shell'].stock = 1
+    locked.helper.remaining = 0
+    step(locked, .05)
+    expect(locked.sources['chocolate-scoop']).toBeUndefined()
+    expect(locked.sources['cone-shell'].stock).toBe(1)
+    expect(locked.prepStations['build-station'].job).toBeNull()
+  })
+
+  it('caps L3 cadence and makes waiting cost tips', () => {
+    const saturated = started(3)
+    setFront(saturated, 'vanilla-cone', 99)
+    saturated.customers[0].patience = 999
+    stockRecipe(saturated, 'vanilla-cone')
+    saturated.shift.remaining = 120
+    let dispatches = 0
+    while (saturated.phase === 'playing') {
+      step(saturated, .05)
+      if (!saturated.events.some(event => event.source === 'helper' && event.createdAt === saturated.time)) continue
+      dispatches++
+      saturated.prepStations['build-station'].job = null
+      stockRecipe(saturated, 'vanilla-cone')
+    }
+    expect(dispatches).toBe(8)
+
+    const manual = started(0, 0)
+    const item = manual.customers[0].order.item
+    manual.counter.items[item] = manual.customers[0].order.quantity
+    manual.counter.stock = manual.customers[0].order.quantity
+    runFor(manual, .75)
+    const manualTip = manual.events.find(event => event.kind === 'pay')?.tip
+
+    const waiting = started(1, 0)
+    stockRecipe(waiting, waiting.customers[0].order.item)
+    runFor(waiting, 30.1)
+    expect(waiting.prepStations['build-station'].job?.assisted).toBe(true)
+    Object.assign(waiting.player, prepPoint(skin, 'build-station'))
+    runFor(waiting, prepSeconds(waiting, item) + .7)
+    Object.assign(waiting.player, stationPoint(skin, 'counter'))
+    runFor(waiting, 1.5)
+    const helperTip = waiting.events.find(event => event.kind === 'pay')?.tip
+    expect([manualTip, helperTip]).toEqual([3, 2])
+  })
+})
+
 describe('open counter (#32)', () => {
   const started = (day: number) => {
     const save = defaultSave(skin)
@@ -1056,7 +1362,7 @@ describe('timed Day 1 shift (#22)', () => {
     expect(idle.shift.revenue).toBe(0)
     expect(goalMet(idle)).toBe(false)
 
-    const playGame = (game: GameState, openingDelay = 0, previewPlanned = false) => {
+    const playGame = (game: GameState, openingDelay = 0, previewPlanned = false, triageLater = false) => {
       startShift(game)
       runFor(game, openingDelay)
       const moveTo = (target: Point) => {
@@ -1087,24 +1393,42 @@ describe('timed Day 1 shift (#22)', () => {
         return source
       }
       while (game.phase === 'playing') {
-        const front = game.customers.find(customer => !customer.served && !customer.missed)
+        const waiting = game.customers.filter(customer => !customer.served && !customer.missed)
+        const front = waiting[0]
         if (!front) {
           runFor(game, .1)
           continue
         }
-        if (!previewPlanned) {
-          const recipe = itemFor(skin, front.order.item).recipe
-          if (!recipe) throw new Error(`order has no recipe: ${front.order.item}`)
-          while (game.phase === 'playing' && !front.served && !front.missed
-            && (game.counter.items[front.order.item] ?? 0) < front.order.quantity) {
+
+        const assisted = triageLater && Object.values(game.prepStations)
+          .find(prep => prep.job?.assisted)?.job
+        if (assisted) {
+          const before = game.player.trayItems[assisted.item] ?? 0
+          routeTo(prepPoint(skin, itemFor(skin, assisted.item).recipe!.station))
+          while (game.phase === 'playing' && (game.player.trayItems[assisted.item] ?? 0) <= before) runFor(game, .1)
+          routeTo(stationPoint(skin, 'counter'))
+          runFor(game, 1.2)
+          continue
+        }
+
+        const work = triageLater ? waiting.slice(1, game.rules.activeOrderWindow)[0] : front
+        if (!work) {
+          runFor(game, .1)
+          continue
+        }
+        if (!previewPlanned || triageLater) {
+          const recipe = itemFor(skin, work.order.item).recipe
+          if (!recipe) throw new Error(`order has no recipe: ${work.order.item}`)
+          while (game.phase === 'playing' && !work.served && !work.missed
+            && (game.counter.items[work.order.item] ?? 0) < work.order.quantity) {
             const recipeSize = Object.values(recipe.inputs).reduce((total, quantity) => total + quantity, 0)
-            const remaining = front.order.quantity - (game.counter.items[front.order.item] ?? 0)
+            const remaining = work.order.quantity - (game.counter.items[work.order.item] ?? 0)
             const batch = Math.min(remaining, Math.max(1, Math.floor(trayCapacity(game) / recipeSize)))
             const targets = Object.fromEntries(Object.entries(recipe.inputs)
               .map(([ingredient, quantity]) => [ingredient, (game.player.trayItems[ingredient] ?? 0) + quantity * batch]))
             for (const [ingredient] of Object.entries(recipe.inputs)) {
               const source = producerPoint(skin, sourceFor(ingredient))
-              while (game.phase === 'playing' && !front.missed
+              while (game.phase === 'playing' && !work.missed
                 && (game.player.trayItems[ingredient] ?? 0) < targets[ingredient]) {
                 routeTo(source)
                 runFor(game, .1)
@@ -1112,10 +1436,10 @@ describe('timed Day 1 shift (#22)', () => {
                 moveTo({ x: 480, y: 880 })
               }
             }
-            const before = game.player.trayItems[front.order.item] ?? 0
+            const before = game.player.trayItems[work.order.item] ?? 0
             routeTo(prepPoint(skin, recipe.station))
-            while (game.phase === 'playing' && !front.missed
-              && (game.player.trayItems[front.order.item] ?? 0) < before + batch) runFor(game, .1)
+            while (game.phase === 'playing' && !work.missed
+              && (game.player.trayItems[work.order.item] ?? 0) < before + batch) runFor(game, .1)
             routeTo(stationPoint(skin, 'counter'))
             runFor(game, batch * .7 + .4)
           }
@@ -1235,13 +1559,22 @@ describe('timed Day 1 shift (#22)', () => {
       [158, 6, 2, 2],
       [195, 7, 0, 3],
     ])
+    expect(campaign.save.coins).toBe(199)
+    expect(enterShop(campaign)).toBe(true)
+    expect(purchaseUpgrade(campaign, 'helper')).toBe(true)
+    expect(campaign.save).toMatchObject({ coins: 19, upgrades: { helper: 1 } })
 
-    const playRush = (level: number, previewPlanned: boolean, upgrades = { shoes: 3, tray: 3, machine: 3, patience: 3 }) => {
+    const playRush = (
+      level: number,
+      previewPlanned: boolean,
+      upgrades: Record<string, number> = { shoes: 3, tray: 3, machine: 3, patience: 3 },
+      triageLater = false,
+    ) => {
       const save = defaultSave(skin)
       save.currentDay = 2
       save.scoreChaseLevel = level
       Object.assign(save.upgrades, upgrades)
-      return playGame(createGame(skin, save), 0, previewPlanned)
+      return playGame(createGame(skin, save), 0, previewPlanned, triageLater)
     }
     const rushTuples = [1, 5, 9].flatMap(level => [false, true].map(previewPlanned => {
       const game = playRush(level, previewPlanned)
@@ -1261,6 +1594,12 @@ describe('timed Day 1 shift (#22)', () => {
       return [game.shift.revenue, game.shift.served, game.shift.missed, game.shift.stars]
     })).toEqual([[123, 5, 2, 0], [143, 6, 1, 1]])
 
+    const helperEntryRoutes = [0, 1].map(helper => {
+      const game = playRush(1, true, { ...entryBuild, helper }, true)
+      return [game.shift.revenue, game.shift.served, game.shift.missed, game.shift.stars]
+    })
+    expect(helperEntryRoutes).toEqual([[143, 6, 2, 1], [153, 7, 1, 1]])
+
     const lastPlannedPass = playRush(11, true)
     const firstPlannedFail = playRush(12, true)
     expect([lastPlannedPass, firstPlannedFail].map(game => [
@@ -1271,6 +1610,17 @@ describe('timed Day 1 shift (#22)', () => {
     expect(goalMet(lastPlannedPass)).toBe(true)
     expect(goalMet(firstPlannedFail)).toBe(false)
 
+    const helperMax = { shoes: 3, tray: 3, machine: 3, patience: 3, helper: 3 }
+    const helperLastPass = playRush(15, true, helperMax, true)
+    const helperFirstFail = playRush(16, true, helperMax, true)
+    expect([helperLastPass, helperFirstFail].map(game => [
+      game.rules.cashGoal, game.shift.revenue, game.shift.served, game.shift.missed, game.shift.stars,
+    ])).toEqual([[280, 296, 13, 1, 1], [290, 273, 12, 1, 0]])
+    expect(helperLastPass.rules).toMatchObject({ customerPatience: 34, spawnInterval: 5.5 })
+    expect(helperFirstFail.rules).toMatchObject({ customerPatience: 34, spawnInterval: 5.5 })
+    expect(goalMet(helperLastPass)).toBe(true)
+    expect(goalMet(helperFirstFail)).toBe(false)
+
     const camped = Object.keys(skin.producers).map(source => {
       const game = createGame(skin)
       startShift(game)
@@ -1279,5 +1629,14 @@ describe('timed Day 1 shift (#22)', () => {
       return [game.shift.revenue, game.shift.served]
     })
     expect(camped).toEqual([[0, 0], [0, 0], [0, 0], [0, 0]])
+
+    const helperCampSave = defaultSave(skin)
+    Object.assign(helperCampSave, { currentDay: 2, scoreChaseLevel: 1 })
+    helperCampSave.upgrades.helper = 3
+    const helperCamped = createGame(skin, helperCampSave)
+    startShift(helperCamped)
+    Object.assign(helperCamped.player, prepPoint(skin, 'build-station'))
+    runFor(helperCamped, helperCamped.rules.duration)
+    expect([helperCamped.shift.revenue, helperCamped.shift.served]).toEqual([0, 0])
   })
 })

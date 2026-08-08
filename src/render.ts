@@ -141,6 +141,7 @@ export class Renderer {
   readonly itemImages = new Map<string, HTMLImageElement>()
   readonly roomBackdrop = new Image()
   readonly roomFloorProp = new Image()
+  readonly helperImage?: HTMLImageElement
   reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 
   constructor(readonly canvas: HTMLCanvasElement, readonly skin: GameSkin) {
@@ -150,6 +151,10 @@ export class Renderer {
     this.atlas.src = skin.spriteSheet
     this.roomBackdrop.src = skin.room.backdrop.image
     this.roomFloorProp.src = skin.room.floorProp.image
+    if (skin.helper) {
+      this.helperImage = new Image()
+      this.helperImage.src = skin.helper.image
+    }
     for (const [id, item] of Object.entries(skin.items)) {
       const image = new Image()
       image.src = item.icon
@@ -161,6 +166,7 @@ export class Renderer {
     return this.atlas.complete && this.atlas.naturalWidth > 0
       && this.roomBackdrop.complete && this.roomBackdrop.naturalWidth > 0
       && this.roomFloorProp.complete && this.roomFloorProp.naturalWidth > 0
+      && (!this.helperImage || this.helperImage.complete && this.helperImage.naturalWidth > 0)
       && [...this.itemImages.values()].every(image => image.complete && image.naturalWidth > 0)
   }
 
@@ -194,6 +200,7 @@ export class Renderer {
         anchor: { x: stationPoint(this.skin, 'counter').x, y: this.skin.stations.counter.depth },
         draw: () => this.drawCounter(state),
       },
+      ...(this.skin.helper ? [{ anchor: roomPropAnchor(this.skin.helper.draw), draw: () => this.drawHelper(state) }] : []),
       ...state.customers.map(customer => ({
         anchor: { x: customer.x, y: customer.y },
         draw: () => this.drawCustomer(customer, state.time),
@@ -271,6 +278,36 @@ export class Renderer {
     const anchor = roomPropAnchor(draw)
     this.shadow(anchor.x, anchor.y - 2, 30, 8)
     this.context.drawImage(this.roomFloorProp, ...draw)
+  }
+
+  private drawHelper(state: GameState): void {
+    const helper = this.skin.helper
+    if (!helper || !this.helperImage?.complete || !this.helperImage.naturalWidth) return
+    const ctx = this.context
+    const enabled = (state.save.upgrades[helper.upgradeId] ?? 0) > 0
+    const anchor = roomPropAnchor(helper.draw)
+    const [x, y, width, height] = helper.draw
+
+    this.shadow(anchor.x, anchor.y + 1, 25, 8)
+    ctx.save()
+    ctx.globalAlpha = enabled ? 1 : .45
+    ctx.drawImage(this.helperImage, x, y, width, height)
+    ctx.restore()
+
+    const [pillX, pillY, pillWidth, pillHeight] = helper.status
+    rounded(ctx, pillX, pillY, pillWidth, pillHeight, 15)
+    ctx.fillStyle = enabled && state.helper.remaining <= 0 ? this.skin.palette.mint : this.skin.palette.cream
+    ctx.fill()
+    ctx.strokeStyle = this.skin.palette.cocoa
+    ctx.lineWidth = 3
+    ctx.stroke()
+    ctx.fillStyle = this.skin.palette.cocoa
+    ctx.font = '900 20px ui-rounded, system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const wait = Math.ceil(Math.max(0, state.helper.remaining))
+    const status = !enabled ? 'OFF' : wait ? `${wait}s` : 'READY'
+    ctx.fillText(`${helper.name} · ${status}`, pillX + pillWidth / 2, pillY + pillHeight / 2 + 1)
   }
 
   private drawProducer(state: GameState, sourceId: string): void {
@@ -535,6 +572,28 @@ export class Renderer {
   private drawEvent(state: GameState, event: GameEvent): void {
     const ctx = this.context
     const { kind, x, y } = event
+    if (kind === 'prep-start' && event.source === 'helper' && this.skin.helper) {
+      const age = Math.max(0, state.time - event.createdAt)
+      if (age >= MOTION_TIMES.DROP_LAND) return
+      const recipe = event.item ? this.skin.items[event.item]?.recipe : undefined
+      const target = prepPoint(this.skin, event.station ?? recipe?.station ?? this.skin.helper.prepStation)
+      const inputs = Object.keys(recipe?.inputs ?? {})
+      inputs.forEach((item, index) => {
+        const source = Object.keys(state.sources).find(id => this.skin.producers[id].item === item)
+        if (!source) return
+        const origin = producerPoint(this.skin, source)
+        const offset = (index - (inputs.length - 1) / 2) * 24
+        const pose = transferPose('drop', age,
+          { x: origin.x, y: origin.y - 42 }, { x: target.x + offset, y: target.y - 54 }, this.reducedMotion)
+        ctx.save()
+        ctx.translate(pose.x, pose.y)
+        ctx.rotate(pose.rotation)
+        ctx.scale(pose.scaleX, pose.scaleY)
+        this.drawItem(item, -15, -18, 30, 36)
+        ctx.restore()
+      })
+      return
+    }
     if ((kind === 'pickup' || kind === 'drop') && event.item) {
       const age = Math.max(0, state.time - event.createdAt)
       const duration = kind === 'pickup' ? MOTION_TIMES.PICKUP_LAND : MOTION_TIMES.DROP_LAND

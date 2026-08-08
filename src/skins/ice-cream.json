@@ -273,6 +273,14 @@
     "startingStation": "soft-scoop",
     "startingStations": ["soft-scoop", "cone-shell", "sundae-cup", "build-station"]
   },
+  "helper": {
+    "name": "PIP",
+    "image": "/assets/helpers/pip-prep-pal.svg",
+    "draw": [678, 622, 64, 78],
+    "status": [640, 588, 128, 30],
+    "prepStation": "build-station",
+    "upgradeId": "helper"
+  },
   "palette": {
     "strawberry": "#FF8FAB",
     "mint": "#63CDB4",
@@ -520,6 +528,17 @@
         { "price": 20, "effect": 8 },
         { "price": 30, "effect": 16 },
         { "price": 80, "effect": 24 }
+      ]
+    },
+    {
+      "id": "helper",
+      "name": "PIP HELPER",
+      "kind": "helperRate",
+      "unit": "STAGES / MIN",
+      "levels": [
+        { "price": 180, "effect": 2 },
+        { "price": 360, "effect": 3 },
+        { "price": 720, "effect": 4 }
       ]
     }
   ]

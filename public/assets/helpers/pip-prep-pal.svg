@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 78" role="img" aria-label="Pip, the Prep Pal">
+  <g stroke="#4a3b45" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path fill="#63cdb4" d="M14 20h36l5 9-5 8H14l-5-8z"/>
+    <path fill="#fff3e6" d="M12 35h40v27a7 7 0 0 1-7 7H19a7 7 0 0 1-7-7z"/>
+    <path fill="#ef7188" d="M10 29h44v9H10z"/>
+    <path fill="#ffd45e" d="M22 18c1-8 5-13 10-13s9 5 10 13z"/>
+    <path fill="#fff3e6" d="M26 18c1-5 3-8 6-8s5 3 6 8z"/>
+    <circle cx="25" cy="48" r="2" fill="#4a3b45" stroke="none"/>
+    <circle cx="39" cy="48" r="2" fill="#4a3b45" stroke="none"/>
+    <path fill="none" d="M27 55c3 3 7 3 10 0"/>
+    <path fill="#63cdb4" d="M18 68v4h8v-3m20-1v4h-8v-3"/>
+    <circle cx="22" cy="72" r="4" fill="#ffd45e"/>
+    <circle cx="42" cy="72" r="4" fill="#ffd45e"/>
+    <path fill="#63cdb4" d="M12 45H7v11h5m40-11h5v11h-5"/>
+  </g>
+</svg>
