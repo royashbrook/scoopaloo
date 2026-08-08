@@ -725,15 +725,14 @@ export class Renderer {
     ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill()
   }
 
-  private sprite(column: number, row: number, x: number, y: number, width: number, height: number, local = false): void {
+  private sprite(column: number, row: number, x: number, y: number, width: number, height: number): void {
     if (!this.atlas.complete || !this.atlas.naturalWidth) return
     const [rx, ry, rw, rh] = this.skin.spriteRects[row][column]
     const scaleX = this.atlas.naturalWidth / 1254
     const scaleY = this.atlas.naturalHeight / 1254
     const ctx = this.context
     ctx.save()
-    if (!local) ctx.translate(x, y)
-    else ctx.translate(x, y)
+    ctx.translate(x, y)
     ctx.drawImage(this.atlas, rx * scaleX, ry * scaleY, rw * scaleX, rh * scaleY, 0, 0, width, height)
     ctx.restore()
   }

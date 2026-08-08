@@ -396,22 +396,24 @@ if (import.meta.env.PROD && updateToast) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void probe() })
 }
 
-window.__scoopaloo = {
-  snapshot: () => structuredClone(state),
-  movePlayer: point => { state.player.x = point.x; state.player.y = point.y },
-  advance: (seconds, input) => runFor(state, seconds, input),
-  viewport: () => ({ ...viewport }),
-  joystickOrigin: () => (controls.joystick.active ? { ...controls.joystick.origin } : null),
-  pause: on => { paused = on },
-  // fixed-time control (#14): the display clock drives dash offsets and idle
-  // wiggles, so deterministic captures pin it to a chosen instant
-  setTime: seconds => { state.time = seconds },
-  atlasReady: () => renderer.assetsReady(),
-  startShift: () => {
-    previousScoreChaseBest = state.save.scoreChaseBest
-    startShift(state)
-  },
-  retryShift: () => {
-    if (retryShift(state)) previousScoreChaseBest = state.save.scoreChaseBest
-  },
+if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
+  window.__scoopaloo = {
+    snapshot: () => structuredClone(state),
+    movePlayer: point => { state.player.x = point.x; state.player.y = point.y },
+    advance: (seconds, input) => runFor(state, seconds, input),
+    viewport: () => ({ ...viewport }),
+    joystickOrigin: () => (controls.joystick.active ? { ...controls.joystick.origin } : null),
+    pause: on => { paused = on },
+    // fixed-time control (#14): the display clock drives dash offsets and idle
+    // wiggles, so deterministic captures pin it to a chosen instant
+    setTime: seconds => { state.time = seconds },
+    atlasReady: () => renderer.assetsReady(),
+    startShift: () => {
+      previousScoreChaseBest = state.save.scoreChaseBest
+      startShift(state)
+    },
+    retryShift: () => {
+      if (retryShift(state)) previousScoreChaseBest = state.save.scoreChaseBest
+    },
+  }
 }
