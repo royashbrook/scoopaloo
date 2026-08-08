@@ -95,6 +95,9 @@ canvas {
 .hud-time strong { color: #e35479; }
 .hud-money b { color: #13856f; }
 .hud-money small { font-size: 13px; }
+.hud-rule { color: #4a3b45; font-size: 12px !important; font-weight: 900; }
+.shift-ui[data-mode="rush"] .hud-stat { padding-inline: .2rem; }
+.shift-ui[data-mode="rush"] .hud-stat:nth-child(-n + 3) strong { font-size: 17px; }
 
 .combo-score {
   display: flex !important;
@@ -411,6 +414,40 @@ canvas {
 .results-card dl div + div { border-left: 2px solid rgb(74 59 69 / .18); }
 .results-card dd { margin: .25rem 0 0; font-size: 25px; font-weight: 900; }
 .result-stars { margin: .8rem 0; color: #c97f00; font-size: 18px; font-weight: 900; }
+.rush-rules {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: .8rem 0;
+  overflow: hidden;
+  border-block: 2px solid rgb(74 59 69 / .18);
+  background: rgb(255 212 94 / .12);
+}
+.rush-rules[hidden], .rush-best[hidden] { display: none; }
+.rush-rules > span { min-width: 0; padding: .48rem .15rem; text-align: center; }
+.rush-rules > span + span { border-left: 1px solid rgb(74 59 69 / .18); }
+.rush-rules b {
+  display: block;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1;
+  letter-spacing: .025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rush-rules strong { display: block; margin-top: .24rem; color: #0c6a58; font-size: 18px; line-height: 1; }
+.shift-card > p.rush-best {
+  margin: .7rem auto;
+  padding: .42rem .6rem;
+  border: 2px solid #4a3b45;
+  border-radius: .7rem;
+  background: rgb(74 59 69 / .06);
+  font-size: 13px;
+  line-height: 1.2;
+}
+.shift-card > p.rush-best.is-new { border-color: #c97f00; color: #9a6100; background: rgb(255 212 94 / .18); }
+.shift-ui[data-mode="rush"] .shift-card,
+.shift-ui[data-mode="rush"] .shop-card { border-color: #b73052; }
+.shift-ui[data-mode="rush"] .shift-card { width: min(400px, calc(100vw - 2rem)); }
 .unlock-banner {
   margin: .7rem auto;
   padding: .45rem .65rem;
@@ -450,6 +487,7 @@ canvas {
   gap: 1rem;
   margin-bottom: .9rem;
 }
+.shop-card > .rush-rules { margin: 0 0 .9rem; }
 .shop-card .card-kicker { margin: 0 0 .35rem; color: #13856f; }
 .shop-card h1 { font-size: clamp(27px, 6vw, 38px); }
 .shop-wallet {

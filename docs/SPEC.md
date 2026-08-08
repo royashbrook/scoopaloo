@@ -60,8 +60,10 @@ toca-boca-adjacent kawaii, from the approved concept board:
 8. spend between shifts to choose: faster prep, faster movement, bigger tray, or more patience.
 9. helpers eventually automate one leg (source→prep) so the game becomes gently idle. player is always
    strictly faster than a helper, so playing beats watching.
+10. clearing day 3 unlocks score chase: repeatable 120-second full-menu rush levels rotate the
+    deck, raise the cash goal, tighten arrivals/patience to fixed floors, and preserve a best score.
 
-progression = shifts, order deck, goals, station graph, and upgrade values defined by the skin.
+progression = shifts, score-chase rules, order deck, goals, station graph, and upgrade values defined by the skin.
 missing a goal means retry, never punishment or lost purchases.
 
 ## animation spec (build these, in this order)
@@ -108,7 +110,7 @@ easing: everything springs or ease-out-backs. nothing moves linearly. respect
 ## save + migration
 
 - save = versioned json in localStorage (`scoopaloo_save_v1`): coins, unlocked stations,
-  upgrade levels, current day, stars/best revenue, and skin id. small on purpose. old saves with
+  upgrade levels, current day, rush level/best, stars/best revenue, and skin id. small on purpose. old saves with
   the retired text toggle still import safely.
 - **save ticket**: settings drawer (not front and center) shows the save as a QR. the QR carries
   a LINK to `rescue.html` with the save compressed into the url fragment (deflate-raw +

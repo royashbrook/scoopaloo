@@ -71,8 +71,16 @@ function migrateSave(skin: GameSkin, parsed: Partial<SaveV1>): SaveV1 {
   }
   const dayStars = records(parsed.dayStars, value => clamp(Math.floor(value), 0, 3))
   const dayBestRevenue = records(parsed.dayBestRevenue, value => Math.max(0, value))
-  dayStars[0] = Math.max(dayStars[0], bestStars)
-  dayBestRevenue[0] = Math.max(dayBestRevenue[0], bestRevenue)
+  if (!Array.isArray(parsed.dayStars)) dayStars[0] = Math.max(dayStars[0], bestStars)
+  if (!Array.isArray(parsed.dayBestRevenue)) dayBestRevenue[0] = Math.max(dayBestRevenue[0], bestRevenue)
+  const finalDay = skin.days.length - 1
+  const completedFinalDay = dayStars[finalDay] > 0
+    || dayBestRevenue[finalDay] >= (skin.days[finalDay]?.cashGoal ?? Infinity)
+  const scoreChaseLevel = skin.scoreChase
+    ? parsed.scoreChaseLevel === undefined && completedFinalDay
+      ? 1
+      : clamp(Math.floor(finite(parsed.scoreChaseLevel)), 0, 999)
+    : 0
   return {
     version: 1,
     coins,
@@ -82,10 +90,12 @@ function migrateSave(skin: GameSkin, parsed: Partial<SaveV1>): SaveV1 {
     text: true,
     bestRevenue: Math.max(bestRevenue, ...dayBestRevenue),
     bestStars: Math.max(bestStars, ...dayStars),
-    currentDay: clamp(Math.floor(finite(parsed.currentDay)), 0, skin.days.length - 1),
+    currentDay: scoreChaseLevel > 0 ? finalDay : clamp(Math.floor(finite(parsed.currentDay)), 0, finalDay),
     lifetimeCash: Number.isFinite(parsed.lifetimeCash) ? Math.max(coins, finite(parsed.lifetimeCash)) : coins,
     dayStars,
     dayBestRevenue,
+    scoreChaseLevel,
+    scoreChaseBest: finite(parsed.scoreChaseBest),
   }
 }
 

@@ -34,6 +34,12 @@ import skinData from './skins/ice-cream.json'
 
 const skin = skinData as GameSkin
 const firstDay = skin.days[0]
+const finishAt = (game: GameState, revenue: number) => {
+  if (game.phase === 'ready') startShift(game)
+  game.shift.revenue = revenue
+  game.shift.remaining = .01
+  step(game, .01)
+}
 
 describe('ice cream stand loop', () => {
   it('takes interaction geometry from the selected skin', () => {
@@ -71,13 +77,6 @@ describe('ice cream stand loop', () => {
 })
 
 describe('three-day shop campaign (#25)', () => {
-  const finishAt = (game: GameState, revenue: number) => {
-    if (game.phase === 'ready') startShift(game)
-    game.shift.revenue = revenue
-    game.shift.remaining = .01
-    step(game, .01)
-  }
-
   it('keeps days and all twelve cumulative upgrade levels in skin data', () => {
     expect(skin.days).toHaveLength(3)
     expect(skin.days.map(day => day.cashGoal)).toEqual([45, 60, 70])
@@ -147,7 +146,7 @@ describe('three-day shop campaign (#25)', () => {
     expect(machineInterval(game)).toBe(producerInterval(game, skin.progression.startingStation))
   })
 
-  it('records each day, gates advancement through the shop, and replays Day 3', () => {
+  it('records each day, gates advancement through the shop, and unlocks score chase', () => {
     const game = createGame(skin)
     finishAt(game, skin.days[0].starThresholds[1])
     expect(game.save.dayBestRevenue).toEqual([60, 0, 0])
@@ -177,7 +176,106 @@ describe('three-day shop campaign (#25)', () => {
     finishAt(game, skin.days[2].cashGoal)
     enterShop(game)
     expect(nextDay(game)).toBe(true)
-    expect(game).toMatchObject({ phase: 'ready', save: { currentDay: 2 }, nextOrder: 1 })
+    expect(game).toMatchObject({
+      phase: 'ready',
+      save: { currentDay: 2, scoreChaseLevel: 1 },
+      rules: { kind: 'score-chase', level: 1 },
+      nextOrder: 1,
+    })
+  })
+})
+
+describe('score chase rush ladder (#27)', () => {
+  const rush = (level: number, upgrades: Record<string, number> = {}) => {
+    const save = defaultSave(skin)
+    save.currentDay = 2
+    save.scoreChaseLevel = level
+    Object.assign(save.upgrades, upgrades)
+    return createGame(skin, save)
+  }
+
+  it('derives bounded rules and rotates a stable full-menu deck', () => {
+    const baseDeck = structuredClone(skin.scoreChase!.orderDeck)
+    expect(rush(1).rules).toMatchObject({
+      kind: 'score-chase', level: 1, id: 'score-chase', label: 'RUSH',
+      challenge: 'FULL MENU SCORE CHASE', duration: 120, cashGoal: 140,
+      starThresholds: [140, 160, 180], customerPatience: 50, spawnInterval: 7.5,
+      orderDeck: baseDeck,
+    })
+    expect(rush(2).rules).toMatchObject({
+      level: 2, cashGoal: 150, starThresholds: [150, 170, 190],
+      customerPatience: 48, spawnInterval: 7.25,
+      orderDeck: [...baseDeck.slice(1), baseDeck[0]],
+    })
+    const second = rush(2)
+    expect(second.customers[0].order).toMatchObject(baseDeck[1])
+    expect(upcomingOrders(second, 2)).toMatchObject([baseDeck[2], baseDeck[3]])
+    expect(rush(9).rules).toMatchObject({
+      level: 9, cashGoal: 220, starThresholds: [220, 240, 260],
+      customerPatience: 34, spawnInterval: 5.5, orderDeck: baseDeck,
+    })
+    expect(skin.scoreChase!.orderDeck).toEqual(baseDeck)
+
+    const broken = structuredClone(skin)
+    broken.scoreChase!.orderDeck = []
+    expect(() => createGame(broken, { ...defaultSave(broken), currentDay: 2, scoreChaseLevel: 1 }))
+      .toThrow('score chase order deck is empty')
+  })
+
+  it('keeps retry on the same rush and advances exactly once after success', () => {
+    const game = rush(1)
+    finishAt(game, game.rules.cashGoal - 1)
+    enterShop(game)
+    expect(nextDay(game)).toBe(false)
+    expect(retryShift(game)).toBe(true)
+    expect(game).toMatchObject({ phase: 'playing', save: { scoreChaseLevel: 1 }, rules: { level: 1 } })
+
+    finishAt(game, game.rules.cashGoal)
+    enterShop(game)
+    expect(nextDay(game)).toBe(true)
+    expect(game).toMatchObject({
+      phase: 'ready', save: { currentDay: 2, scoreChaseLevel: 2 },
+      rules: { kind: 'score-chase', level: 2, cashGoal: 150 },
+    })
+  })
+
+  it('keeps the old final-day replay for skins without score chase', () => {
+    const campaignOnly = structuredClone(skin)
+    delete campaignOnly.scoreChase
+    const save = defaultSave(campaignOnly)
+    save.currentDay = 2
+    const game = createGame(campaignOnly, save)
+    finishAt(game, game.rules.cashGoal)
+    enterShop(game)
+    expect(nextDay(game)).toBe(true)
+    expect(game).toMatchObject({
+      save: { currentDay: 2, scoreChaseLevel: 0 },
+      rules: { kind: 'campaign', level: 3 },
+    })
+  })
+
+  it('records rush bests without changing any campaign record', () => {
+    const game = rush(1)
+    Object.assign(game.save, {
+      bestRevenue: 195,
+      bestStars: 3,
+      dayStars: [1, 2, 3],
+      dayBestRevenue: [54, 65, 195],
+      scoreChaseBest: 150,
+    })
+    const campaignRecords = structuredClone({
+      bestRevenue: game.save.bestRevenue,
+      bestStars: game.save.bestStars,
+      dayStars: game.save.dayStars,
+      dayBestRevenue: game.save.dayBestRevenue,
+    })
+    finishAt(game, 220)
+    expect(game.shift.stars).toBe(3)
+    expect(game.save).toMatchObject({ ...campaignRecords, scoreChaseBest: 220 })
+
+    retryShift(game)
+    finishAt(game, 140)
+    expect(game.save).toMatchObject({ ...campaignRecords, scoreChaseBest: 220 })
   })
 })
 
@@ -688,13 +786,13 @@ describe('timed Day 1 shift (#22)', () => {
     expect(game).toEqual(frozen)
   })
 
-  it('pins the first deterministic manual-route balance baseline', () => {
+  it('pins campaign balance and same-upgrade reactive versus preview-planned rush routes', () => {
     const idle = started()
     runFor(idle, firstDay.duration)
     expect(idle.shift.revenue).toBe(0)
     expect(goalMet(idle)).toBe(false)
 
-    const playGame = (game: GameState, openingDelay = 0) => {
+    const playGame = (game: GameState, openingDelay = 0, previewPlanned = false) => {
       startShift(game)
       runFor(game, openingDelay)
       const moveTo = (target: Point) => {
@@ -730,32 +828,87 @@ describe('timed Day 1 shift (#22)', () => {
           runFor(game, .1)
           continue
         }
-        const recipe = itemFor(skin, front.order.item).recipe
-        if (!recipe) throw new Error(`order has no recipe: ${front.order.item}`)
-        while (game.phase === 'playing' && !front.served && !front.missed
-          && (game.counter.items[front.order.item] ?? 0) < front.order.quantity) {
-          const recipeSize = Object.values(recipe.inputs).reduce((total, quantity) => total + quantity, 0)
-          const remaining = front.order.quantity - (game.counter.items[front.order.item] ?? 0)
-          const batch = Math.min(remaining, Math.max(1, Math.floor(trayCapacity(game) / recipeSize)))
-          const targets = Object.fromEntries(Object.entries(recipe.inputs)
-            .map(([ingredient, quantity]) => [ingredient, (game.player.trayItems[ingredient] ?? 0) + quantity * batch]))
-          for (const [ingredient] of Object.entries(recipe.inputs)) {
-            const source = producerPoint(skin, sourceFor(ingredient))
-            while (game.phase === 'playing' && !front.missed
-              && (game.player.trayItems[ingredient] ?? 0) < targets[ingredient]) {
-              routeTo(source)
-              runFor(game, .1)
-              if (source.y > 1000) moveTo({ x: 480, y: source.y })
-              moveTo({ x: 480, y: 880 })
+        if (!previewPlanned) {
+          const recipe = itemFor(skin, front.order.item).recipe
+          if (!recipe) throw new Error(`order has no recipe: ${front.order.item}`)
+          while (game.phase === 'playing' && !front.served && !front.missed
+            && (game.counter.items[front.order.item] ?? 0) < front.order.quantity) {
+            const recipeSize = Object.values(recipe.inputs).reduce((total, quantity) => total + quantity, 0)
+            const remaining = front.order.quantity - (game.counter.items[front.order.item] ?? 0)
+            const batch = Math.min(remaining, Math.max(1, Math.floor(trayCapacity(game) / recipeSize)))
+            const targets = Object.fromEntries(Object.entries(recipe.inputs)
+              .map(([ingredient, quantity]) => [ingredient, (game.player.trayItems[ingredient] ?? 0) + quantity * batch]))
+            for (const [ingredient] of Object.entries(recipe.inputs)) {
+              const source = producerPoint(skin, sourceFor(ingredient))
+              while (game.phase === 'playing' && !front.missed
+                && (game.player.trayItems[ingredient] ?? 0) < targets[ingredient]) {
+                routeTo(source)
+                runFor(game, .1)
+                if (source.y > 1000) moveTo({ x: 480, y: source.y })
+                moveTo({ x: 480, y: 880 })
+              }
             }
+            const before = game.player.trayItems[front.order.item] ?? 0
+            routeTo(prepPoint(skin, recipe.station))
+            while (game.phase === 'playing' && !front.missed
+              && (game.player.trayItems[front.order.item] ?? 0) < before + batch) runFor(game, .1)
+            routeTo(stationPoint(skin, 'counter'))
+            runFor(game, batch * .7 + .4)
           }
-          const before = game.player.trayItems[front.order.item] ?? 0
-          routeTo(prepPoint(skin, recipe.station))
-          while (game.phase === 'playing' && !front.missed
-            && (game.player.trayItems[front.order.item] ?? 0) < before + batch) runFor(game, .1)
-          routeTo(stationPoint(skin, 'counter'))
-          runFor(game, batch * .7 + .4)
+          runFor(game, .8)
+          continue
         }
+
+        const visible = [front.order, ...upcomingOrders(game, 2)]
+        const products: string[] = []
+        let slots = trayCapacity(game) - inventoryTotal(game.player.trayItems)
+        for (const order of visible) {
+          const recipe = itemFor(skin, order.item).recipe
+          if (!recipe) throw new Error(`order has no recipe: ${order.item}`)
+          const recipeSize = Object.values(recipe.inputs).reduce((total, quantity) => total + quantity, 0)
+          let need = order.quantity - (game.counter.items[order.item] ?? 0)
+            - products.filter(item => item === order.item).length
+          while (need-- > 0 && slots >= recipeSize) {
+            products.push(order.item)
+            slots -= recipeSize
+          }
+        }
+        if (products.length === 0) {
+          runFor(game, .1)
+          continue
+        }
+
+        const ingredients: Record<string, number> = {}
+        for (const product of products) {
+          for (const [ingredient, quantity] of Object.entries(itemFor(skin, product).recipe!.inputs)) {
+            ingredients[ingredient] = (ingredients[ingredient] ?? 0) + quantity
+          }
+        }
+        for (const [ingredient, quantity] of Object.entries(ingredients)) {
+          const target = (game.player.trayItems[ingredient] ?? 0) + quantity
+          const source = producerPoint(skin, sourceFor(ingredient))
+          while (game.phase === 'playing' && !front.missed
+            && (game.player.trayItems[ingredient] ?? 0) < target) {
+            routeTo(source)
+            runFor(game, .1)
+            if (source.y > 1000) moveTo({ x: 480, y: source.y })
+            moveTo({ x: 480, y: 880 })
+          }
+        }
+        if (front.missed) {
+          runFor(game, .8)
+          continue
+        }
+
+        const targets = Object.fromEntries([...new Set(products)].map(product => [
+          product,
+          (game.player.trayItems[product] ?? 0) + products.filter(item => item === product).length,
+        ]))
+        routeTo(prepPoint(skin, 'build-station'))
+        while (game.phase === 'playing' && !front.missed && Object.entries(targets)
+          .some(([product, quantity]) => (game.player.trayItems[product] ?? 0) < quantity)) runFor(game, .1)
+        routeTo(stationPoint(skin, 'counter'))
+        runFor(game, products.length * .7 + .4)
         runFor(game, .8)
       }
       return game
@@ -818,6 +971,41 @@ describe('timed Day 1 shift (#22)', () => {
       [135, 5, 2, 2],
       [195, 7, 0, 3],
     ])
+
+    const playRush = (level: number, previewPlanned: boolean, upgrades = { shoes: 3, tray: 3, machine: 3, patience: 3 }) => {
+      const save = defaultSave(skin)
+      save.currentDay = 2
+      save.scoreChaseLevel = level
+      Object.assign(save.upgrades, upgrades)
+      return playGame(createGame(skin, save), 0, previewPlanned)
+    }
+    const rushTuples = [1, 5, 9].flatMap(level => [false, true].map(previewPlanned => {
+      const game = playRush(level, previewPlanned)
+      return [game.shift.revenue, game.shift.served, game.shift.missed, game.shift.stars]
+    }))
+    expect(rushTuples).toEqual([
+      [217, 9, 0, 3], [253, 10, 0, 3],
+      [225, 9, 0, 3], [251, 10, 0, 3],
+      [212, 9, 0, 0], [249, 10, 0, 2],
+    ])
+    for (let index = 0; index < rushTuples.length; index += 2) {
+      expect(rushTuples[index + 1][0]).toBeGreaterThan(rushTuples[index][0])
+    }
+    const entryBuild = { shoes: 1, tray: 1, machine: 0, patience: 2 }
+    expect([false, true].map(previewPlanned => {
+      const game = playRush(1, previewPlanned, entryBuild)
+      return [game.shift.revenue, game.shift.served, game.shift.missed, game.shift.stars]
+    })).toEqual([[123, 5, 2, 0], [143, 6, 1, 1]])
+
+    const lastPlannedPass = playRush(11, true)
+    const firstPlannedFail = playRush(12, true)
+    expect([lastPlannedPass, firstPlannedFail].map(game => [
+      game.rules.cashGoal, game.shift.revenue, game.shift.served, game.shift.missed, game.shift.stars,
+    ])).toEqual([[240, 251, 10, 0, 1], [250, 233, 9, 0, 0]])
+    expect(lastPlannedPass.rules).toMatchObject({ customerPatience: 34, spawnInterval: 5.5 })
+    expect(firstPlannedFail.rules).toMatchObject({ customerPatience: 34, spawnInterval: 5.5 })
+    expect(goalMet(lastPlannedPass)).toBe(true)
+    expect(goalMet(firstPlannedFail)).toBe(false)
 
     const camped = Object.keys(skin.producers).map(source => {
       const game = createGame(skin)

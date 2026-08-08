@@ -3,7 +3,6 @@ import './style.css'
 import {
   createGame,
   comboBonus,
-  currentDay,
   customerPatience,
   enterShop,
   goalMet,
@@ -54,6 +53,7 @@ const canvas: HTMLCanvasElement = found
 
 const skin = skinData as GameSkin
 const state = createGame(skin, loadSave(skin))
+let previousScoreChaseBest = state.save.scoreChaseBest
 const sound = new GameSound()
 canvas.addEventListener('pointerdown', () => sound.unlock(), { passive: true })
 canvas.addEventListener('keydown', () => sound.unlock())
@@ -78,12 +78,14 @@ if (!shiftRoot) throw new Error('shift UI missing')
 const shiftUi = new ShiftUi(shiftRoot, {
   start: () => {
     sound.unlock()
+    previousScoreChaseBest = state.save.scoreChaseBest
     startShift(state)
     sound.play('start')
   },
   retry: () => {
     sound.unlock()
     if (retryShift(state)) {
+      previousScoreChaseBest = state.save.scoreChaseBest
       sound.play('start')
       storeSave(state.save)
     }
@@ -93,6 +95,7 @@ const shiftUi = new ShiftUi(shiftRoot, {
   next: () => {
     sound.unlock()
     if (nextDay(state)) {
+      previousScoreChaseBest = state.save.scoreChaseBest
       sound.play('next')
       storeSave(state.save)
     }
@@ -163,7 +166,7 @@ function serviceStake(customer: Customer): { tip: number; combo: number; payout:
 }
 
 function updateShiftUi(): void {
-  const day = currentDay(state)
+  const rules = state.rules
   const waitingCustomers = state.customers.filter(customer => !customer.served && !customer.missed)
   const front = waitingCustomers[0]
   const rejection = [...state.events].reverse().find(event => event.kind === 'reject')
@@ -216,15 +219,22 @@ function updateShiftUi(): void {
   }
   shiftUi.update({
     phase: state.phase,
-    day: day.label,
-    challenge: day.challenge,
-    readyBanner: state.save.currentDay > 0
-      ? state.skin.days[state.save.currentDay - 1]?.unlockBanner
-      : '',
-    resultBanner: goalMet(state) ? day.unlockBanner : '',
+    day: rules.kind === 'score-chase' ? `${rules.label} ${rules.level}` : rules.label,
+    challenge: rules.challenge,
+    readyBanner: rules.kind === 'score-chase'
+      ? rules.level === 1 ? state.skin.days.at(-1)?.unlockBanner : `RUSH ${rules.level} UNLOCKED`
+      : state.save.currentDay > 0 ? state.skin.days[state.save.currentDay - 1]?.unlockBanner : '',
+    resultBanner: goalMet(state) ? rules.unlockBanner : '',
+    rush: rules.kind === 'score-chase' ? {
+      level: rules.level,
+      best: state.save.scoreChaseBest,
+      previousBest: previousScoreChaseBest,
+      arrivalSeconds: rules.spawnInterval,
+      patienceSeconds: customerPatience(state),
+    } : undefined,
     secondsRemaining: state.shift.remaining,
     revenue: state.shift.revenue,
-    goal: day.cashGoal,
+    goal: rules.cashGoal,
     served: state.shift.served,
     missed: state.shift.missed,
     streak: state.shift.streak,
@@ -241,8 +251,10 @@ function updateShiftUi(): void {
     success: goalMet(state),
     cash: state.save.coins,
     canAdvance: goalMet(state),
-    finalDay: state.save.currentDay === state.skin.days.length - 1,
-    upgrades: skin.upgrades.map(upgrade => upgradeUi(upgrade, day.customerPatience)),
+    finalDay: rules.kind === 'campaign' && rules.level === state.skin.days.length,
+    canStartScoreChase: rules.kind === 'campaign'
+      && rules.level === state.skin.days.length && Boolean(state.skin.scoreChase),
+    upgrades: skin.upgrades.map(upgrade => upgradeUi(upgrade, rules.customerPatience)),
     warning: rejection?.reason === 'returned-raw' ? 'EXTRA RETURNED TO SOURCE'
       : rejection?.reason === 'needs-prep' ? 'FINISH IT AT PREP'
         : rejection ? 'WRONG ITEM' : '',
@@ -362,6 +374,11 @@ window.__scoopaloo = {
   // wiggles, so deterministic captures pin it to a chosen instant
   setTime: seconds => { state.time = seconds },
   atlasReady: () => renderer.assetsReady(),
-  startShift: () => startShift(state),
-  retryShift: () => retryShift(state),
+  startShift: () => {
+    previousScoreChaseBest = state.save.scoreChaseBest
+    startShift(state)
+  },
+  retryShift: () => {
+    if (retryShift(state)) previousScoreChaseBest = state.save.scoreChaseBest
+  },
 }

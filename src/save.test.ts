@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultSave } from './engine'
+import { createGame, defaultSave, startShift, step } from './engine'
 import { decodeSave, encodeSave, loadSave, SAVE_KEY, storeSave } from './save'
 import type { GameSkin } from './skin'
 import skinData from './skins/ice-cream.json'
@@ -21,7 +21,15 @@ describe('save v1', () => {
   })
 
   it('round trips an sc1 deflate-raw code', async () => {
-    const save = { ...defaultSave(skin), coins: 21, lifetimeCash: 21, unlockedStations: [...skin.progression.startingStations, legacyUnlock] }
+    const save = {
+      ...defaultSave(skin),
+      coins: 21,
+      lifetimeCash: 21,
+      currentDay: 2,
+      scoreChaseLevel: 5,
+      scoreChaseBest: 248,
+      unlockedStations: [...skin.progression.startingStations, legacyUnlock],
+    }
     const code = await encodeSave(save)
     expect(code.startsWith('sc1.')).toBe(true)
     expect(await decodeSave(skin, code)).toEqual(save)
@@ -45,6 +53,8 @@ describe('save v1', () => {
       text: true,
       bestRevenue: 0,
       bestStars: 0,
+      scoreChaseLevel: 0,
+      scoreChaseBest: 0,
     })
   })
 
@@ -79,6 +89,8 @@ describe('save v1', () => {
       lifetimeCash: 37,
       dayStars: [0, 0, 0],
       dayBestRevenue: [0, 0, 0],
+      scoreChaseLevel: 0,
+      scoreChaseBest: 0,
     })
   })
 
@@ -104,5 +116,87 @@ describe('save v1', () => {
       upgrades: { shoes: 3, tray: 0, machine: 1, patience: 0, 'retired-upgrade': 2 },
     })
     expect(restored.unlockedStations).toEqual(['retired-cart', ...skin.progression.startingStations])
+  })
+
+  it('backfills only proven legacy Day 3 completion into Rush 1', () => {
+    const restore = (value: object) => loadSave(skin, {
+      getItem: () => JSON.stringify({
+        ...defaultSave(skin),
+        scoreChaseLevel: undefined,
+        scoreChaseBest: undefined,
+        ...value,
+      }),
+    })
+
+    expect(restore({ currentDay: 2 }).scoreChaseLevel).toBe(0)
+    expect(restore({ currentDay: 2, dayStars: [1, 2, 1] })).toMatchObject({
+      currentDay: 2,
+      scoreChaseLevel: 1,
+      scoreChaseBest: 0,
+    })
+    expect(restore({ currentDay: 0, dayBestRevenue: [0, 0, skin.days[2].cashGoal] })).toMatchObject({
+      currentDay: 2,
+      scoreChaseLevel: 1,
+    })
+
+    const explicitCampaign = restore({ currentDay: 2, dayStars: [1, 2, 1], scoreChaseLevel: 0 })
+    expect(explicitCampaign.scoreChaseLevel).toBe(0)
+  })
+
+  it('sanitizes corrupt rush fields without losing unknown history', () => {
+    const restored = loadSave(skin, { getItem: () => JSON.stringify({
+      ...defaultSave(skin),
+      unlockedStations: ['retired-cart'],
+      upgrades: { ...defaultSave(skin).upgrades, 'retired-upgrade': 2 },
+      scoreChaseLevel: -9,
+      scoreChaseBest: -400,
+    }) })
+    expect(restored).toMatchObject({
+      scoreChaseLevel: 0,
+      scoreChaseBest: 0,
+      upgrades: { 'retired-upgrade': 2 },
+    })
+    expect(restored.unlockedStations).toEqual(['retired-cart', ...skin.progression.startingStations])
+
+    const overflow = JSON.stringify(defaultSave(skin))
+      .replace('"scoreChaseLevel":0', '"scoreChaseLevel":1e999')
+      .replace('"scoreChaseBest":0', '"scoreChaseBest":1e999')
+    expect(loadSave(skin, { getItem: () => overflow })).toMatchObject({
+      scoreChaseLevel: 0,
+      scoreChaseBest: 0,
+    })
+  })
+
+  it('round trips a finished rush without touching campaign records', () => {
+    const save = defaultSave(skin)
+    Object.assign(save, {
+      currentDay: 2,
+      scoreChaseLevel: 1,
+      bestRevenue: 195,
+      bestStars: 3,
+      dayStars: [1, 2, 3],
+      dayBestRevenue: [54, 65, 195],
+    })
+    const game = createGame(skin, save)
+    startShift(game)
+    game.shift.revenue = 220
+    game.shift.remaining = .01
+    step(game, .01)
+
+    const values = new Map<string, string>()
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value) },
+    }
+    storeSave(game.save, storage)
+    expect(loadSave(skin, storage)).toMatchObject({
+      currentDay: 2,
+      scoreChaseLevel: 1,
+      scoreChaseBest: 220,
+      bestRevenue: 195,
+      bestStars: 3,
+      dayStars: [1, 2, 3],
+      dayBestRevenue: [54, 65, 195],
+    })
   })
 })

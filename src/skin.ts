@@ -31,6 +31,22 @@ export type SkinDay = {
   spawnInterval: number
   orderDeck: SkinOrder[]
 }
+export type SkinScoreChase = {
+  id: string
+  label: string
+  challenge: string
+  duration: number
+  cashGoal: number
+  goalStep: number
+  starGap: number
+  customerPatience: number
+  patienceStep: number
+  minCustomerPatience: number
+  spawnInterval: number
+  spawnStep: number
+  minSpawnInterval: number
+  orderDeck: SkinOrder[]
+}
 export type ProducerStation = {
   item: string
   interaction: number[]
@@ -63,6 +79,7 @@ export type GameSkin = {
   spriteSheet: string
   comboTiers: ComboTier[]
   days: SkinDay[]
+  scoreChase?: SkinScoreChase
   items: Record<string, SkinItem>
   producers: Record<string, ProducerStation>
   prepStations: Record<string, PrepStation>
