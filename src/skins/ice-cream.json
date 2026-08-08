@@ -1,0 +1,18 @@
+{
+  "id": "ice-cream",
+  "spriteSheet": "/assets/scoopaloo-atlas.png?v=2",
+  "palette": {
+    "strawberry": "#FF8FAB",
+    "mint": "#63CDB4",
+    "sunshine": "#FFD45E",
+    "waffle": "#FFD9B8",
+    "cream": "#FFF3E6",
+    "cocoa": "#4A3B45"
+  },
+  "stations": {
+    "machine": { "x": 180, "y": 190, "sprite": [1, 2] },
+    "counter": { "x": 650, "y": 255, "sprite": [2, 2] },
+    "register": { "x": 750, "y": 265, "sprite": [3, 2] },
+    "build": { "x": 205, "y": 475, "sprite": [3, 3] }
+  }
+}

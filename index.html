@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#FF8FAB" />
+    <meta name="description" content="A tiny ice cream stand you can play without words." />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Scoopaloo</title>
+  </head>
+  <body>
+    <main>
+      <canvas id="game" width="960" height="640" aria-label="Scoopaloo ice cream stand game"></canvas>
+      <button id="save-button" class="round-button" aria-label="Open save card">◆</button>
+      <dialog id="save-dialog">
+        <form method="dialog"><button class="close" aria-label="Close">×</button></form>
+        <div class="save-mark">◆</div>
+        <img id="save-qr" alt="QR code for this save" />
+        <a id="rescue-link" target="_blank" rel="noopener">↗</a>
+      </dialog>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
