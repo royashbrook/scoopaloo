@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  comboBonus,
   currentDay,
   customerPatience,
   createGame,
@@ -22,6 +23,7 @@ import {
   upgradeEffect,
   upgradeLevel,
   upgradeOffer,
+  upcomingOrders,
   walkSpeed,
   type GameState,
   type Point,
@@ -387,6 +389,88 @@ describe('timed Day 1 shift (#22)', () => {
     step(game, .05)
   }
 
+  const orderKeys = (game: GameState, count = 2) => upcomingOrders(game, count)
+    .map(order => `${order.item}:${order.quantity}`)
+  const deckKey = (index: number) => {
+    const order = firstDay.orderDeck[index % firstDay.orderDeck.length]
+    return `${order.item}:${order.quantity}`
+  }
+
+  it('previews two future orders without duplicating a spawned customer', () => {
+    const game = started()
+    const firstPreview = [deckKey(1), deckKey(2)]
+    expect(orderKeys(game)).toEqual(firstPreview)
+
+    game.spawnTimer = .05
+    step(game, .05)
+    expect(orderKeys(game)).toEqual(firstPreview)
+
+    serveFront(game)
+    game.spawnTimer = .05
+    step(game, .05)
+    expect(orderKeys(game)).toEqual([deckKey(2), deckKey(3)])
+
+    const front = game.customers.find(customer => !customer.served && !customer.missed)
+    if (!front) throw new Error('no waiting customer')
+    front.patience = .05
+    step(game, .05)
+    expect(orderKeys(game)).toEqual([deckKey(3), deckKey(4)])
+  })
+
+  it('wraps future previews through the skin order deck', () => {
+    const game = started()
+    game.nextOrder = firstDay.orderDeck.length - 1
+    expect(orderKeys(game, 3)).toEqual([
+      deckKey(firstDay.orderDeck.length - 1),
+      deckKey(0),
+      deckKey(1),
+    ])
+  })
+
+  it('applies exact data-driven combo boundaries to payout before coin splitting', () => {
+    const game = started()
+    expect(Array.from({ length: 8 }, (_, streak) => comboBonus(game, streak)))
+      .toEqual([0, 0, 2, 2, 4, 4, 6, 6])
+
+    game.shift.streak = 1
+    game.customers[0].patience = firstDay.customerPatience / 2 + .05
+    const basePrice = game.customers[0].order.price
+    serveFront(game)
+
+    const payout = basePrice + 2 + 2
+    expect(game.events.find(event => event.kind === 'pay')).toMatchObject({
+      amount: payout,
+      tip: 2,
+      combo: 2,
+      streak: 2,
+    })
+    expect(game.flyingCoins.reduce((total, coin) => total + coin.value, 0)).toBe(payout)
+  })
+
+  it('makes six uninterrupted serves worth $10 more than a broken 3 + 3 run', () => {
+    const game = started()
+    const bonus = (streaks: number[]) => streaks.reduce((total, streak) => total + comboBonus(game, streak), 0)
+    expect(bonus([1, 2, 3, 4, 5, 6])).toBe(18)
+    expect(bonus([1, 2, 3, 1, 2, 3])).toBe(8)
+  })
+
+  it('emits one combo break for simultaneous walkouts and none without a streak', () => {
+    const broken = started()
+    broken.shift.streak = 4
+    broken.shift.bestStreak = 4
+    broken.customers[0].patience = .05
+    addWaitingCustomer(broken, 2, .05)
+    step(broken, .05)
+    expect(broken.events.filter(event => event.kind === 'combo-break')).toEqual([
+      expect.objectContaining({ kind: 'combo-break', streak: 4 }),
+    ])
+
+    const empty = started()
+    empty.customers[0].patience = .05
+    step(empty, .05)
+    expect(empty.events.some(event => event.kind === 'combo-break')).toBe(false)
+  })
+
   it('enters results exactly at zero, not one tick early', () => {
     const game = started()
     game.shift.remaining = .05
@@ -408,6 +492,9 @@ describe('timed Day 1 shift (#22)', () => {
     expect(game.customers[0]).toMatchObject({ missed: true, patience: 0 })
     expect(game.customers[0].x).toBeGreaterThan(startX)
     expect(game.shift).toMatchObject({ missed: 1, streak: 0, bestStreak: 3 })
+    expect(game.events.filter(event => event.kind === 'combo-break')).toEqual([
+      expect.objectContaining({ kind: 'combo-break', streak: 3 }),
+    ])
   })
 
   it('calculates deterministic tips and credits payout only when coins collect', () => {
@@ -573,7 +660,7 @@ describe('timed Day 1 shift (#22)', () => {
     expect(campaign.shift.stars).toBeLessThanOrEqual(2)
     expect(enterShop(campaign)).toBe(true)
     expect([purchaseUpgrade(campaign, 'shoes'), purchaseUpgrade(campaign, 'patience')]).toEqual([true, true])
-    expect(campaign.save.coins).toBe(5)
+    expect(campaign.save.coins).toBe(9)
     expect(nextDay(campaign)).toBe(true)
     playGame(campaign)
     const dayTwoUpgraded = [campaign.shift.revenue, campaign.shift.served, campaign.shift.missed, campaign.shift.stars]
@@ -584,7 +671,7 @@ describe('timed Day 1 shift (#22)', () => {
     expect(campaign.shift.served).toBeGreaterThan(dayTwoBase.shift.served)
     expect(enterShop(campaign)).toBe(true)
     expect([purchaseUpgrade(campaign, 'shoes'), purchaseUpgrade(campaign, 'patience')]).toEqual([true, true])
-    expect(campaign.save.coins).toBe(3)
+    expect(campaign.save.coins).toBe(11)
     expect(nextDay(campaign)).toBe(true)
     playGame(campaign)
     const dayThreeUpgraded = [campaign.shift.revenue, campaign.shift.served, campaign.shift.missed, campaign.shift.stars]
@@ -601,11 +688,11 @@ describe('timed Day 1 shift (#22)', () => {
       [dayThreeBase.shift.revenue, dayThreeBase.shift.served, dayThreeBase.shift.missed, dayThreeBase.shift.stars],
       dayThreeUpgraded,
     ]).toEqual([
-      [50, 4, 2, 1],
-      [27, 2, 4, 0],
-      [63, 4, 2, 1],
+      [54, 4, 2, 1],
+      [29, 2, 4, 0],
+      [67, 4, 2, 1],
       [39, 2, 6, 0],
-      [143, 7, 1, 3],
+      [155, 7, 1, 3],
     ])
 
     const camped = Object.keys(skin.producers).map(source => {

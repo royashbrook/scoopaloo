@@ -64,7 +64,9 @@ export class Renderer {
     state.flyingCoins.forEach(coin => this.grounded({ x: coin.x, y: coin.y }, () => this.drawCoin(coin.x, coin.y, coin.age)))
     state.events.forEach(event => this.grounded({ x: event.x, y: event.y }, () => this.drawEvent(event)))
     state.events.filter(event => event.kind === 'pay' && event.amount).forEach(event =>
-      this.drawPayAmount(event.x, event.y, event.age, event.amount ?? 0, event.tip ?? 0, view))
+      this.drawPayAmount(event.x, event.y, event.age, event.amount ?? 0, event.tip ?? 0, event.combo ?? 0, view))
+    state.events.filter(event => event.kind === 'combo-break').forEach(event =>
+      this.drawComboBreak(event.x, event.y, event.age, event.streak ?? 0, view))
     if (joystick.active) this.drawJoystick(joystick)
   }
 
@@ -282,22 +284,51 @@ export class Renderer {
 
   // Revenue is critical feedback, so its label stays in CSS pixels instead of
   // shrinking with the world on tall phones.
-  private drawPayAmount(x: number, y: number, age: number, amount: number, tip: number, view: Viewport): void {
+  private drawPayAmount(x: number, y: number, age: number, amount: number, tip: number, combo: number, view: Viewport): void {
     const ctx = this.context
     const point = worldToClient(view, { x, y: y - 80 })
     const t = Math.min(1, age / .9)
     ctx.save()
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0)
     ctx.globalAlpha = 1 - t
-    ctx.font = '900 22px ui-rounded, system-ui, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.lineWidth = 5
     ctx.strokeStyle = this.skin.palette.cocoa
     ctx.fillStyle = this.skin.palette.sunshine
-    const label = tip > 0 ? `+$${amount}  $${tip} TIP` : `+$${amount}`
-    ctx.strokeText(label, point.x, point.y - t * 24)
-    ctx.fillText(label, point.x, point.y - t * 24)
+    const top = `+$${amount} TOTAL`
+    const base = amount - tip - combo
+    const parts = [`$${base} ORDER`]
+    if (tip > 0) parts.push(`$${tip} TIP`)
+    if (combo > 0) parts.push(`$${combo} COMBO`)
+    const labelY = point.y - t * 24
+    ctx.font = '900 22px ui-rounded, system-ui, sans-serif'
+    ctx.strokeText(top, point.x, labelY - 9)
+    ctx.fillText(top, point.x, labelY - 9)
+    ctx.font = '900 13px ui-rounded, system-ui, sans-serif'
+    ctx.lineWidth = 4
+    const detail = parts.join(' · ')
+    ctx.strokeText(detail, point.x, labelY + 12)
+    ctx.fillText(detail, point.x, labelY + 12)
+    ctx.restore()
+  }
+
+  private drawComboBreak(x: number, y: number, age: number, streak: number, view: Viewport): void {
+    const ctx = this.context
+    const point = worldToClient(view, { x, y: y - 80 })
+    const t = Math.min(1, age / .9)
+    ctx.save()
+    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0)
+    ctx.globalAlpha = 1 - t
+    ctx.font = '900 19px ui-rounded, system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.lineWidth = 5
+    ctx.strokeStyle = this.skin.palette.cocoa
+    ctx.fillStyle = this.skin.palette.strawberry
+    const label = `COMBO LOST · ${streak}`
+    ctx.strokeText(label, point.x, point.y - t * 20)
+    ctx.fillText(label, point.x, point.y - t * 20)
     ctx.restore()
   }
 

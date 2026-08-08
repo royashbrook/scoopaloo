@@ -1,6 +1,11 @@
 {
   "id": "ice-cream",
   "spriteSheet": "/assets/scoopaloo-atlas.png?v=2",
+  "comboTiers": [
+    { "streak": 2, "bonus": 2 },
+    { "streak": 4, "bonus": 4 },
+    { "streak": 6, "bonus": 6 }
+  ],
   "days": [
     {
       "id": "opening-day",
@@ -51,7 +56,7 @@
       "unlockBanner": "SCORE CHASE UNLOCKED",
       "duration": 150,
       "cashGoal": 70,
-      "starThresholds": [70, 85, 100],
+      "starThresholds": [70, 110, 150],
       "customerPatience": 40,
       "spawnInterval": 16,
       "orderDeck": [

@@ -100,7 +100,7 @@ describe('mobile sound', () => {
     await Promise.resolve()
     const cues: SoundCue[] = [
       'pickup', 'drop', 'pour', 'pay', 'reject',
-      'prep-start', 'prep-ready', 'blocked',
+      'prep-start', 'prep-ready', 'blocked', 'combo', 'combo-break',
       'start', 'success', 'fail', 'buy', 'next',
     ]
 

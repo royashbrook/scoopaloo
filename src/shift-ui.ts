@@ -12,6 +12,9 @@ export type ShiftUiState = {
   served: number
   missed: number
   streak: number
+  comboBonus?: number
+  comboNextAt?: number
+  comboEvent?: { serial: number; kind: 'gain' | 'break'; streak: number }
   bestStreak: number
   stars: number
   success: boolean
@@ -28,6 +31,7 @@ export type ShiftUiState = {
   } | null
   trayItems?: InventoryUiItem[]
   counterItems?: InventoryUiItem[]
+  upcomingOrders?: UpcomingOrderUiItem[]
   order?: {
     label: string
     quantity: number
@@ -38,6 +42,7 @@ export type ShiftUiState = {
 }
 
 type InventoryUiItem = { label: string; icon: string; count: number }
+export type UpcomingOrderUiItem = { label: string; icon: string; quantity: number; patience?: number | null }
 export type UpgradeUiItem = {
   id: string
   name: string
@@ -63,6 +68,8 @@ type ShiftActions = {
 export class ShiftUi {
   private readonly fields: Record<string, HTMLElement>
   private previousPhase: ShiftPhase | null = null
+  private previousComboEvent = -1
+  private comboTimer?: number
 
   constructor(private readonly root: HTMLElement, actions: ShiftActions) {
     root.className = 'shift-ui'
@@ -73,27 +80,37 @@ export class ShiftUi {
         <div class="hud-stat hud-money"><span>EARNED</span><strong><b data-field="revenue">$0</b><small data-field="goal"> / $60</small></strong></div>
         <div class="hud-stat"><span>SERVED</span><strong data-field="served">0</strong></div>
         <div class="hud-stat"><span>MISSED</span><strong data-field="missed">0</strong></div>
-        <div class="hud-stat"><span>STREAK</span><strong data-field="streak">0</strong></div>
+        <div class="hud-stat hud-combo" data-field="combo-card">
+          <span>COMBO</span>
+          <strong class="combo-score"><b data-field="streak">0</b><small data-field="combo-tier" hidden></small></strong>
+          <span class="sr-only" data-field="combo-status" role="status" aria-live="polite" aria-atomic="true">Combo 0.</span>
+        </div>
       </section>
 
-      <aside class="order-ticket" data-field="ticket" aria-label="Current order" hidden>
-        <div class="ticket-heading"><span>ORDER</span><strong data-field="order-quantity">×1</strong></div>
-        <div class="ticket-body">
-          <img class="ticket-icon" data-field="order-icon" src="/assets/items/vanilla-cone.svg" alt="" />
-          <strong data-field="order-label">VANILLA CONE</strong>
-          <b data-field="order-price">$6</b>
-        </div>
-        <div class="patience-track" aria-label="Customer patience"><i data-field="patience"></i></div>
-        <div class="ticket-guidance">
-          <span data-field="ticket-guidance" role="status" aria-live="polite" aria-atomic="true">GET THE INGREDIENTS</span>
-          <i class="prep-progress" data-field="prep-progress" role="progressbar" aria-label="Preparation progress" aria-valuemin="0" aria-valuemax="100" hidden></i>
-        </div>
-        <ol class="recipe-list" data-field="recipe-list" aria-label="Recipe"></ol>
-        <div class="inventory-readout">
-          <div><span>TRAY</span><div data-inventory="tray"></div></div>
-          <div><span>COUNTER</span><div data-inventory="counter"></div></div>
-        </div>
-      </aside>
+      <div class="order-panel" data-field="order-panel" hidden>
+        <aside class="next-orders is-empty" aria-label="Upcoming orders" aria-hidden="true">
+          <span class="next-heading" aria-hidden="true">NEXT</span>
+          <ol data-field="upcoming-orders"></ol>
+        </aside>
+        <aside class="order-ticket" data-field="ticket" aria-label="Current order">
+          <div class="ticket-heading"><span>ORDER</span><strong data-field="order-quantity">×1</strong></div>
+          <div class="ticket-body">
+            <img class="ticket-icon" data-field="order-icon" src="/assets/items/vanilla-cone.svg" alt="" />
+            <strong data-field="order-label">VANILLA CONE</strong>
+            <b data-field="order-price">$6</b>
+          </div>
+          <div class="patience-track" aria-label="Customer patience"><i data-field="patience"></i></div>
+          <div class="ticket-guidance">
+            <span data-field="ticket-guidance" role="status" aria-live="polite" aria-atomic="true">GET THE INGREDIENTS</span>
+            <i class="prep-progress" data-field="prep-progress" role="progressbar" aria-label="Preparation progress" aria-valuemin="0" aria-valuemax="100" hidden></i>
+          </div>
+          <ol class="recipe-list" data-field="recipe-list" aria-label="Recipe"></ol>
+          <div class="inventory-readout">
+            <div><span>TRAY</span><div data-inventory="tray"></div></div>
+            <div><span>COUNTER</span><div data-inventory="counter"></div></div>
+          </div>
+        </aside>
+      </div>
 
       <section class="shift-card ready-card" aria-labelledby="ready-title">
         <img src="/assets/brand/scoopaloo-logo.svg" alt="Scoopaloo" />
@@ -167,6 +184,12 @@ export class ShiftUi {
   update(state: ShiftUiState): void {
     if (state.phase !== this.previousPhase) {
       this.root.dataset.phase = state.phase
+      if (state.phase === 'playing') {
+        this.previousComboEvent = -1
+        if (this.comboTimer != null) window.clearTimeout(this.comboTimer)
+        this.comboTimer = undefined
+        this.fields['combo-card'].classList.remove('is-gain', 'is-break')
+      }
       const shop = this.root.querySelector<HTMLDialogElement>('.shop-card')
       if (state.phase === 'shop' && shop && !shop.open) {
         shop.showModal()
@@ -191,6 +214,20 @@ export class ShiftUi {
     this.set('served', state.served)
     this.set('missed', state.missed)
     this.set('streak', state.streak)
+    const hasCombo = state.comboBonus != null
+    const nextTier = state.comboNextAt
+    this.setOptional('combo-tier', hasCombo
+      ? `${nextTier == null ? '' : `/${nextTier} `}+$${state.comboBonus}` : '')
+    const remaining = nextTier == null ? 0 : Math.max(0, nextTier - state.streak)
+    const comboEventStatus = state.comboEvent?.kind === 'break'
+      ? `Combo lost after ${state.comboEvent.streak} serves. `
+      : state.comboEvent?.kind === 'gain' ? `Combo tier reached. ` : ''
+    this.set('combo-status', hasCombo
+      ? `${comboEventStatus}Combo ${state.streak}. Current bonus $${state.comboBonus} per serve.${nextTier == null
+        ? ' Maximum tier.'
+        : ` ${remaining} more ${remaining === 1 ? 'serve' : 'serves'} for the next tier.`}`
+      : `Combo ${state.streak}.`)
+    this.flashCombo(state.comboEvent)
     this.set('ready-goal', `$${state.goal}`)
     this.set('result-title', state.success ? 'SHIFT COMPLETE' : 'GOAL MISSED')
     this.set('result-revenue', `$${state.revenue}`)
@@ -212,7 +249,7 @@ export class ShiftUi {
 
     const ticket = this.fields.ticket
     const showTicket = state.phase === 'playing' && Boolean(state.order)
-    ticket.hidden = !showTicket
+    this.fields['order-panel'].hidden = !showTicket
     const warning = state.warning ?? (state.wrongItem ? 'WRONG ITEM' : '')
     ticket.classList.toggle('is-wrong', Boolean(warning))
     this.set('ticket-guidance', warning || state.recipe?.instruction || 'GET THE INGREDIENTS')
@@ -228,6 +265,7 @@ export class ShiftUi {
     }
     this.renderInventory('tray', state.trayItems ?? [])
     this.renderInventory('counter', state.counterItems ?? [])
+    this.renderUpcoming(state.upcomingOrders ?? [])
     if (!state.order) return
     this.set('order-label', state.order.label)
     this.set('order-quantity', `×${state.order.quantity}`)
@@ -343,6 +381,61 @@ export class ShiftUi {
       item.append(icon, name, count)
       return item
     }))
+  }
+
+  private renderUpcoming(orders: UpcomingOrderUiItem[]): void {
+    const target = this.fields['upcoming-orders']
+    const rail = target.closest<HTMLElement>('.next-orders')
+    const upcoming = orders.slice(0, 2)
+    const signature = upcoming.map(order => `${order.icon}:${order.label}:${order.quantity}`).join('|')
+    if (target.dataset.signature !== signature) {
+      target.dataset.signature = signature
+      target.replaceChildren(...upcoming.map((order, index) => {
+        const item = document.createElement('li')
+        item.dataset.label = order.label
+        item.dataset.quantity = String(order.quantity)
+        const position = document.createElement('span')
+        position.className = 'next-position'
+        position.ariaHidden = 'true'
+        position.textContent = String(index + 2)
+        const icon = document.createElement('img')
+        icon.src = order.icon
+        icon.alt = ''
+        const quantity = document.createElement('b')
+        quantity.ariaHidden = 'true'
+        quantity.textContent = `×${order.quantity}`
+        const patience = document.createElement('i')
+        patience.className = 'next-patience'
+        patience.ariaHidden = 'true'
+        item.append(position, icon, quantity, patience)
+        return item
+      }))
+    }
+    upcoming.forEach((order, index) => {
+      const item = target.children[index] as HTMLElement | undefined
+      const patience = item?.querySelector<HTMLElement>('.next-patience')
+      if (!item || !patience) return
+      const waiting = order.patience != null
+      const percent = Math.round(Math.max(0, Math.min(1, order.patience ?? 0)) * 100)
+      item.setAttribute('aria-label', `Order ${index + 2}: ${order.label}, quantity ${order.quantity}, ${waiting
+        ? `${percent}% patience remaining` : 'not waiting yet'}`)
+      patience.hidden = !waiting
+      patience.style.width = `${percent}%`
+    })
+    rail?.classList.toggle('is-empty', upcoming.length === 0)
+    if (upcoming.length === 0) rail?.setAttribute('aria-hidden', 'true')
+    else rail?.removeAttribute('aria-hidden')
+  }
+
+  private flashCombo(event?: ShiftUiState['comboEvent']): void {
+    if (!event || event.serial === this.previousComboEvent) return
+    this.previousComboEvent = event.serial
+    const target = this.fields['combo-card']
+    target.classList.remove('is-gain', 'is-break')
+    void target.offsetWidth
+    target.classList.add(event.kind === 'gain' ? 'is-gain' : 'is-break')
+    if (this.comboTimer != null) window.clearTimeout(this.comboTimer)
+    this.comboTimer = window.setTimeout(() => target.classList.remove('is-gain', 'is-break'), 450)
   }
 }
 

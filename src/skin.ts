@@ -16,6 +16,7 @@ export type SkinItem = {
   recipe?: SkinRecipe
 }
 export type CustomerOrder = SkinOrder & Pick<SkinItem, 'label' | 'icon' | 'color'> & { price: number }
+export type ComboTier = { streak: number; bonus: number }
 export type SkinDay = {
   id: string
   label: string
@@ -58,6 +59,7 @@ export type UpgradeLevel = { price: number; effect: number }
 export type GameSkin = {
   id: string
   spriteSheet: string
+  comboTiers: ComboTier[]
   days: SkinDay[]
   items: Record<string, SkinItem>
   producers: Record<string, ProducerStation>

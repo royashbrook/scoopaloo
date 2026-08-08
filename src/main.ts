@@ -2,6 +2,7 @@ import QRCode from 'qrcode'
 import './style.css'
 import {
   createGame,
+  comboBonus,
   currentDay,
   customerPatience,
   enterShop,
@@ -15,6 +16,7 @@ import {
   startShift,
   step,
   upgradeOffer,
+  upcomingOrders,
   type GameState,
   type Point,
 } from './engine'
@@ -133,14 +135,21 @@ function updateSound(): void {
   for (const event of state.events) {
     if (heardEvents.has(event)) continue
     heardEvents.add(event)
-    sound.play(event.kind === 'reject' && event.reason !== 'wrong-item' ? 'blocked' : event.kind)
+    const reachedComboTier = event.kind === 'pay'
+      && skin.comboTiers.some(tier => tier.streak === event.streak)
+    sound.play(event.kind === 'reject' && event.reason !== 'wrong-item' ? 'blocked'
+      : reachedComboTier ? 'combo' : event.kind)
   }
 }
 
 function updateShiftUi(): void {
   const day = currentDay(state)
-  const front = state.customers.find(customer => !customer.served && !customer.missed)
+  const waitingCustomers = state.customers.filter(customer => !customer.served && !customer.missed)
+  const front = waitingCustomers[0]
   const rejection = [...state.events].reverse().find(event => event.kind === 'reject')
+  const nextComboTier = skin.comboTiers.find(tier => tier.streak > state.shift.streak)
+  const comboFeedback = [...state.events].reverse().find(event => event.kind === 'combo-break'
+    || (event.kind === 'pay' && skin.comboTiers.some(tier => tier.streak === event.streak)))
   let order = null
   let recipe = null
   if (front) {
@@ -189,6 +198,13 @@ function updateShiftUi(): void {
     served: state.shift.served,
     missed: state.shift.missed,
     streak: state.shift.streak,
+    comboBonus: comboBonus(state, state.shift.streak),
+    comboNextAt: nextComboTier?.streak,
+    comboEvent: comboFeedback ? {
+      serial: Math.round((state.time - comboFeedback.age) * 1000),
+      kind: comboFeedback.kind === 'combo-break' ? 'break' : 'gain',
+      streak: comboFeedback.streak ?? 0,
+    } : undefined,
     bestStreak: state.shift.bestStreak,
     stars: state.shift.stars,
     success: goalMet(state),
@@ -202,6 +218,14 @@ function updateShiftUi(): void {
     recipe,
     trayItems: inventoryUi(state.player.trayItems),
     counterItems: inventoryUi(state.counter.items),
+    upcomingOrders: upcomingOrders(state, 2).map((upcoming, index) => ({
+      label: upcoming.label,
+      icon: upcoming.icon,
+      quantity: upcoming.quantity,
+      patience: waitingCustomers[index + 1]
+        ? waitingCustomers[index + 1].patience / customerPatience(state)
+        : null,
+    })),
     order,
   })
 }

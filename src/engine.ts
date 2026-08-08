@@ -3,7 +3,7 @@ import { itemFor, prepPoint, producerPoint, stationPoint } from './skin'
 
 export type Point = { x: number; y: number }
 export type Input = Point
-export type EventKind = 'pickup' | 'drop' | 'pour' | 'prep-start' | 'prep-ready' | 'pay' | 'reject'
+export type EventKind = 'pickup' | 'drop' | 'pour' | 'prep-start' | 'prep-ready' | 'pay' | 'reject' | 'combo-break'
 export type RejectReason = 'wrong-item' | 'needs-prep' | 'returned-raw'
 export type Inventory = Record<string, number>
 
@@ -59,6 +59,8 @@ export type GameEvent = Point & {
   age: number
   amount?: number
   tip?: number
+  combo?: number
+  streak?: number
   item?: string
   expectedItem?: string
   source?: string
@@ -215,25 +217,31 @@ function freshShift(skin: GameSkin, save: SaveV1): ShiftState {
   }
 }
 
+function orderAt(skin: GameSkin, save: SaveV1, index: number): CustomerOrder {
+  const day = skin.days[clamp(Math.floor(save.currentDay), 0, skin.days.length - 1)]
+  if (!day) throw new Error('campaign has no days')
+  const request = day.orderDeck[index % day.orderDeck.length]
+  if (!request) throw new Error('order deck is empty')
+  const item = itemFor(skin, request.item)
+  return {
+    ...request,
+    label: item.label,
+    price: item.price * request.quantity,
+    icon: item.icon,
+    color: item.color,
+  }
+}
+
 function customer(skin: GameSkin, save: SaveV1, id: number, look: number): Customer {
   const day = skin.days[clamp(Math.floor(save.currentDay), 0, skin.days.length - 1)]
   if (!day) throw new Error('campaign has no days')
-  const request = day.orderDeck[look % day.orderDeck.length]
-  if (!request) throw new Error('order deck is empty')
-  const item = itemFor(skin, request.item)
   return {
     id,
     look: look % 4,
     served: false,
     missed: false,
     patience: day.customerPatience + savedUpgradeEffect(skin, save, 'customerPatience'),
-    order: {
-      ...request,
-      label: item.label,
-      price: item.price * request.quantity,
-      icon: item.icon,
-      color: item.color,
-    },
+    order: orderAt(skin, save, look),
     x: 700,
     y: 550,
     exit: 0,
@@ -385,16 +393,20 @@ function updateCustomers(state: GameState, dt: number): void {
     state.spawnTimer = currentDay(state).spawnInterval
   }
 
-  let walkedOut = false
+  const brokenStreak = state.shift.streak
+  let walkedOut: Customer | undefined
   state.customers.filter(item => !item.served && !item.missed).forEach(item => {
     item.patience = Math.max(0, item.patience - dt)
     if (item.patience > 0) return
     item.missed = true
     state.shift.missed++
-    state.shift.streak = 0
-    walkedOut = true
+    walkedOut ??= item
   })
-  if (walkedOut) state.counter.serveTimer = 0
+  if (walkedOut) {
+    state.shift.streak = 0
+    state.counter.serveTimer = 0
+    if (brokenStreak > 0) emit(state, 'combo-break', walkedOut, { streak: brokenStreak })
+  }
 
   const waiting = state.customers.filter(item => !item.served && !item.missed)
   waiting.forEach((item, index) => {
@@ -415,8 +427,9 @@ function updateCustomers(state: GameState, dt: number): void {
       state.shift.streak++
       state.shift.bestStreak = Math.max(state.shift.bestStreak, state.shift.streak)
       const tip = tipFor(front.patience, customerPatience(state))
-      const payout = front.order.price + tip
-      emit(state, 'pay', register, { amount: payout, tip, item: front.order.item })
+      const combo = comboBonus(state, state.shift.streak)
+      const payout = front.order.price + tip + combo
+      emit(state, 'pay', register, { amount: payout, tip, combo, streak: state.shift.streak, item: front.order.item })
       for (let i = 0; i < 4; i++) {
         const angle = -2.7 + i * .45
         state.flyingCoins.push({
@@ -472,7 +485,7 @@ function emit(
   state: GameState,
   kind: EventKind,
   at: Point,
-  details: Pick<GameEvent, 'amount' | 'tip' | 'item' | 'expectedItem' | 'source' | 'station' | 'reason'> = {},
+  details: Pick<GameEvent, 'amount' | 'tip' | 'combo' | 'streak' | 'item' | 'expectedItem' | 'source' | 'station' | 'reason'> = {},
 ): void {
   state.events.push({ kind, x: at.x, y: at.y, age: 0, ...details })
 }
@@ -537,6 +550,16 @@ export function inventoryTotal(inventory: Inventory): number {
   return Object.values(inventory).reduce((total, quantity) => total + quantity, 0)
 }
 
+export function upcomingOrders(state: GameState, count: number): CustomerOrder[] {
+  const limit = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0
+  const waiting = state.customers.filter(customer => !customer.served && !customer.missed)
+  const orders = waiting.slice(1, limit + 1).map(customer => customer.order)
+  for (let index = state.nextOrder; orders.length < limit; index++) {
+    orders.push(orderAt(state.skin, state.save, index))
+  }
+  return orders
+}
+
 export function runFor(state: GameState, seconds: number, input: Input = { x: 0, y: 0 }): void {
   for (let left = seconds; left > 0 && state.phase === 'playing'; left -= .05) step(state, Math.min(.05, left), input)
 }
@@ -590,6 +613,10 @@ export function nextDay(state: GameState): boolean {
 export function tipFor(remaining: number, patience: number): number {
   if (remaining <= 0 || patience <= 0) return 0
   return Math.ceil(clamp(remaining / patience, 0, 1) * 3)
+}
+
+export function comboBonus(state: GameState, streak: number): number {
+  return state.skin.comboTiers.reduce((bonus, tier) => streak >= tier.streak ? tier.bonus : bonus, 0)
 }
 
 export function goalMet(state: GameState): boolean {
