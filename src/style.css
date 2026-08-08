@@ -21,16 +21,13 @@ body {
   -webkit-user-select: none;
 }
 
-main { display: grid; place-items: center; }
-
+/* the canvas IS the screen (#13): the shared viewport exposes more world on the
+   extra axis, so there is nothing to letterbox and nothing to shadow */
 canvas {
-  width: min(100vw, calc(100vh * 1.5));
-  height: min(100vh, calc(100vw / 1.5));
-  max-width: 100%;
-  max-height: 100%;
+  width: 100vw;
+  height: 100dvh;
   display: block;
   image-rendering: auto;
-  filter: drop-shadow(0 1.3rem 2rem rgb(74 59 69 / .16));
 }
 
 button, a {
@@ -73,6 +70,3 @@ dialog form { position: absolute; right: .7rem; top: .5rem; }
 #save-qr { display: block; width: min(17rem, 100%); margin: .4rem auto 1rem; border-radius: 1rem; }
 #rescue-link { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; margin: auto; border: .2rem solid #4a3b45; border-radius: 50%; font-size: 1.6rem; }
 
-@media (prefers-reduced-motion: reduce) {
-  canvas { filter: none; }
-}
