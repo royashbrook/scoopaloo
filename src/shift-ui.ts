@@ -12,9 +12,10 @@ export type ShiftUiState = {
   bestStreak: number
   stars: number
   success: boolean
+  wrongItem?: boolean
+  trayItems?: InventoryUiItem[]
+  counterItems?: InventoryUiItem[]
   order?: {
-    x: number
-    y: number
     label: string
     quantity: number
     price: number
@@ -22,6 +23,8 @@ export type ShiftUiState = {
     icon?: string
   } | null
 }
+
+type InventoryUiItem = { label: string; icon: string; count: number }
 
 type ShiftActions = { start: () => void; retry: () => void; next: () => void }
 
@@ -49,6 +52,11 @@ export class ShiftUi {
           <b data-field="order-price">$6</b>
         </div>
         <div class="patience-track" aria-label="Customer patience"><i data-field="patience"></i></div>
+        <div class="ticket-warning" data-field="ticket-warning" aria-live="assertive" hidden>WRONG ITEM</div>
+        <div class="inventory-readout">
+          <div><span>TRAY</span><div data-inventory="tray"></div></div>
+          <div><span>COUNTER</span><div data-inventory="counter"></div></div>
+        </div>
       </aside>
 
       <section class="shift-card ready-card" aria-labelledby="ready-title">
@@ -114,6 +122,10 @@ export class ShiftUi {
     const ticket = this.fields.ticket
     const showTicket = state.phase === 'playing' && Boolean(state.order)
     ticket.hidden = !showTicket
+    ticket.classList.toggle('is-wrong', Boolean(state.wrongItem))
+    this.fields['ticket-warning'].hidden = !state.wrongItem
+    this.renderInventory('tray', state.trayItems ?? [])
+    this.renderInventory('counter', state.counterItems ?? [])
     if (!state.order) return
     this.set('order-label', state.order.label)
     this.set('order-quantity', `×${state.order.quantity}`)
@@ -126,6 +138,28 @@ export class ShiftUi {
   private set(field: string, value: string | number): void {
     const text = String(value)
     if (this.fields[field]?.textContent !== text) this.fields[field].textContent = text
+  }
+
+  private renderInventory(name: string, items: InventoryUiItem[]): void {
+    const target = this.root.querySelector<HTMLElement>(`[data-inventory="${name}"]`)
+    if (!target) return
+    const signature = items.map(item => `${item.icon}:${item.count}`).join('|') || 'empty'
+    if (target.dataset.signature === signature) return
+    target.dataset.signature = signature
+    if (items.length === 0) {
+      const empty = document.createElement('em')
+      empty.textContent = 'EMPTY'
+      target.replaceChildren(empty)
+      return
+    }
+    target.replaceChildren(...items.flatMap(item => {
+      const icon = document.createElement('img')
+      icon.src = item.icon
+      icon.alt = item.label
+      const count = document.createElement('b')
+      count.textContent = `×${item.count}`
+      return [icon, count]
+    }))
   }
 }
 

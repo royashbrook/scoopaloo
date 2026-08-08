@@ -5,7 +5,7 @@
 //     deployment; offline falls back to the cached shell.
 //   - hashed/static assets stay cache-first: their names change when they change.
 //   - only ok responses are ever cached.
-const CACHE = 'scoopaloo-v4'
+const CACHE = 'scoopaloo-v5'
 const SHELL = [
   '/',
   '/manifest.webmanifest',
@@ -13,6 +13,8 @@ const SHELL = [
   '/assets/scoopaloo-atlas.png?v=2',
   '/assets/brand/scoopaloo-logo.svg',
   '/assets/brand/scoopaloo-mark.svg',
+  '/assets/items/vanilla-cone.svg',
+  '/assets/items/sundae.svg',
   '/favicon.svg',
   '/apple-touch-icon.png',
   '/icon-192.png',

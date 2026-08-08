@@ -53,12 +53,17 @@ test('earns a real goal and keeps results readable at every target size', async 
     const game = window.__scoopaloo
     game.pause(true)
     game.startShift()
-    const station = (key: 'machine' | 'counter' | 'register') => {
+    const station = (key: 'counter' | 'register') => {
       const [x, y] = game.snapshot().skin.stations[key].interaction
       return { x, y }
     }
     for (let round = 0; round < 12 && game.snapshot().shift.revenue < game.snapshot().skin.shift.cashGoal; round++) {
-      game.movePlayer(station('machine'))
+      const state = game.snapshot()
+      const front = state.customers.find(customer => !customer.served && !customer.missed)
+      if (!front) { game.advance(.1); continue }
+      const source = state.skin.items[front.order.item].recipe.source
+      const [x, y] = state.skin.producers[source].interaction
+      game.movePlayer({ x, y })
       game.advance(4)
       game.movePlayer(station('counter'))
       game.advance(2)

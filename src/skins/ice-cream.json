@@ -63,9 +63,9 @@
       "draw": [525, 200, 245, 195],
       "sprite": [2, 2],
       "stockDisplay": {
-        "origin": [590, 238],
-        "step": [42, 0],
-        "size": [52, 63]
+        "origin": [598, 245],
+        "step": [45, 0],
+        "size": [39, 47]
       },
       "interval": 2.1,
       "capacity": 3

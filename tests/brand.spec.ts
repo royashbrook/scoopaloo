@@ -38,6 +38,8 @@ test('ships decoded brand assets, exact manifest icons, and offline copies', asy
       '/favicon.svg',
       '/assets/brand/scoopaloo-logo.svg',
       '/assets/brand/scoopaloo-mark.svg',
+      '/assets/items/vanilla-cone.svg',
+      '/assets/items/sundae.svg',
     ].map(async src => {
       const response = await fetch(src)
       return { src, ok: response.ok, type: response.headers.get('content-type') }
@@ -83,6 +85,8 @@ test('ships decoded brand assets, exact manifest icons, and offline copies', asy
     '/favicon.svg',
     '/assets/brand/scoopaloo-logo.svg',
     '/assets/brand/scoopaloo-mark.svg',
+    '/assets/items/vanilla-cone.svg',
+    '/assets/items/sundae.svg',
     ...pngs.map(icon => icon.src),
   ])
   expect(offline).not.toContain(false)

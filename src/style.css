@@ -128,6 +128,33 @@ canvas {
   background: linear-gradient(90deg, #ff8fab, #ffd45e 45%, #63cdb4 75%);
   transition: width .1s linear;
 }
+.order-ticket.is-wrong { border-color: #d63e64; animation: ticket-wrong .16s ease-in-out 2; }
+.ticket-warning {
+  padding: .38rem .6rem;
+  color: #fff3e6;
+  background: #d63e64;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: .055em;
+  text-align: center;
+}
+.inventory-readout { border-top: 2px solid rgb(74 59 69 / .18); }
+.inventory-readout > div {
+  display: grid;
+  grid-template-columns: 4.4rem 1fr;
+  align-items: center;
+  min-height: 34px;
+  padding: .2rem .55rem;
+}
+.inventory-readout > div + div { border-top: 1px solid rgb(74 59 69 / .14); }
+.inventory-readout span { font-size: 13px; font-weight: 900; letter-spacing: .055em; }
+.inventory-readout [data-inventory] { display: flex; align-items: center; justify-content: flex-end; gap: .18rem; min-width: 0; }
+.inventory-readout img { width: 25px; height: 25px; object-fit: contain; }
+.inventory-readout b { margin-right: .28rem; font-size: 14px; }
+.inventory-readout em { font-size: 12px; font-style: normal; font-weight: 800; opacity: .55; }
+@keyframes ticket-wrong {
+  50% { translate: .3rem 0; }
+}
 
 .shift-card {
   position: fixed;
@@ -244,7 +271,7 @@ button, a {
   50% { margin-bottom: .5rem; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .update-toast { animation: none; }
+  .update-toast, .order-ticket.is-wrong { animation: none; }
 }
 
 dialog {

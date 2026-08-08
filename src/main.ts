@@ -7,7 +7,7 @@ import { loadSave, rescueUrl, storeSave } from './save'
 import { ShiftUi } from './shift-ui'
 import type { GameSkin } from './skin'
 import skinData from './skins/ice-cream.json'
-import { backingSize, computeViewport, worldToClient, type Viewport } from './viewport'
+import { backingSize, computeViewport, type Viewport } from './viewport'
 
 declare global {
   interface Window {
@@ -80,15 +80,12 @@ function updateShiftUi(): void {
   const front = state.customers.find(customer => !customer.served && !customer.missed)
   let order = null
   if (front) {
-    const point = worldToClient(viewport, { x: front.x, y: front.y - 135 })
-    const width = Math.min(230, viewport.cssWidth - 24)
     order = {
-      x: Math.max(12, Math.min(viewport.cssWidth - width - 12, point.x - width / 2)),
-      y: Math.max(132, Math.min(viewport.cssHeight - 132, point.y)),
       label: front.order.label,
       quantity: front.order.quantity,
-      price: skin.shift.basePrice * front.order.quantity,
+      price: front.order.price,
       patience: front.patience / skin.shift.customerPatience,
+      icon: front.order.icon,
     }
   }
   shiftUi.update({
@@ -103,8 +100,17 @@ function updateShiftUi(): void {
     bestStreak: state.shift.bestStreak,
     stars: state.shift.stars,
     success: goalMet(state),
+    wrongItem: state.events.some(event => event.kind === 'reject'),
+    trayItems: inventoryUi(state.player.trayItems),
+    counterItems: inventoryUi(state.counter.items),
     order,
   })
+}
+
+function inventoryUi(inventory: Record<string, number>): { label: string; icon: string; count: number }[] {
+  return Object.entries(inventory)
+    .filter(([, count]) => count > 0)
+    .map(([item, count]) => ({ label: skin.items[item].label, icon: skin.items[item].icon, count }))
 }
 
 requestAnimationFrame(frame)
@@ -161,7 +167,7 @@ window.__scoopaloo = {
   // fixed-time control (#14): the display clock drives dash offsets and idle
   // wiggles, so deterministic captures pin it to a chosen instant
   setTime: seconds => { state.time = seconds },
-  atlasReady: () => renderer.atlas.complete && renderer.atlas.naturalWidth > 0,
+  atlasReady: () => renderer.assetsReady(),
   startShift: () => startShift(state),
   retryShift: () => retryShift(state),
 }
