@@ -6,6 +6,13 @@ export type ShiftUiState = {
   challenge?: string
   readyBanner?: string
   resultBanner?: string
+  rush?: {
+    level: number
+    best: number
+    previousBest: number
+    arrivalSeconds: number
+    patienceSeconds: number
+  }
   secondsRemaining: number
   revenue: number
   goal: number
@@ -22,6 +29,7 @@ export type ShiftUiState = {
   cash?: number
   canAdvance?: boolean
   finalDay?: boolean
+  canStartScoreChase?: boolean
   upgrades?: UpgradeUiItem[]
   wrongItem?: boolean
   warning?: string
@@ -89,10 +97,10 @@ export class ShiftUi {
     root.className = 'shift-ui'
     root.innerHTML = `
       <section class="shift-hud" aria-label="Shift status">
-        <div class="hud-stat"><span>DAY</span><strong data-field="hud-day">1</strong></div>
-        <div class="hud-stat hud-time"><span>TIME</span><strong data-field="time">1:30</strong></div>
-        <div class="hud-stat hud-money"><span>EARNED</span><strong><b data-field="revenue">$0</b><small data-field="goal"> / $60</small></strong></div>
-        <div class="hud-stat"><span>SERVED</span><strong data-field="served">0</strong></div>
+        <div class="hud-stat"><span data-field="hud-mode">DAY</span><strong><b data-field="hud-day">1</b><small class="hud-rule" data-field="hud-best" hidden></small></strong></div>
+        <div class="hud-stat hud-time"><span data-field="hud-time-label">TIME</span><strong><b data-field="time">1:30</b><small class="hud-rule" data-field="hud-arrival" hidden></small></strong></div>
+        <div class="hud-stat hud-money"><span data-field="hud-earned-label">EARNED</span><strong><b data-field="revenue">$0</b><small data-field="goal"> / $60</small></strong></div>
+        <div class="hud-stat"><span data-field="hud-served-label">SERVED</span><strong><b data-field="served">0</b><small class="hud-rule" data-field="hud-patience" hidden></small></strong></div>
         <div class="hud-stat"><span>MISSED</span><strong data-field="missed">0</strong></div>
         <div class="hud-stat hud-combo" data-field="combo-card">
           <span>COMBO</span>
@@ -143,20 +151,33 @@ export class ShiftUi {
         <p class="card-kicker" data-field="ready-day">DAY 1</p>
         <h1 id="ready-title"><span data-field="ready-goal">$60</span> GOAL</h1>
         <p data-field="ready-challenge">SERVE FAST. COLLECT EVERY COIN.</p>
+        <div class="rush-rules" data-field="ready-rush-rules" aria-label="Score chase rules" hidden>
+          <span><b>GOAL</b><strong data-field="ready-rush-goal"></strong></span>
+          <span><b>BEST</b><strong data-field="ready-rush-best"></strong></span>
+          <span><b>ARRIVALS</b><strong data-field="ready-rush-arrival"></strong></span>
+          <span><b>PATIENCE</b><strong data-field="ready-rush-patience"></strong></span>
+        </div>
         <p class="unlock-banner" data-field="ready-unlock"></p>
-        <button type="button" data-action="start">START SHIFT</button>
+        <button type="button" data-action="start" data-field="start">START SHIFT</button>
       </section>
 
       <section class="shift-card results-card" aria-labelledby="results-title">
         <p class="card-kicker" data-field="results-day">DAY 1 RESULTS</p>
         <h1 id="results-title" data-field="result-title">SHIFT COMPLETE</h1>
         <div class="result-score"><strong data-field="result-revenue">$0</strong><span data-field="result-goal"> / $60 GOAL</span></div>
+        <div class="rush-rules" data-field="result-rush-rules" aria-label="Score chase rules" hidden>
+          <span><b>GOAL</b><strong data-field="result-rush-goal"></strong></span>
+          <span><b>BEST</b><strong data-field="result-rush-best"></strong></span>
+          <span><b>ARRIVALS</b><strong data-field="result-rush-arrival"></strong></span>
+          <span><b>PATIENCE</b><strong data-field="result-rush-patience"></strong></span>
+        </div>
         <dl>
           <div><dt>SERVED</dt><dd data-field="result-served">0</dd></div>
           <div><dt>MISSED</dt><dd data-field="result-missed">0</dd></div>
           <div><dt>BEST STREAK</dt><dd data-field="result-streak">0</dd></div>
         </dl>
         <p class="result-stars" data-field="stars">STARS 0 / 3</p>
+        <p class="rush-best" data-field="result-best" role="status" hidden></p>
         <p class="unlock-banner" data-field="result-unlock" role="status"></p>
         <div class="card-actions">
           <button type="button" class="secondary" data-action="retry" data-field="result-retry">RETRY</button>
@@ -172,6 +193,12 @@ export class ShiftUi {
           </div>
           <div class="shop-wallet"><span>CASH</span><strong data-field="cash">$0</strong></div>
         </header>
+        <div class="rush-rules" data-field="shop-rush-rules" aria-label="Score chase rules" hidden>
+          <span><b>GOAL</b><strong data-field="shop-rush-goal"></strong></span>
+          <span><b>BEST</b><strong data-field="shop-rush-best"></strong></span>
+          <span><b>ARRIVALS</b><strong data-field="shop-rush-arrival"></strong></span>
+          <span><b>PATIENCE</b><strong data-field="shop-rush-patience"></strong></span>
+        </div>
         <div class="upgrade-grid" data-field="upgrades" aria-label="Available upgrades"></div>
         <p class="purchase-status" data-field="purchase-status" role="status" aria-live="polite"></p>
         <div class="card-actions shop-actions">
@@ -229,11 +256,32 @@ export class ShiftUi {
     }
 
     const dayNumber = state.day.replace(/\D/g, '') || state.day
+    const rush = state.rush
+    this.root.dataset.mode = rush ? 'rush' : 'campaign'
+    this.set('hud-mode', rush ? 'RUSH/BEST' : 'DAY')
+    this.set('hud-time-label', rush ? 'TIME/ARR' : 'TIME')
+    this.set('hud-earned-label', rush ? 'EARN/GOAL' : 'EARNED')
+    this.set('hud-served-label', rush ? 'SERVED/PAT' : 'SERVED')
     this.set('hud-day', dayNumber)
+    this.setOptional('hud-best', rush ? ` · $${rush.best}` : '')
+    this.setOptional('hud-arrival', rush ? ` · ${metric(rush.arrivalSeconds)}s` : '')
+    this.setOptional('hud-patience', rush ? ` · ${metric(rush.patienceSeconds)}s` : '')
+    this.root.querySelector('.shift-hud')?.setAttribute('aria-label', rush
+      ? `Rush ${rush.level} status. Goal $${state.goal}. Best $${rush.best}. Arrivals every ${metric(rush.arrivalSeconds)} seconds. Patience ${metric(rush.patienceSeconds)} seconds.`
+      : 'Shift status')
     this.set('ready-day', state.day)
     this.set('results-day', `${state.day} RESULTS`)
     this.set('shop-day', `GEAR FOR ${state.day}`)
     this.set('ready-challenge', state.challenge ?? 'SERVE FAST. COLLECT EVERY COIN.')
+    this.set('start', rush ? 'START RUSH' : 'START SHIFT')
+    for (const card of ['ready', 'result', 'shop']) {
+      this.fields[`${card}-rush-rules`].hidden = !rush
+      if (!rush) continue
+      this.set(`${card}-rush-goal`, `$${state.goal}`)
+      this.set(`${card}-rush-best`, `$${rush.best}`)
+      this.set(`${card}-rush-arrival`, `${metric(rush.arrivalSeconds)}s`)
+      this.set(`${card}-rush-patience`, `${metric(rush.patienceSeconds)}s`)
+    }
     this.setOptional('ready-unlock', state.readyBanner)
     this.setOptional('result-unlock', state.resultBanner)
     this.set('time', clock(state.secondsRemaining))
@@ -257,21 +305,32 @@ export class ShiftUi {
       : `Combo ${state.streak}.`)
     this.flashCombo(state.comboEvent)
     this.set('ready-goal', `$${state.goal}`)
-    this.set('result-title', state.success ? 'SHIFT COMPLETE' : 'GOAL MISSED')
+    this.set('result-title', rush
+      ? state.success ? 'RUSH CLEARED' : 'RUSH ENDED'
+      : state.success ? 'SHIFT COMPLETE' : 'GOAL MISSED')
     this.set('result-revenue', `$${state.revenue}`)
     this.set('result-goal', ` / $${state.goal} GOAL`)
     this.set('result-served', state.served)
     this.set('result-missed', state.missed)
     this.set('result-streak', state.bestStreak)
-    this.set('stars', `STARS ${state.stars} / 3`)
+    this.setOptional('stars', rush ? '' : `STARS ${state.stars} / 3`)
+    const improved = Boolean(rush && rush.best > rush.previousBest)
+    this.setOptional('result-best', rush
+      ? improved
+        ? `PRIOR $${rush.previousBest} → NEW BEST $${rush.best}`
+        : `PRIOR BEST $${rush.previousBest} · STILL $${rush.best}`
+      : '')
+    this.fields['result-best'].classList.toggle('is-new', improved)
     this.set('cash', `$${state.cash ?? 0}`)
-    this.set('result-retry', state.success ? 'REPLAY' : 'RETRY')
-    this.set('shop-retry', `RETRY DAY ${dayNumber}`)
+    this.set('result-retry', rush
+      ? `${state.success ? 'REPLAY' : 'RETRY'} RUSH ${rush.level}`
+      : state.success ? 'REPLAY' : 'RETRY')
+    this.set('shop-retry', rush ? `RETRY RUSH ${rush.level}` : `RETRY DAY ${dayNumber}`)
     this.renderUpgrades(state.upgrades ?? [])
 
     const canAdvance = state.canAdvance ?? state.success
     this.root.querySelectorAll<HTMLButtonElement>('[data-action="next"]').forEach(button => { button.disabled = !canAdvance })
-    this.set('shop-next', state.finalDay ? `REPLAY ${state.day}` : 'NEXT DAY')
+    this.set('shop-next', advanceLabel(state))
     this.fields['shop-next'].hidden = !canAdvance
     this.fields['shop-retry'].hidden = canAdvance
 
@@ -492,4 +551,14 @@ export class ShiftUi {
 function clock(seconds: number): string {
   const whole = Math.max(0, Math.ceil(seconds))
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`
+}
+
+function metric(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
+}
+
+export function advanceLabel(state: Pick<ShiftUiState, 'rush' | 'finalDay' | 'canStartScoreChase' | 'day'>): string {
+  if (state.rush) return 'NEXT RUSH'
+  if (!state.finalDay) return 'NEXT DAY'
+  return state.canStartScoreChase ? 'START SCORE CHASE' : `REPLAY ${state.day}`
 }

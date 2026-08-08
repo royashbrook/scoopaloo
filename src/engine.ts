@@ -20,7 +20,16 @@ export type SaveV1 = {
   lifetimeCash: number
   dayStars: [number, number, number]
   dayBestRevenue: [number, number, number]
+  scoreChaseLevel: number
+  scoreChaseBest: number
 }
+
+export type ActiveShiftRules = Pick<SkinDay,
+  'id' | 'label' | 'challenge' | 'unlockBanner' | 'duration' | 'cashGoal' | 'starThresholds'
+  | 'customerPatience' | 'spawnInterval' | 'orderDeck'> & {
+    kind: 'campaign' | 'score-chase'
+    level: number
+  }
 
 export type ShiftPhase = 'ready' | 'playing' | 'results' | 'shop'
 export type ShiftState = {
@@ -74,6 +83,7 @@ export type PrepState = { job: PrepJob | null; outputs: Inventory }
 
 export type GameState = {
   skin: GameSkin
+  rules: ActiveShiftRules
   phase: ShiftPhase
   shift: ShiftState
   time: number
@@ -117,6 +127,8 @@ export const defaultSave = (skin: GameSkin): SaveV1 => ({
   lifetimeCash: 0,
   dayStars: [0, 0, 0],
   dayBestRevenue: [0, 0, 0],
+  scoreChaseLevel: 0,
+  scoreChaseBest: 0,
 })
 
 function backfillDayUnlocks(skin: GameSkin, save: SaveV1): void {
@@ -168,7 +180,7 @@ export const trayCapacity = (state: GameState): number => 2 + upgradeEffect(stat
 export const producerInterval = (state: GameState, source = state.skin.progression.startingStation): number =>
   state.skin.producers[source].interval
 export const machineInterval = producerInterval
-export const customerPatience = (state: GameState): number => currentDay(state).customerPatience + upgradeEffect(state, 'customerPatience')
+export const customerPatience = (state: GameState): number => state.rules.customerPatience + upgradeEffect(state, 'customerPatience')
 
 export function prepSeconds(state: GameState, item: string): number {
   const recipe = itemFor(state.skin, item).recipe
@@ -178,6 +190,7 @@ export function prepSeconds(state: GameState, item: string): number {
 
 export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): GameState {
   const saved = structuredClone(save)
+  if (saved.scoreChaseLevel > 0 && skin.scoreChase) saved.currentDay = skin.days.length - 1
   // SaveV1 already persists both currentDay and station history. Rebuild any
   // day-earned station here so older saves gain new content without SaveV2.
   backfillDayUnlocks(skin, saved)
@@ -196,17 +209,19 @@ export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): Ga
   }]))
   const machine = sources[skin.progression.startingStation]
   if (!machine) throw new Error(`unknown starting producer: ${skin.progression.startingStation}`)
+  const rules = activeShiftRules(skin, saved)
   return {
     skin,
+    rules,
     phase: 'ready',
-    shift: freshShift(skin, saved),
+    shift: freshShift(rules),
     time: 0,
     player: { x: 480, y: 880, facing: 1, moving: false, tray: 0, trayItems: emptyInventory(skin), trayWobble: 0 },
     sources,
     machine,
     prepStations,
     counter: { stock: 0, items: emptyInventory(skin), serveTimer: 0 },
-    customers: [customer(skin, saved, 1, 0)],
+    customers: [customer(skin, saved, rules, 1, 0)],
     flyingCoins: [],
     events: [],
     spawnTimer: 2,
@@ -217,11 +232,9 @@ export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): Ga
   }
 }
 
-function freshShift(skin: GameSkin, save: SaveV1): ShiftState {
-  const day = skin.days[clamp(Math.floor(save.currentDay), 0, skin.days.length - 1)]
-  if (!day) throw new Error('campaign has no days')
+function freshShift(rules: ActiveShiftRules): ShiftState {
   return {
-    remaining: day.duration,
+    remaining: rules.duration,
     revenue: 0,
     served: 0,
     missed: 0,
@@ -231,10 +244,8 @@ function freshShift(skin: GameSkin, save: SaveV1): ShiftState {
   }
 }
 
-function orderAt(skin: GameSkin, save: SaveV1, index: number): CustomerOrder {
-  const day = skin.days[clamp(Math.floor(save.currentDay), 0, skin.days.length - 1)]
-  if (!day) throw new Error('campaign has no days')
-  const request = day.orderDeck[index % day.orderDeck.length]
+function orderAt(skin: GameSkin, rules: ActiveShiftRules, index: number): CustomerOrder {
+  const request = rules.orderDeck[index % rules.orderDeck.length]
   if (!request) throw new Error('order deck is empty')
   const item = itemFor(skin, request.item)
   return {
@@ -246,16 +257,14 @@ function orderAt(skin: GameSkin, save: SaveV1, index: number): CustomerOrder {
   }
 }
 
-function customer(skin: GameSkin, save: SaveV1, id: number, look: number): Customer {
-  const day = skin.days[clamp(Math.floor(save.currentDay), 0, skin.days.length - 1)]
-  if (!day) throw new Error('campaign has no days')
+function customer(skin: GameSkin, save: SaveV1, rules: ActiveShiftRules, id: number, look: number): Customer {
   return {
     id,
     look: look % 4,
     served: false,
     missed: false,
-    patience: day.customerPatience + savedUpgradeEffect(skin, save, 'customerPatience'),
-    order: orderAt(skin, save, look),
+    patience: rules.customerPatience + savedUpgradeEffect(skin, save, 'customerPatience'),
+    order: orderAt(skin, rules, look),
     x: 700,
     y: 550,
     exit: 0,
@@ -402,9 +411,9 @@ function updateCustomers(state: GameState, dt: number): void {
   state.spawnTimer -= dt
   if (state.spawnTimer <= 0 && state.customers.filter(item => !item.served && !item.missed).length < 4) {
     const id = state.nextOrder + 1
-    state.customers.push(customer(state.skin, state.save, id, state.nextOrder))
+    state.customers.push(customer(state.skin, state.save, state.rules, id, state.nextOrder))
     state.nextOrder++
-    state.spawnTimer = currentDay(state).spawnInterval
+    state.spawnTimer = state.rules.spawnInterval
   }
 
   const brokenStreak = state.shift.streak
@@ -570,7 +579,7 @@ export function upcomingOrders(state: GameState, count: number): CustomerOrder[]
   const waiting = state.customers.filter(customer => !customer.served && !customer.missed)
   const orders = waiting.slice(1, limit + 1).map(customer => customer.order)
   for (let index = state.nextOrder; orders.length < limit; index++) {
-    orders.push(orderAt(state.skin, state.save, index))
+    orders.push(orderAt(state.skin, state.rules, index))
   }
   return orders
 }
@@ -620,7 +629,14 @@ export function purchaseUpgrade(state: GameState, id: string): boolean {
 
 export function nextDay(state: GameState): boolean {
   if (state.phase !== 'shop' || !goalMet(state)) return false
-  state.save.currentDay = Math.min(state.skin.days.length - 1, state.save.currentDay + 1)
+  const finalDay = state.skin.days.length - 1
+  if (state.skin.scoreChase && state.save.scoreChaseLevel > 0) {
+    state.save.scoreChaseLevel = Math.min(999, state.save.scoreChaseLevel + 1)
+  } else if (state.skin.scoreChase && state.save.currentDay >= finalDay) {
+    state.save.scoreChaseLevel = 1
+  } else {
+    state.save.currentDay = Math.min(finalDay, state.save.currentDay + 1)
+  }
   backfillDayUnlocks(state.skin, state.save)
   resetShift(state, 'ready')
   return true
@@ -636,7 +652,7 @@ export function comboBonus(state: GameState, streak: number): number {
 }
 
 export function goalMet(state: GameState): boolean {
-  return state.shift.revenue >= currentDay(state).cashGoal
+  return state.shift.revenue >= state.rules.cashGoal
 }
 
 export function starsFor(skin: GameSkin, revenue: number, dayIndex = 0): number {
@@ -650,10 +666,49 @@ function finishShift(state: GameState): void {
   const dayIndex = clamp(Math.floor(state.save.currentDay), 0, state.skin.days.length - 1)
   state.phase = 'results'
   state.shift.remaining = 0
-  state.shift.stars = starsFor(state.skin, state.shift.revenue, dayIndex)
-  state.save.dayBestRevenue[dayIndex] = Math.max(state.save.dayBestRevenue[dayIndex], state.shift.revenue)
-  state.save.dayStars[dayIndex] = Math.max(state.save.dayStars[dayIndex], state.shift.stars)
-  state.save.bestRevenue = Math.max(state.save.bestRevenue, state.shift.revenue)
-  state.save.bestStars = Math.max(state.save.bestStars, state.shift.stars)
+  state.shift.stars = state.rules.starThresholds.filter(threshold => state.shift.revenue >= threshold).length
+  if (state.rules.kind === 'campaign') {
+    state.save.dayBestRevenue[dayIndex] = Math.max(state.save.dayBestRevenue[dayIndex], state.shift.revenue)
+    state.save.dayStars[dayIndex] = Math.max(state.save.dayStars[dayIndex], state.shift.stars)
+    state.save.bestRevenue = Math.max(state.save.bestRevenue, state.shift.revenue)
+    state.save.bestStars = Math.max(state.save.bestStars, state.shift.stars)
+  } else {
+    state.save.scoreChaseBest = Math.max(state.save.scoreChaseBest, state.shift.revenue)
+  }
   state.player.moving = false
+}
+
+function activeShiftRules(skin: GameSkin, save: SaveV1): ActiveShiftRules {
+  const chase = skin.scoreChase
+  if (chase && save.scoreChaseLevel > 0) {
+    if (chase.orderDeck.length === 0) throw new Error('score chase order deck is empty')
+    const level = clamp(Math.floor(save.scoreChaseLevel), 1, 999)
+    const step = level - 1
+    const goal = chase.cashGoal + chase.goalStep * step
+    const rotation = step % chase.orderDeck.length
+    return {
+      kind: 'score-chase',
+      level,
+      id: chase.id,
+      label: chase.label,
+      challenge: chase.challenge,
+      unlockBanner: `RUSH ${Math.min(999, level + 1)} UNLOCKED`,
+      duration: chase.duration,
+      cashGoal: goal,
+      starThresholds: [goal, goal + chase.starGap, goal + chase.starGap * 2],
+      customerPatience: Math.max(chase.minCustomerPatience, chase.customerPatience - chase.patienceStep * step),
+      spawnInterval: Math.max(chase.minSpawnInterval, chase.spawnInterval - chase.spawnStep * step),
+      orderDeck: [...chase.orderDeck.slice(rotation), ...chase.orderDeck.slice(0, rotation)],
+    }
+  }
+  const dayIndex = clamp(Math.floor(save.currentDay), 0, skin.days.length - 1)
+  const day = skin.days[dayIndex]
+  if (!day) throw new Error('campaign has no days')
+  return {
+    ...day,
+    kind: 'campaign',
+    level: dayIndex + 1,
+    starThresholds: [...day.starThresholds],
+    orderDeck: [...day.orderDeck],
+  }
 }

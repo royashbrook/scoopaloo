@@ -72,6 +72,31 @@
       ]
     }
   ],
+  "scoreChase": {
+    "id": "score-chase",
+    "label": "RUSH",
+    "challenge": "FULL MENU SCORE CHASE",
+    "duration": 120,
+    "cashGoal": 140,
+    "goalStep": 10,
+    "starGap": 20,
+    "customerPatience": 50,
+    "patienceStep": 2,
+    "minCustomerPatience": 34,
+    "spawnInterval": 7.5,
+    "spawnStep": 0.25,
+    "minSpawnInterval": 5.5,
+    "orderDeck": [
+      { "item": "chocolate-cone", "quantity": 1 },
+      { "item": "sundae", "quantity": 2 },
+      { "item": "vanilla-cone", "quantity": 1 },
+      { "item": "chocolate-sundae", "quantity": 2 },
+      { "item": "chocolate-cone", "quantity": 2 },
+      { "item": "sundae", "quantity": 1 },
+      { "item": "vanilla-cone", "quantity": 2 },
+      { "item": "chocolate-sundae", "quantity": 1 }
+    ]
+  },
   "items": {
     "vanilla-cone": {
       "label": "VANILLA CONE",
