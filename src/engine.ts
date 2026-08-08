@@ -29,6 +29,7 @@ export type ActiveShiftRules = Pick<SkinDay,
   | 'customerPatience' | 'spawnInterval' | 'orderDeck'> & {
     kind: 'campaign' | 'score-chase'
     level: number
+    activeOrderWindow: number
   }
 
 export type ShiftPhase = 'ready' | 'playing' | 'results' | 'shop'
@@ -94,7 +95,7 @@ export type GameState = {
   /** Compatibility alias for the original renderer; sources is authoritative. */
   machine: ProducerState
   prepStations: Record<string, PrepState>
-  counter: { stock: number; items: Inventory; serveTimer: number }
+  counter: { stock: number; items: Inventory; serveTimer: number; servingCustomerId: number | null }
   customers: Customer[]
   flyingCoins: FlyingCoin[]
   events: GameEvent[]
@@ -222,7 +223,7 @@ export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): Ga
     sources,
     machine,
     prepStations,
-    counter: { stock: 0, items: emptyInventory(skin), serveTimer: 0 },
+    counter: { stock: 0, items: emptyInventory(skin), serveTimer: 0, servingCustomerId: null },
     customers: [customer(skin, saved, rules, 1, 0)],
     flyingCoins: [],
     events: [],
@@ -339,9 +340,12 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
   updatePrepStations(state, dt, capacity)
 
   if (state.pickupCooldown === 0 && near(state.player, counter) && inventoryTotal(state.player.trayItems) > 0) {
-    const front = state.customers.find(item => !item.served && !item.missed)
-    const item = front && (state.player.trayItems[front.order.item] ?? 0) > 0
-      ? front.order.item
+    const waiting = state.customers.filter(item => !item.served && !item.missed)
+    const active = waiting.slice(0, state.rules.activeOrderWindow)
+    const front = waiting[0]
+    const requested = active.find(customer => (state.player.trayItems[customer.order.item] ?? 0) > 0)
+    const item = requested
+      ? requested.order.item
       : firstStock(state.skin, state.player.trayItems)
     state.pickupCooldown = INTERACTION_COOLDOWN
     if (!itemFor(state.skin, item).recipe) {
@@ -366,7 +370,7 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
       state.counter.stock = inventoryTotal(state.counter.items)
       state.player.trayWobble = Math.max(state.player.trayWobble, .8)
       emit(state, 'drop', counter, { item, from })
-      if (front && front.order.item !== item) {
+      if (front && !active.some(customer => customer.order.item === item)) {
         emit(state, 'reject', counter, { item, expectedItem: front.order.item, reason: 'wrong-item' })
       }
     }
@@ -447,6 +451,7 @@ function updateCustomers(state: GameState, dt: number): void {
   if (walkedOut) {
     state.shift.streak = 0
     state.counter.serveTimer = 0
+    state.counter.servingCustomerId = null
     if (brokenStreak > 0) emit(state, 'combo-break', walkedOut, { streak: brokenStreak })
   }
 
@@ -457,21 +462,27 @@ function updateCustomers(state: GameState, dt: number): void {
     item.y = 550 + index * 25
   })
 
-  const front = waiting[0]
-  if (front && (state.counter.items[front.order.item] ?? 0) >= front.order.quantity) {
+  const target = waiting.slice(0, state.rules.activeOrderWindow)
+    .find(customer => (state.counter.items[customer.order.item] ?? 0) >= customer.order.quantity)
+  if (target) {
+    if (state.counter.servingCustomerId !== target.id) {
+      state.counter.servingCustomerId = target.id
+      state.counter.serveTimer = 0
+    }
     state.counter.serveTimer += dt
     if (state.counter.serveTimer >= .7) {
-      addStock(state.counter.items, front.order.item, -front.order.quantity)
+      addStock(state.counter.items, target.order.item, -target.order.quantity)
       state.counter.stock = inventoryTotal(state.counter.items)
       state.counter.serveTimer = 0
-      front.served = true
+      state.counter.servingCustomerId = null
+      target.served = true
       state.shift.served++
       state.shift.streak++
       state.shift.bestStreak = Math.max(state.shift.bestStreak, state.shift.streak)
-      const tip = tipFor(front.patience, customerPatience(state))
+      const tip = tipFor(target.patience, customerPatience(state))
       const combo = comboBonus(state, state.shift.streak)
-      const payout = front.order.price + tip + combo
-      emit(state, 'pay', register, { amount: payout, tip, combo, streak: state.shift.streak, item: front.order.item })
+      const payout = target.order.price + tip + combo
+      emit(state, 'pay', register, { amount: payout, tip, combo, streak: state.shift.streak, item: target.order.item })
       for (let i = 0; i < 4; i++) {
         const angle = -2.7 + i * .45
         state.flyingCoins.push({
@@ -488,6 +499,7 @@ function updateCustomers(state: GameState, dt: number): void {
     }
   } else {
     state.counter.serveTimer = 0
+    state.counter.servingCustomerId = null
   }
 
   state.customers.forEach(item => {
@@ -717,6 +729,7 @@ function activeShiftRules(skin: GameSkin, save: SaveV1): ActiveShiftRules {
       starThresholds: [goal, goal + chase.starGap, goal + chase.starGap * 2],
       customerPatience: Math.max(chase.minCustomerPatience, chase.customerPatience - chase.patienceStep * step),
       spawnInterval: Math.max(chase.minSpawnInterval, chase.spawnInterval - chase.spawnStep * step),
+      activeOrderWindow: boundedOrderWindow(chase.activeOrderWindow),
       orderDeck: [...chase.orderDeck.slice(rotation), ...chase.orderDeck.slice(0, rotation)],
     }
   }
@@ -727,7 +740,12 @@ function activeShiftRules(skin: GameSkin, save: SaveV1): ActiveShiftRules {
     ...day,
     kind: 'campaign',
     level: dayIndex + 1,
+    activeOrderWindow: boundedOrderWindow(day.activeOrderWindow),
     starThresholds: [...day.starThresholds],
     orderDeck: [...day.orderDeck],
   }
+}
+
+function boundedOrderWindow(value: number | undefined): number {
+  return clamp(Math.floor(typeof value === 'number' && Number.isFinite(value) ? value : 1), 1, 3)
 }

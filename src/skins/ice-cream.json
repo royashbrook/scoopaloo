@@ -30,6 +30,7 @@
       "starThresholds": [45, 60, 75],
       "customerPatience": 50,
       "spawnInterval": 10,
+      "activeOrderWindow": 1,
       "orderDeck": [
         { "item": "vanilla-cone", "quantity": 1 },
         { "item": "vanilla-cone", "quantity": 1 },
@@ -52,6 +53,7 @@
       "starThresholds": [60, 75, 90],
       "customerPatience": 32,
       "spawnInterval": 8.5,
+      "activeOrderWindow": 2,
       "orderDeck": [
         { "item": "chocolate-cone", "quantity": 1 },
         { "item": "vanilla-cone", "quantity": 1 },
@@ -73,6 +75,7 @@
       "starThresholds": [70, 130, 190],
       "customerPatience": 60,
       "spawnInterval": 7.5,
+      "activeOrderWindow": 3,
       "orderDeck": [
         { "item": "chocolate-sundae", "quantity": 2 },
         { "item": "vanilla-cone", "quantity": 2 },
@@ -99,6 +102,7 @@
     "spawnInterval": 7.5,
     "spawnStep": 0.25,
     "minSpawnInterval": 5.5,
+    "activeOrderWindow": 3,
     "orderDeck": [
       { "item": "chocolate-cone", "quantity": 1 },
       { "item": "sundae", "quantity": 2 },
