@@ -9,6 +9,7 @@ export type SoundCue =
   | 'blocked'
   | 'combo'
   | 'combo-break'
+  | 'hurry'
   | 'start'
   | 'success'
   | 'fail'
@@ -35,6 +36,7 @@ const cues: Record<SoundCue, readonly Note[]> = {
   blocked: [[190, 0, .12, 'triangle']],
   combo: [[587, 0, .07], [740, .055, .08], [988, .11, .13]],
   'combo-break': [[330, 0, .08, 'triangle'], [247, .07, .1, 'triangle'], [185, .15, .13, 'triangle']],
+  hurry: [[784, 0, .06, 'triangle'], [784, .12, .06, 'triangle']],
   start: [[330, 0, .08], [440, .07, .08], [660, .14, .13]],
   success: [[523, 0, .1], [659, .08, .1], [784, .16, .18]],
   fail: [[330, 0, .12], [247, .1, .12], [196, .2, .18]],

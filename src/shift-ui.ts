@@ -15,6 +15,7 @@ export type ShiftUiState = {
   comboBonus?: number
   comboNextAt?: number
   comboEvent?: { serial: number; kind: 'gain' | 'break'; streak: number }
+  urgentEvent?: { serial: number }
   bestStreak: number
   stars: number
   success: boolean
@@ -37,12 +38,24 @@ export type ShiftUiState = {
     quantity: number
     price: number
     patience: number
+    patienceSeconds: number
+    patienceMax: number
+    tip: number
+    potentialCombo: number
+    potentialPayout: number
+    urgent: boolean
     icon?: string
   } | null
 }
 
 type InventoryUiItem = { label: string; icon: string; count: number }
-export type UpcomingOrderUiItem = { label: string; icon: string; quantity: number; patience?: number | null }
+export type UpcomingOrderUiItem = {
+  label: string
+  icon: string
+  quantity: number
+  patience?: number | null
+  seconds?: number | null
+}
 export type UpgradeUiItem = {
   id: string
   name: string
@@ -69,6 +82,7 @@ export class ShiftUi {
   private readonly fields: Record<string, HTMLElement>
   private previousPhase: ShiftPhase | null = null
   private previousComboEvent = -1
+  private previousUrgentEvent = -1
   private comboTimer?: number
 
   constructor(private readonly root: HTMLElement, actions: ShiftActions) {
@@ -93,13 +107,25 @@ export class ShiftUi {
           <ol data-field="upcoming-orders"></ol>
         </aside>
         <aside class="order-ticket" data-field="ticket" aria-label="Current order">
-          <div class="ticket-heading"><span>ORDER</span><strong data-field="order-quantity">×1</strong></div>
+          <div class="ticket-heading">
+            <span>ORDER</span>
+            <strong data-field="order-quantity">×1</strong>
+            <b data-field="order-payout">MAX $9</b>
+          </div>
           <div class="ticket-body">
             <img class="ticket-icon" data-field="order-icon" src="/assets/items/vanilla-cone.svg" alt="" />
             <strong data-field="order-label">VANILLA CONE</strong>
             <b data-field="order-price">$6</b>
           </div>
-          <div class="patience-track" aria-label="Customer patience"><i data-field="patience"></i></div>
+          <div class="patience-track" data-field="patience-track" role="progressbar" aria-label="Customer patience" aria-valuemin="0">
+            <i data-field="patience" aria-hidden="true"></i>
+            <span class="patience-values" aria-hidden="true">
+              <b data-field="patience-seconds">50s</b>
+              <b data-field="tip-value">TIP +$3</b>
+              <b data-field="projected-combo">COMBO +$0</b>
+            </span>
+          </div>
+          <span class="sr-only" data-field="urgent-status" role="status" aria-live="polite" aria-atomic="true"></span>
           <div class="ticket-guidance">
             <span data-field="ticket-guidance" role="status" aria-live="polite" aria-atomic="true">GET THE INGREDIENTS</span>
             <i class="prep-progress" data-field="prep-progress" role="progressbar" aria-label="Preparation progress" aria-valuemin="0" aria-valuemax="100" hidden></i>
@@ -186,6 +212,8 @@ export class ShiftUi {
       this.root.dataset.phase = state.phase
       if (state.phase === 'playing') {
         this.previousComboEvent = -1
+        this.previousUrgentEvent = -1
+        this.set('urgent-status', '')
         if (this.comboTimer != null) window.clearTimeout(this.comboTimer)
         this.comboTimer = undefined
         this.fields['combo-card'].classList.remove('is-gain', 'is-break')
@@ -252,6 +280,7 @@ export class ShiftUi {
     this.fields['order-panel'].hidden = !showTicket
     const warning = state.warning ?? (state.wrongItem ? 'WRONG ITEM' : '')
     ticket.classList.toggle('is-wrong', Boolean(warning))
+    ticket.classList.toggle('is-urgent', Boolean(state.order?.urgent))
     this.set('ticket-guidance', warning || state.recipe?.instruction || 'GET THE INGREDIENTS')
     this.renderRecipe(state.recipe?.steps ?? [], state.order?.label ?? '')
     const progress = state.recipe?.progress
@@ -266,13 +295,27 @@ export class ShiftUi {
     this.renderInventory('tray', state.trayItems ?? [])
     this.renderInventory('counter', state.counterItems ?? [])
     this.renderUpcoming(state.upcomingOrders ?? [])
+    if (!state.order?.urgent) this.set('urgent-status', '')
     if (!state.order) return
     this.set('order-label', state.order.label)
     this.set('order-quantity', `×${state.order.quantity}`)
     this.set('order-price', `$${state.order.price}`)
+    this.set('order-payout', `MAX $${state.order.potentialPayout}`)
+    this.set('patience-seconds', `${state.order.patienceSeconds}s`)
+    this.set('tip-value', `TIP +$${state.order.tip}`)
+    this.set('projected-combo', `COMBO +$${state.order.potentialCombo}`)
     const icon = this.fields['order-icon'] as HTMLImageElement
     if (state.order.icon && icon.getAttribute('src') !== state.order.icon) icon.src = state.order.icon
     this.fields.patience.style.width = `${Math.round(Math.max(0, Math.min(1, state.order.patience)) * 100)}%`
+    const patience = this.fields['patience-track']
+    patience.setAttribute('aria-valuemax', String(state.order.patienceMax))
+    patience.setAttribute('aria-valuenow', String(state.order.patienceSeconds))
+    patience.setAttribute('aria-valuetext', `${state.order.patienceSeconds} seconds remaining. Maximum payout $${state.order.potentialPayout} at current patience: $${state.order.price} order, up to $${state.order.tip} tip, up to $${state.order.potentialCombo} combo.`)
+    if (state.urgentEvent && state.urgentEvent.serial !== this.previousUrgentEvent) {
+      this.previousUrgentEvent = state.urgentEvent.serial
+      const unit = state.order.patienceSeconds === 1 ? 'second' : 'seconds'
+      this.set('urgent-status', `Hurry: ${state.order.patienceSeconds} ${unit} left for ${state.order.label}. Maximum payout is now $${state.order.potentialPayout}.`)
+    }
   }
 
   private set(field: string, value: string | number): void {
@@ -404,21 +447,28 @@ export class ShiftUi {
         const quantity = document.createElement('b')
         quantity.ariaHidden = 'true'
         quantity.textContent = `×${order.quantity}`
+        const seconds = document.createElement('span')
+        seconds.className = 'next-seconds'
+        seconds.ariaHidden = 'true'
         const patience = document.createElement('i')
         patience.className = 'next-patience'
         patience.ariaHidden = 'true'
-        item.append(position, icon, quantity, patience)
+        item.append(position, icon, quantity, seconds, patience)
         return item
       }))
     }
     upcoming.forEach((order, index) => {
       const item = target.children[index] as HTMLElement | undefined
       const patience = item?.querySelector<HTMLElement>('.next-patience')
-      if (!item || !patience) return
-      const waiting = order.patience != null
+      const seconds = item?.querySelector<HTMLElement>('.next-seconds')
+      if (!item || !patience || !seconds) return
+      const waiting = order.patience != null && order.seconds != null
+      const wholeSeconds = Math.max(0, Math.ceil(order.seconds ?? 0))
       const percent = Math.round(Math.max(0, Math.min(1, order.patience ?? 0)) * 100)
       item.setAttribute('aria-label', `Order ${index + 2}: ${order.label}, quantity ${order.quantity}, ${waiting
-        ? `${percent}% patience remaining` : 'not waiting yet'}`)
+        ? `${wholeSeconds} seconds remaining` : 'not waiting yet'}`)
+      seconds.hidden = !waiting
+      seconds.textContent = `${wholeSeconds}s`
       patience.hidden = !waiting
       patience.style.width = `${percent}%`
     })

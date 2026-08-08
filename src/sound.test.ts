@@ -101,7 +101,7 @@ describe('mobile sound', () => {
     const cues: SoundCue[] = [
       'pickup', 'drop', 'pour', 'pay', 'reject',
       'prep-start', 'prep-ready', 'blocked', 'combo', 'combo-break',
-      'start', 'success', 'fail', 'buy', 'next',
+      'hurry', 'start', 'success', 'fail', 'buy', 'next',
     ]
 
     for (const cue of cues) {
@@ -120,6 +120,18 @@ describe('mobile sound', () => {
       gain.events.some(event => event.value === .025)
       && gain.events.at(-1)?.value === .0001,
     )).toBe(true)
+  })
+
+  it('plays hurry as one restrained double pulse', async () => {
+    const context = new FakeContext()
+    const sound = new GameSound(storage(), () => context as SoundContext)
+    sound.unlock()
+    await Promise.resolve()
+
+    sound.play('hurry')
+
+    expect(context.oscillators.map(node => node.frequency.events[0]?.value)).toEqual([784, 784])
+    expect(context.oscillators.map(node => node.starts[0])).toEqual([10, 10.12])
   })
 
   it('plays a cue requested while the first gesture is still resuming audio', async () => {
