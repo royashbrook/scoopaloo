@@ -265,6 +265,7 @@ function updateShiftUi(): void {
       label: upcoming.label,
       icon: upcoming.icon,
       quantity: upcoming.quantity,
+      actionable: Boolean(waitingCustomers[index + 1]) && index + 1 < rules.activeOrderWindow,
       patience: waitingCustomers[index + 1]
         ? waitingCustomers[index + 1].patience / customerPatience(state)
         : null,

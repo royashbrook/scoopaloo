@@ -168,6 +168,8 @@ describe('three-day shop campaign (#25)', () => {
     expect(skin.days.map(day => day.cashGoal)).toEqual([45, 60, 70])
     expect(skin.days.map(day => day.customerPatience)).toEqual([50, 32, 60])
     expect(skin.days.map(day => day.spawnInterval)).toEqual([10, 8.5, 7.5])
+    expect(skin.days.map(day => day.activeOrderWindow)).toEqual([1, 2, 3])
+    expect(skin.scoreChase?.activeOrderWindow).toBe(3)
     expect(skin.days[2].starThresholds).toEqual([70, 130, 190])
     expect(skin.days[2].spawnInterval).toBeLessThanOrEqual(skin.days[1].spawnInterval)
     expect(skin.days.every(day => day.challenge && day.unlockBanner && day.orderDeck.length > 0)).toBe(true)
@@ -286,6 +288,7 @@ describe('score chase rush ladder (#27)', () => {
       kind: 'score-chase', level: 1, id: 'score-chase', label: 'RUSH',
       challenge: 'FULL MENU SCORE CHASE', duration: 120, cashGoal: 140,
       starThresholds: [140, 160, 180], customerPatience: 50, spawnInterval: 7.5,
+      activeOrderWindow: 3,
       orderDeck: baseDeck,
     })
     expect(rush(2).rules).toMatchObject({
@@ -306,6 +309,22 @@ describe('score chase rush ladder (#27)', () => {
     broken.scoreChase!.orderDeck = []
     expect(() => createGame(broken, { ...defaultSave(broken), currentDay: 2, scoreChaseLevel: 1 }))
       .toThrow('score chase order deck is empty')
+  })
+
+  it('defaults and clamps active order windows into the three-ticket rail', () => {
+    const custom = structuredClone(skin)
+    custom.days[0].activeOrderWindow = 99
+    custom.days[1].activeOrderWindow = -4
+    delete custom.days[2].activeOrderWindow
+    custom.scoreChase!.activeOrderWindow = 2.9
+    const campaignWindows = custom.days.map((_, currentDay) => {
+      const save = defaultSave(custom)
+      save.currentDay = currentDay
+      return createGame(custom, save).rules.activeOrderWindow
+    })
+    const rushSave = defaultSave(custom)
+    Object.assign(rushSave, { currentDay: 2, scoreChaseLevel: 1 })
+    expect([...campaignWindows, createGame(custom, rushSave).rules.activeOrderWindow]).toEqual([3, 1, 1, 2])
   })
 
   it('keeps retry on the same rush and advances exactly once after success', () => {
@@ -648,6 +667,164 @@ describe('manual typed preparation', () => {
   })
 })
 
+describe('open counter (#32)', () => {
+  const started = (day: number) => {
+    const save = defaultSave(skin)
+    save.currentDay = day
+    const game = createGame(skin, save)
+    startShift(game)
+    return game
+  }
+
+  const addOrder = (game: GameState, item: string, quantity = 1) => {
+    const product = itemFor(skin, item)
+    const id = Math.max(...game.customers.map(customer => customer.id)) + 1
+    const added = {
+      ...game.customers[0],
+      id,
+      look: id % skin.sprites.customers.length,
+      served: false,
+      missed: false,
+      patience: customerPatience(game),
+      order: { item, quantity, label: product.label, price: product.price * quantity, icon: product.icon, color: product.color },
+      x: 900,
+      y: 345,
+      exit: 0,
+    }
+    game.customers.push(added)
+    return added
+  }
+
+  it('keeps later stock inert on Day 1 and serves the oldest fulfillable open order on Day 2', () => {
+    const locked = started(0)
+    const lockedSecond = addOrder(locked, 'sundae')
+    locked.counter.items.sundae = 1
+    locked.counter.stock = 1
+    runFor(locked, .75)
+    expect(lockedSecond.served).toBe(false)
+    expect(locked.counter).toMatchObject({ serveTimer: 0, servingCustomerId: null })
+
+    const open = started(1)
+    const front = open.customers[0]
+    const second = addOrder(open, 'vanilla-cone')
+    const hidden = addOrder(open, 'sundae')
+    Object.assign(open.counter.items, { 'vanilla-cone': 1, sundae: 1 })
+    open.counter.stock = 2
+    runFor(open, .75)
+    expect(front.served).toBe(false)
+    expect(second.served).toBe(true)
+    expect(hidden.served).toBe(false)
+    expect(open.events).toContainEqual(expect.objectContaining({ kind: 'pay', item: 'vanilla-cone' }))
+
+    const partial = started(2)
+    const double = partial.customers[0]
+    const single = addOrder(partial, double.order.item)
+    partial.counter.items[double.order.item] = 1
+    partial.counter.stock = 1
+    runFor(partial, .75)
+    expect(double.served).toBe(false)
+    expect(single.served).toBe(true)
+
+    const boundary = started(2)
+    addOrder(boundary, 'vanilla-cone')
+    const third = addOrder(boundary, 'chocolate-cone')
+    const fourth = addOrder(boundary, 'sundae')
+    Object.assign(boundary.counter.items, { 'chocolate-cone': 1, sundae: 1 })
+    boundary.counter.stock = 2
+    runFor(boundary, .75)
+    expect(third.served).toBe(true)
+    expect(fourth.served).toBe(false)
+  })
+
+  it('prefers open-order tray items and warns only for products outside the window', () => {
+    const game = started(1)
+    addOrder(game, 'vanilla-cone')
+    addOrder(game, 'sundae')
+    Object.assign(game.player.trayItems, { 'vanilla-cone': 1, sundae: 1 })
+    game.player.tray = 2
+    Object.assign(game.player, stationPoint(skin, 'counter'))
+
+    step(game, .05)
+    expect(game.counter.items['vanilla-cone']).toBe(1)
+    expect(game.events.some(event => event.reason === 'wrong-item')).toBe(false)
+
+    game.pickupCooldown = 0
+    step(game, .05)
+    expect(game.counter.items.sundae).toBe(1)
+    expect(game.events).toContainEqual(expect.objectContaining({
+      kind: 'reject', item: 'sundae', expectedItem: game.customers[0].order.item, reason: 'wrong-item',
+    }))
+  })
+
+  it('pins serve progress to one customer and resets it when priority changes', () => {
+    const game = started(2)
+    const front = game.customers[0]
+    const second = addOrder(game, 'vanilla-cone')
+    game.counter.items['vanilla-cone'] = 1
+    game.counter.stock = 1
+
+    runFor(game, .4)
+    expect(game.counter.servingCustomerId).toBe(second.id)
+    expect(game.counter.serveTimer).toBeCloseTo(.4)
+
+    game.counter.items[front.order.item] = front.order.quantity
+    game.counter.stock = inventoryTotal(game.counter.items)
+    runFor(game, .35)
+    expect(game.counter.servingCustomerId).toBe(front.id)
+    expect(game.counter.serveTimer).toBeCloseTo(.35)
+    expect(front.served).toBe(false)
+
+    runFor(game, .36)
+    expect(front.served).toBe(true)
+    expect(second.served).toBe(false)
+    expect(game.counter.servingCustomerId).toBe(second.id)
+    expect(game.counter.serveTimer).toBeCloseTo(.01)
+    runFor(game, .69)
+    expect(second.served).toBe(true)
+  })
+
+  it('resets an in-flight later serve when another customer walks out', () => {
+    const game = started(1)
+    const front = game.customers[0]
+    const second = addOrder(game, 'vanilla-cone')
+    game.counter.items['vanilla-cone'] = 1
+    game.counter.stock = 1
+    runFor(game, .4)
+
+    front.patience = .05
+    step(game, .05)
+    expect(front.missed).toBe(true)
+    expect(game.counter).toMatchObject({ servingCustomerId: second.id, serveTimer: .05 })
+    expect(second.served).toBe(false)
+  })
+
+  it('pins the skip payoff while preserving front-order miss and combo risk', () => {
+    const skip = (activeOrderWindow: number) => {
+      const game = started(1)
+      game.rules.activeOrderWindow = activeOrderWindow
+      game.customers[0].patience = 10
+      const second = addOrder(game, 'vanilla-cone')
+      second.patience = .8
+      game.counter.items['vanilla-cone'] = 1
+      game.counter.stock = 1
+      runFor(game, .85)
+      return [game.shift.served, game.shift.missed, game.events.find(event => event.kind === 'pay')?.amount ?? 0]
+    }
+    expect([skip(1), skip(2)]).toEqual([[0, 1, 0], [1, 0, 11]])
+
+    const careless = started(1)
+    careless.shift.streak = 2
+    careless.shift.bestStreak = 2
+    careless.customers[0].patience = .2
+    addOrder(careless, 'vanilla-cone')
+    careless.counter.items['vanilla-cone'] = 1
+    careless.counter.stock = 1
+    runFor(careless, .95)
+    expect(careless.shift).toMatchObject({ served: 1, missed: 1, streak: 1, bestStreak: 2 })
+    expect(careless.events).toContainEqual(expect.objectContaining({ kind: 'combo-break', streak: 2 }))
+  })
+})
+
 describe('timed Day 1 shift (#22)', () => {
   const started = () => {
     const game = createGame(skin)
@@ -676,6 +853,7 @@ describe('timed Day 1 shift (#22)', () => {
     game.counter.items[front.order.item] = front.order.quantity
     game.counter.stock = inventoryTotal(game.counter.items)
     game.counter.serveTimer = .66
+    game.counter.servingCustomerId = front.id
     step(game, .05)
   }
 
@@ -1054,7 +1232,7 @@ describe('timed Day 1 shift (#22)', () => {
       [27, 2, 5, 0],
       [65, 4, 3, 1],
       [55, 2, 7, 0],
-      [135, 5, 2, 2],
+      [158, 6, 2, 2],
       [195, 7, 0, 3],
     ])
 

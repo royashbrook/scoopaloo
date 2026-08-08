@@ -61,6 +61,7 @@ export type UpcomingOrderUiItem = {
   label: string
   icon: string
   quantity: number
+  actionable: boolean
   patience?: number | null
   seconds?: number | null
 }
@@ -489,7 +490,9 @@ export class ShiftUi {
     const target = this.fields['upcoming-orders']
     const rail = target.closest<HTMLElement>('.next-orders')
     const upcoming = orders.slice(0, 2)
-    const signature = upcoming.map(order => `${order.icon}:${order.label}:${order.quantity}`).join('|')
+    const signature = upcoming.map(order => [
+      order.icon, order.label, order.quantity, order.actionable, order.patience != null,
+    ].join(':')).join('|')
     if (target.dataset.signature !== signature) {
       target.dataset.signature = signature
       target.replaceChildren(...upcoming.map((order, index) => {
@@ -512,7 +515,10 @@ export class ShiftUi {
         const patience = document.createElement('i')
         patience.className = 'next-patience'
         patience.ariaHidden = 'true'
-        item.append(position, icon, quantity, seconds, patience)
+        const state = document.createElement('span')
+        state.className = 'next-state'
+        state.ariaHidden = 'true'
+        item.append(position, icon, quantity, seconds, patience, state)
         return item
       }))
     }
@@ -520,12 +526,20 @@ export class ShiftUi {
       const item = target.children[index] as HTMLElement | undefined
       const patience = item?.querySelector<HTMLElement>('.next-patience')
       const seconds = item?.querySelector<HTMLElement>('.next-seconds')
-      if (!item || !patience || !seconds) return
+      const state = item?.querySelector<HTMLElement>('.next-state')
+      if (!item || !patience || !seconds || !state) return
       const waiting = order.patience != null && order.seconds != null
+      const actionable = waiting && order.actionable
+      const availability = actionable ? 'actionable' : waiting ? 'waiting' : 'preview'
       const wholeSeconds = Math.max(0, Math.ceil(order.seconds ?? 0))
       const percent = Math.round(Math.max(0, Math.min(1, order.patience ?? 0)) * 100)
-      item.setAttribute('aria-label', `Order ${index + 2}: ${order.label}, quantity ${order.quantity}, ${waiting
-        ? `${wholeSeconds} seconds remaining` : 'not waiting yet'}`)
+      item.className = `is-${availability}`
+      item.dataset.state = availability
+      state.textContent = actionable ? 'NOW' : waiting ? 'WAIT' : 'SOON'
+      item.setAttribute('aria-label', `Order ${index + 2}: ${order.label}, quantity ${order.quantity}; ${actionable
+        ? `actionable now, ${wholeSeconds} seconds remaining`
+        : waiting ? `waiting outside the active service window, ${wholeSeconds} seconds remaining`
+          : 'preview only, not waiting yet, not spawned and cannot be served yet'}`)
       seconds.hidden = !waiting
       seconds.textContent = `${wholeSeconds}s`
       patience.hidden = !waiting

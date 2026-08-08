@@ -161,7 +161,12 @@ canvas {
   place-items: center;
   border-top: 1px solid rgb(74 59 69 / .18);
 }
-.next-orders li:nth-child(2) { background: rgb(99 205 180 / .12); }
+.next-orders li.is-actionable {
+  background: rgb(99 205 180 / .22);
+  box-shadow: inset 4px 0 #13856f;
+}
+.next-orders li.is-waiting { background: rgb(255 212 94 / .16); }
+.next-orders li.is-preview img { opacity: .55; }
 .next-orders img { width: 30px; height: 34px; object-fit: contain; }
 .next-position,
 .next-orders b {
@@ -172,7 +177,19 @@ canvas {
   line-height: 1;
 }
 .next-position { top: 4px; left: 5px; }
-.next-orders b { right: 4px; bottom: 5px; padding: 1px 2px; border-radius: .3rem; background: rgb(255 243 230 / .9); font-size: 13px; }
+.next-orders b { right: 2px; bottom: 20px; padding: 1px; border-radius: .3rem; background: rgb(255 243 230 / .9); font-size: 13px; }
+.next-state {
+  position: absolute;
+  bottom: 5px;
+  left: 5px;
+  z-index: 1;
+  color: #4a3b45;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+.is-actionable .next-state { color: #0b6b5c; }
+.is-preview .next-state { color: rgb(74 59 69 / .72); }
 .next-seconds {
   position: absolute;
   top: 4px;

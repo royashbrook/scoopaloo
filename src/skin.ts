@@ -29,6 +29,7 @@ export type SkinDay = {
   starThresholds: number[]
   customerPatience: number
   spawnInterval: number
+  activeOrderWindow?: number
   orderDeck: SkinOrder[]
 }
 export type SkinScoreChase = {
@@ -45,6 +46,7 @@ export type SkinScoreChase = {
   spawnInterval: number
   spawnStep: number
   minSpawnInterval: number
+  activeOrderWindow?: number
   orderDeck: SkinOrder[]
 }
 export type ProducerStation = {
