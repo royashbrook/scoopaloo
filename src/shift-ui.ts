@@ -360,7 +360,7 @@ export class ShiftUi {
     const signature = steps.map(step => `${step.label}:${step.have}:${step.need}`).join('|')
     if (target.dataset.signature === signature) return
     target.dataset.signature = signature
-    target.setAttribute('aria-label', label ? `Recipe for ${label}` : 'Recipe')
+    target.setAttribute('aria-label', label ? `Recipe for ${label}, per item` : 'Recipe')
     let current = false
     target.replaceChildren(...steps.map(step => {
       const item = document.createElement('li')

@@ -22,6 +22,8 @@ export type SkinDay = {
   label: string
   challenge: string
   unlockBanner: string
+  /** Stations granted when this day is entered (day index is persisted by SaveV1). */
+  unlockStations?: string[]
   duration: number
   cashGoal: number
   starThresholds: number[]

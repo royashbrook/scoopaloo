@@ -1,5 +1,5 @@
 import { byDepth, depthScale } from './depth'
-import { inventoryTotal, prepSeconds, type GameEvent, type GameState, type Point } from './engine'
+import { inventoryTotal, prepSeconds, WORLD, type GameEvent, type GameState, type Point } from './engine'
 import type { GameSkin } from './skin'
 import { prepPoint, producerPoint, stationPoint } from './skin'
 import type { Viewport } from './viewport'
@@ -129,8 +129,20 @@ export class Renderer {
     const [x, y, width, height] = producer.draw
     const [column, row] = producer.sprite
     const point = producerPoint(this.skin, sourceId)
+    if (!source) {
+      const ctx = this.context
+      ctx.save()
+      ctx.globalAlpha = .35
+      this.shadow(point.x, point.y + 6, width * .42, 22)
+      this.sprite(column, row, x, y, width, height)
+      ctx.restore()
+      this.drawProducerPlaque(point, producer.item, true)
+      return
+    }
+
     this.shadow(point.x, point.y + 6, width * .42, 22)
     this.sprite(column, row, x, y, width, height)
+    this.drawProducerPlaque(point, source.item, false)
     if (sourceId === this.skin.progression.startingStation) {
       const ctx = this.context
       ctx.save()
@@ -147,7 +159,32 @@ export class Renderer {
     for (let i = 0; i < source.stock; i++) {
       this.drawItem(source.item, origin[0] + step[0] * i, origin[1] + step[1] * i, size[0], size[1])
     }
-    this.pickupRing(point.x, point.y + 35, state.time)
+    // Keep the nearest row's full ring on short tablet canvases while leaving
+    // its interaction point unchanged.
+    this.pickupRing(point.x, Math.min(point.y + 35, WORLD.height - 40), state.time)
+  }
+
+  private drawProducerPlaque(point: Point, item: string, locked: boolean): void {
+    const ctx = this.context
+    ctx.save()
+    const top = point.y - (locked ? 142 : 134)
+    const height = locked ? 82 : 66
+    ctx.fillStyle = this.skin.palette.cream
+    ctx.strokeStyle = this.skin.palette.cocoa
+    ctx.lineWidth = 3
+    rounded(ctx, point.x - 32, top, 64, height, 14); ctx.fill(); ctx.stroke()
+    if (locked) {
+      this.drawItem(item, point.x - 20, top + 3, 40, 44)
+      ctx.fillStyle = this.skin.palette.cocoa
+      ctx.font = '900 18px ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('DAY 2', point.x, top + 65)
+      ctx.restore()
+      return
+    }
+    this.drawItem(item, point.x - 24, top + 5, 48, 56)
+    ctx.restore()
   }
 
   private drawCounter(state: GameState): void {

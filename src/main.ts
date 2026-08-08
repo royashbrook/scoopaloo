@@ -191,6 +191,9 @@ function updateShiftUi(): void {
     phase: state.phase,
     day: day.label,
     challenge: day.challenge,
+    readyBanner: state.save.currentDay > 0
+      ? state.skin.days[state.save.currentDay - 1]?.unlockBanner
+      : '',
     resultBanner: goalMet(state) ? day.unlockBanner : '',
     secondsRemaining: state.shift.remaining,
     revenue: state.shift.revenue,

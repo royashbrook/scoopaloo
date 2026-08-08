@@ -37,6 +37,12 @@ async function assertSize(page: Page, name: string): Promise<void> {
       right: client([right, bottom]).x,
       bottom: client([right, bottom]).y,
     })
+    const depthScale = (y: number) => y <= 430 ? .82 : y >= 1030 ? 1.1 : .82 + .28 * ((y - 430) / 600)
+    const groundedRect = (anchor: number[], bounds: number[]) => {
+      const scale = depthScale(anchor[1])
+      const scaled = (value: number, axis: number) => anchor[axis] + (value - anchor[axis]) * scale
+      return worldRect(scaled(bounds[0], 0), scaled(bounds[1], 1), scaled(bounds[2], 0), scaled(bounds[3], 1))
+    }
     const counter = skin.stations.counter
     const [counterX, counterY] = counter.interaction
     const [drawX, drawY, drawWidth, drawHeight] = counter.draw
@@ -47,6 +53,21 @@ async function assertSize(page: Page, name: string): Promise<void> {
       // Four-person queue envelope, including each 116x132 customer sprite.
       worldRect(counterX - 8, counterY - 117, counterX + 180, counterY + 90),
     ]
+    const sourceVisuals = Object.values(skin.producers).map(producer => {
+      const [x, y, width, height] = producer.draw
+      const [px, py] = producer.interaction
+      const { origin, step, size } = producer.stockDisplay
+      const last = Math.max(0, producer.capacity - 1)
+      const stockX = [origin[0], origin[0] + step[0] * last]
+      const stockY = [origin[1], origin[1] + step[1] * last]
+      const ringY = Math.min(py + 35, 1120 - 40)
+      return groundedRect([px, producer.depth], [
+        Math.min(x, px - 69, px - 34, ...stockX),
+        Math.min(y, py - 144, ringY - 31, ...stockY),
+        Math.max(x + width, px + 69, px + 34, ...stockX.map(value => value + size[0])),
+        Math.max(y + height, ringY + 31, ...stockY.map(value => value + size[1])),
+      ])
+    })
     const overlaps = (a: { left: number; top: number; right: number; bottom: number }, b: DOMRect) =>
       a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
     const opaque = (x: number, y: number) => {
@@ -69,11 +90,14 @@ async function assertSize(page: Page, name: string): Promise<void> {
       stationsClear: points.every(point => boxes.every(box => !overlapsPoint(box, client(point.at)))),
       serviceVisualsInside: visuals.every(inside),
       serviceVisualsClear: visuals.every(visual => boxes.every(box => !overlaps(visual, box))),
+      sourceVisualsInside: sourceVisuals.every(inside),
+      sourceVisualsClear: sourceVisuals.every(visual => boxes.every(box => !overlaps(visual, box))),
       yLegs: {
         serviceToPrep: Math.min(...points.filter(point => point.kind === 'prep').flatMap(prep =>
           points.filter(point => point.kind === 'service').map(service => Math.abs(client(prep.at).y - client(service.at).y)))),
         prepToSource: Math.min(...points.filter(point => point.kind === 'prep').flatMap(prep =>
           points.filter(point => point.kind === 'source').map(source => Math.abs(client(prep.at).y - client(source.at).y)))),
+        sourceRows: [...new Set(points.filter(point => point.kind === 'source').map(point => Math.round(client(point.at).y)))].sort((a, b) => a - b),
       },
     }
   })
@@ -85,9 +109,13 @@ async function assertSize(page: Page, name: string): Promise<void> {
   expect(checks.stationsClear, name).toBe(true)
   expect(checks.serviceVisualsInside, name).toBe(true)
   expect(checks.serviceVisualsClear, name).toBe(true)
+  expect(checks.sourceVisualsInside, name).toBe(true)
+  expect(checks.sourceVisualsClear, name).toBe(true)
   if (name === 'phone') {
     expect(checks.yLegs.serviceToPrep).toBeGreaterThanOrEqual(120)
     expect(checks.yLegs.prepToSource).toBeGreaterThanOrEqual(120)
+    expect(checks.yLegs.sourceRows).toHaveLength(2)
+    expect(checks.yLegs.sourceRows[1] - checks.yLegs.sourceRows[0]).toBeGreaterThanOrEqual(90)
   }
 
   // the real pointer path: press each station's world point, the joystick origin

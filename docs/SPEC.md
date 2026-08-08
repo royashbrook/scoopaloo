@@ -39,21 +39,24 @@ toca-boca-adjacent kawaii, from the approved concept board:
 
 ## the loop
 
-1. three sources produce scoops, cone shells, and sundae cups over time.
-2. player collects the shared scoop plus the correct vessel shown in the recipe checklist.
+1. four sources produce vanilla or chocolate scoops, cone shells, and sundae cups over time.
+   vanilla opens on day 1; the chocolate machine is a saved day 2 unlock.
+2. player reads the current ticket and two-order preview, then collects the requested flavor plus
+   the correct vessel shown in the recipe checklist.
 3. carry both components to the prep station and hold in its ring. an exact recipe consumes
    atomically, visibly fills a short progress ring, and buffers the finished item for pickup.
    incomplete or wrong ingredients remain recoverable; raw components cannot be sold.
 4. carry the finished cone or sundae to the counter; it slides into the display.
 5. customers walk in with readable order tickets and patience, queue at the counter, and get
-   served only by matching stock. a walkout is visible and resets the service streak.
-6. payment: base price plus a remaining-patience tip appears as a number; coins fountain out and
+   served only by matching stock. the next two orders stay visible for batching and planning.
+   a walkout is visible and resets the service streak.
+6. payment: base price plus a remaining-patience tip and explicit streak bonus appears as a
+   number; flat bonuses unlock at 2/4/6 consecutive serves. coins fountain out and
    lie on the floor near the register. the player collects by
    walking near (small magnet radius, coins fly to the player with a pop).
 7. a timed shift shows its cash goal, clock, served, missed, and streak. results show revenue,
    goal, best streak, and 1-3 stars before retry, upgrade, or next day.
-8. spend between shifts to choose: faster prep, faster movement, bigger tray,
-   more patience, or better tips.
+8. spend between shifts to choose: faster prep, faster movement, bigger tray, or more patience.
 9. helpers eventually automate one leg (source→prep) so the game becomes gently idle. player is always
    strictly faster than a helper, so playing beats watching.
 

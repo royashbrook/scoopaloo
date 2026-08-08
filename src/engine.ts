@@ -119,6 +119,15 @@ export const defaultSave = (skin: GameSkin): SaveV1 => ({
   dayBestRevenue: [0, 0, 0],
 })
 
+function backfillDayUnlocks(skin: GameSkin, save: SaveV1): void {
+  const dayIndex = clamp(Math.floor(save.currentDay), 0, skin.days.length - 1)
+  for (const day of skin.days.slice(0, dayIndex + 1)) {
+    for (const station of day.unlockStations ?? []) {
+      if (!save.unlockedStations.includes(station)) save.unlockedStations.push(station)
+    }
+  }
+}
+
 export function upgradeLevel(save: SaveV1, id: string): number {
   return clamp(Math.floor(Number.isFinite(save.upgrades[id]) ? save.upgrades[id] : 0), 0, 3)
 }
@@ -169,13 +178,18 @@ export function prepSeconds(state: GameState, item: string): number {
 
 export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): GameState {
   const saved = structuredClone(save)
-  const sources = Object.fromEntries(Object.entries(skin.producers).map(([source, producer]) => {
-    return [source, {
-      item: producer.item,
-      stock: 0,
-      timer: producer.interval,
-    }]
-  }))
+  // SaveV1 already persists both currentDay and station history. Rebuild any
+  // day-earned station here so older saves gain new content without SaveV2.
+  backfillDayUnlocks(skin, saved)
+  const sources = Object.fromEntries(Object.entries(skin.producers)
+    .filter(([source]) => saved.unlockedStations.includes(source))
+    .map(([source, producer]) => {
+      return [source, {
+        item: producer.item,
+        stock: 0,
+        timer: producer.interval,
+      }]
+    }))
   const prepStations = Object.fromEntries(Object.keys(skin.prepStations).map(station => [station, {
     job: null,
     outputs: emptyInventory(skin),
@@ -313,8 +327,8 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
       const returned = inventoryTotal(state.player.trayItems) >= capacity && !hasAvailablePrepCapacity(state)
         ? rawToReturn(state, front?.order.item)
         : undefined
-      const owner = returned && Object.entries(state.skin.producers)
-        .find(([, producer]) => producer.item === returned)?.[0]
+      const owner = returned && Object.entries(state.sources)
+        .find(([, source]) => source.item === returned)?.[0]
       if (returned && owner) {
         addStock(state.player.trayItems, returned, -1)
         state.player.tray = inventoryTotal(state.player.trayItems)
@@ -513,13 +527,14 @@ function maybeFirstStock(skin: GameSkin, inventory: Inventory): string | undefin
 }
 
 function matchingRecipe(state: GameState, station: string): string | undefined {
-  const items = Object.keys(state.skin.items)
-  const requested = state.customers.find(customer => !customer.served && !customer.missed)?.order.item
-  if (requested) {
-    const index = items.indexOf(requested)
-    if (index >= 0) items.splice(index, 1)
-    items.unshift(requested)
-  }
+  // Use the exact current + next-two window shown by the UI, including deck
+  // previews that have not spawned yet. Planning ahead must beat incidental
+  // JSON insertion order when a larger tray can satisfy several recipes.
+  const front = state.customers.find(customer => !customer.served && !customer.missed)?.order
+  const requested = [front, ...upcomingOrders(state, 2)]
+    .filter((order): order is CustomerOrder => Boolean(order))
+    .map(order => order.item)
+  const items = [...new Set([...requested, ...Object.keys(state.skin.items)])]
   return items.find(item => {
     const recipe = state.skin.items[item].recipe
     return recipe?.station === station
@@ -606,6 +621,7 @@ export function purchaseUpgrade(state: GameState, id: string): boolean {
 export function nextDay(state: GameState): boolean {
   if (state.phase !== 'shop' || !goalMet(state)) return false
   state.save.currentDay = Math.min(state.skin.days.length - 1, state.save.currentDay + 1)
+  backfillDayUnlocks(state.skin, state.save)
   resetShift(state, 'ready')
   return true
 }

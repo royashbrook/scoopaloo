@@ -11,7 +11,7 @@
       "id": "opening-day",
       "label": "DAY 1",
       "challenge": "OPENING DAY",
-      "unlockBanner": "THE UPGRADE SHOP IS OPEN",
+      "unlockBanner": "CHOCOLATE MACHINE UNLOCKED",
       "duration": 90,
       "cashGoal": 45,
       "starThresholds": [45, 60, 75],
@@ -31,43 +31,44 @@
     {
       "id": "double-scoop-dash",
       "label": "DAY 2",
-      "challenge": "DOUBLE-SCOOP DASH",
-      "unlockBanner": "FINAL DAY UNLOCKED",
-      "duration": 90,
+      "challenge": "CHOCOLATE RUSH",
+      "unlockBanner": "DAY 3: DOUBLE ORDERS",
+      "unlockStations": ["chocolate-scoop"],
+      "duration": 85,
       "cashGoal": 60,
       "starThresholds": [60, 75, 90],
-      "customerPatience": 42,
+      "customerPatience": 32,
       "spawnInterval": 8.5,
       "orderDeck": [
+        { "item": "chocolate-cone", "quantity": 1 },
         { "item": "vanilla-cone", "quantity": 1 },
         { "item": "sundae", "quantity": 1 },
+        { "item": "chocolate-sundae", "quantity": 1 },
+        { "item": "chocolate-cone", "quantity": 2 },
         { "item": "vanilla-cone", "quantity": 2 },
-        { "item": "sundae", "quantity": 2 },
-        { "item": "sundae", "quantity": 1 },
-        { "item": "vanilla-cone", "quantity": 2 },
-        { "item": "sundae", "quantity": 2 },
-        { "item": "vanilla-cone", "quantity": 1 }
+        { "item": "chocolate-sundae", "quantity": 2 },
+        { "item": "sundae", "quantity": 2 }
       ]
     },
     {
       "id": "scoop-storm",
       "label": "DAY 3",
-      "challenge": "SCOOP STORM",
+      "challenge": "FULL MENU FINALE",
       "unlockBanner": "SCORE CHASE UNLOCKED",
       "duration": 150,
       "cashGoal": 70,
-      "starThresholds": [70, 110, 150],
-      "customerPatience": 40,
-      "spawnInterval": 16,
+      "starThresholds": [70, 130, 190],
+      "customerPatience": 60,
+      "spawnInterval": 7.5,
       "orderDeck": [
-        { "item": "sundae", "quantity": 2 },
+        { "item": "chocolate-sundae", "quantity": 2 },
         { "item": "vanilla-cone", "quantity": 2 },
-        { "item": "sundae", "quantity": 1 },
+        { "item": "chocolate-cone", "quantity": 2 },
+        { "item": "sundae", "quantity": 2 },
+        { "item": "chocolate-sundae", "quantity": 1 },
         { "item": "vanilla-cone", "quantity": 2 },
         { "item": "sundae", "quantity": 2 },
-        { "item": "vanilla-cone", "quantity": 1 },
-        { "item": "sundae", "quantity": 2 },
-        { "item": "vanilla-cone", "quantity": 2 }
+        { "item": "chocolate-cone", "quantity": 2 }
       ]
     }
   ],
@@ -87,7 +88,7 @@
       }
     },
     "sundae": {
-      "label": "SUNDAE",
+      "label": "VANILLA SUNDAE",
       "price": 13,
       "icon": "/assets/items/sundae.svg",
       "color": "#63CDB4",
@@ -100,20 +101,54 @@
         "seconds": 1.25
       }
     },
+    "chocolate-cone": {
+      "label": "CHOCOLATE CONE",
+      "price": 12,
+      "icon": "/assets/items/chocolate-cone.svg",
+      "color": "#8B5A44",
+      "recipe": {
+        "station": "build-station",
+        "inputs": {
+          "chocolate-scoop": 1,
+          "cone-shell": 1
+        },
+        "seconds": 1.15
+      }
+    },
+    "chocolate-sundae": {
+      "label": "CHOCOLATE SUNDAE",
+      "price": 15,
+      "icon": "/assets/items/chocolate-sundae.svg",
+      "color": "#8B5A44",
+      "recipe": {
+        "station": "build-station",
+        "inputs": {
+          "chocolate-scoop": 1,
+          "sundae-cup": 1
+        },
+        "seconds": 1.4
+      }
+    },
     "soft-scoop": {
-      "label": "SOFT SCOOP",
+      "label": "VANILLA",
       "price": 0,
       "icon": "/assets/items/soft-scoop.svg",
       "color": "#FFF3E6"
     },
+    "chocolate-scoop": {
+      "label": "CHOCOLATE",
+      "price": 0,
+      "icon": "/assets/items/chocolate-scoop.svg",
+      "color": "#8B5A44"
+    },
     "cone-shell": {
-      "label": "EMPTY CONE",
+      "label": "CONE",
       "price": 0,
       "icon": "/assets/items/cone-shell.svg",
       "color": "#FFD9B8"
     },
     "sundae-cup": {
-      "label": "SUNDAE CUP",
+      "label": "CUP",
       "price": 0,
       "icon": "/assets/items/sundae-cup.svg",
       "color": "#63CDB4"
@@ -122,42 +157,56 @@
   "producers": {
     "soft-scoop": {
       "item": "soft-scoop",
-      "interaction": [220, 1030],
-      "depth": 1036,
-      "draw": [130, 875, 175, 190],
+      "interaction": [360, 1070],
+      "depth": 1076,
+      "draw": [280, 915, 160, 190],
       "sprite": [1, 2],
       "stockDisplay": {
-        "origin": [175, 1043],
-        "step": [34, -3],
-        "size": [48, 58]
+        "origin": [315, 1058],
+        "step": [30, -3],
+        "size": [42, 52]
       },
       "interval": 1.7,
       "capacity": 3
     },
+    "chocolate-scoop": {
+      "item": "chocolate-scoop",
+      "interaction": [600, 1070],
+      "depth": 1076,
+      "draw": [520, 915, 160, 190],
+      "sprite": [1, 2],
+      "stockDisplay": {
+        "origin": [555, 1058],
+        "step": [30, -3],
+        "size": [42, 52]
+      },
+      "interval": 1.9,
+      "capacity": 3
+    },
     "cone-shell": {
       "item": "cone-shell",
-      "interaction": [480, 1030],
-      "depth": 1036,
-      "draw": [390, 875, 175, 190],
+      "interaction": [270, 920],
+      "depth": 926,
+      "draw": [185, 765, 170, 190],
       "sprite": [2, 2],
       "stockDisplay": {
-        "origin": [435, 1043],
-        "step": [34, -3],
-        "size": [48, 58]
+        "origin": [225, 933],
+        "step": [30, -3],
+        "size": [42, 52]
       },
       "interval": 1.5,
       "capacity": 3
     },
     "sundae-cup": {
       "item": "sundae-cup",
-      "interaction": [740, 1030],
-      "depth": 1036,
-      "draw": [650, 875, 175, 190],
+      "interaction": [690, 920],
+      "depth": 926,
+      "draw": [605, 765, 170, 190],
       "sprite": [2, 2],
       "stockDisplay": {
-        "origin": [695, 1043],
-        "step": [34, -3],
-        "size": [48, 58]
+        "origin": [645, 933],
+        "step": [30, -3],
+        "size": [42, 52]
       },
       "interval": 1.8,
       "capacity": 3
@@ -404,9 +453,9 @@
       "kind": "trayCapacity",
       "unit": "TRAY SLOTS",
       "levels": [
-        { "price": 50, "effect": 1 },
-        { "price": 110, "effect": 2 },
-        { "price": 190, "effect": 3 }
+        { "price": 40, "effect": 2 },
+        { "price": 110, "effect": 3 },
+        { "price": 190, "effect": 4 }
       ]
     },
     {

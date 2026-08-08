@@ -40,6 +40,15 @@ async function producerFor(page: Page, item: string): Promise<Point> {
   }, item)
 }
 
+async function collectFrom(page: Page, item: string): Promise<void> {
+  const target = await producerFor(page, item)
+  // The flavor row sits behind the vessel row. Approach through the center
+  // aisle so this pointer proof chooses one ingredient instead of collecting
+  // a vessel during a diagonal drive-by.
+  if (target.y > 1000) await dragTo(page, { x: 480, y: target.y })
+  await dragTo(page, target)
+}
+
 test('one thumb builds two components, rejects raw stock, then recovers and serves', async ({ page }) => {
   test.setTimeout(60_000)
   await page.addInitScript(() => {
@@ -87,8 +96,11 @@ test('one thumb builds two components, rejects raw stock, then recovers and serv
   expect(route.inputs).toHaveLength(2)
 
   const first = route.inputs[0]
-  await dragTo(page, await producerFor(page, first))
+  await collectFrom(page, first)
   await expect.poll(() => page.evaluate(item => window.__scoopaloo.snapshot().player.trayItems[item] ?? 0, first)).toBe(1)
+  await expect.poll(() => page.evaluate(() =>
+    Object.values(window.__scoopaloo.snapshot().player.trayItems).reduce((sum, count) => sum + count, 0),
+  )).toBe(1)
   await expect(page.locator('.recipe-list li')).toHaveCount(2)
   await expect(page.locator('.recipe-list')).toContainText('1/1')
   await expect(page.locator('.recipe-list [aria-current="step"]')).toHaveCount(1)
@@ -105,7 +117,7 @@ test('one thumb builds two components, rejects raw stock, then recovers and serv
   await expect(page.locator('.order-ticket')).toHaveClass(/is-wrong/)
   await expect(page.locator('[data-field="ticket-guidance"]')).toContainText(/PREP|BUILD|FINISH/)
 
-  await dragTo(page, await producerFor(page, first))
+  await collectFrom(page, first)
   await expect.poll(() => page.evaluate(item => window.__scoopaloo.snapshot().player.trayItems[item] ?? 0, first)).toBe(2)
   await dragTo(page, route.counter)
   await expect.poll(() => page.evaluate(() =>
@@ -123,7 +135,7 @@ test('one thumb builds two components, rejects raw stock, then recovers and serv
   await expect(page.locator('[data-field="ticket-guidance"]')).toContainText(/RETURN|EXTRA|SPACE/)
 
   const second = route.inputs[1]
-  await dragTo(page, await producerFor(page, second))
+  await collectFrom(page, second)
   await expect.poll(() => page.evaluate(item => window.__scoopaloo.snapshot().player.trayItems[item] ?? 0, second)).toBe(1)
   await expect(page.locator('.recipe-list li')).toHaveCount(2)
   await expect(page.locator('.recipe-list li.is-done')).toHaveCount(2)
