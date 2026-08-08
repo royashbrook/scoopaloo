@@ -6,6 +6,7 @@ import {
   customerPatience,
   enterShop,
   goalMet,
+  helperInterval,
   leaveShop,
   nextDay,
   purchaseUpgrade,
@@ -108,6 +109,7 @@ const shiftUi = new ShiftUi(shiftRoot, {
     }
   },
 })
+canvas.setAttribute('aria-describedby', 'helper-status')
 let previous = performance.now()
 let saveClock = 0
 let previousSoundPhase = state.phase
@@ -167,6 +169,7 @@ function serviceStake(customer: Customer): { tip: number; combo: number; payout:
 
 function updateShiftUi(): void {
   const rules = state.rules
+  const helperSeconds = helperInterval(state)
   const waitingCustomers = state.customers.filter(customer => !customer.served && !customer.missed)
   const front = waitingCustomers[0]
   const rejection = [...state.events].reverse().find(event => event.kind === 'reject')
@@ -210,7 +213,9 @@ function updateShiftUi(): void {
       recipe = {
         instruction: carrying ? 'DELIVER TO COUNTER'
           : ready ? 'READY AT PREP'
-            : working ? `MAKING ${front.order.label}`
+            : working ? prep.job?.assisted && progress === 0
+              ? `${skin.helper?.name ?? 'HELPER'} READY · HOLD AT PREP`
+              : `MAKING ${front.order.label}`
               : missing.length ? `GET ${missing.join(' + ')}` : 'HOLD AT PREP',
         progress,
         steps,
@@ -255,6 +260,11 @@ function updateShiftUi(): void {
     canStartScoreChase: rules.kind === 'campaign'
       && rules.level === state.skin.days.length && Boolean(state.skin.scoreChase),
     upgrades: skin.upgrades.map(upgrade => upgradeUi(upgrade, rules.customerPatience)),
+    helper: skin.helper ? {
+      name: skin.helper.name,
+      remaining: state.helper.remaining,
+      enabled: helperSeconds !== null,
+    } : undefined,
     warning: rejection?.reason === 'returned-raw' ? 'EXTRA RETURNED TO SOURCE'
       : rejection?.reason === 'needs-prep' ? 'FINISH IT AT PREP'
         : rejection ? 'WRONG ITEM' : '',
@@ -297,6 +307,9 @@ function upgradeUi(upgrade: SkinUpgrade, basePatience: number): UpgradeUiItem {
     stat: upgrade.unit,
     affordable: offer.affordable,
     capped: offer.capped,
+    helper: skin.helper?.upgradeId === upgrade.id
+      ? { name: skin.helper.name, image: skin.helper.image }
+      : undefined,
   }
 }
 

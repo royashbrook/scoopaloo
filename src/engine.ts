@@ -81,8 +81,9 @@ export type GameEvent = Point & {
 }
 
 export type ProducerState = { item: string; stock: number; timer: number }
-export type PrepJob = { item: string; remaining: number }
+export type PrepJob = { item: string; remaining: number; assisted?: boolean }
 export type PrepState = { job: PrepJob | null; outputs: Inventory }
+export type HelperState = { targetCustomerId: number | null; remaining: number }
 
 export type GameState = {
   skin: GameSkin
@@ -95,6 +96,7 @@ export type GameState = {
   /** Compatibility alias for the original renderer; sources is authoritative. */
   machine: ProducerState
   prepStations: Record<string, PrepState>
+  helper: HelperState
   counter: { stock: number; items: Inventory; serveTimer: number; servingCustomerId: number | null }
   customers: Customer[]
   flyingCoins: FlyingCoin[]
@@ -184,6 +186,13 @@ export const producerInterval = (state: GameState, source = state.skin.progressi
   state.skin.producers[source].interval
 export const machineInterval = producerInterval
 export const customerPatience = (state: GameState): number => state.rules.customerPatience + upgradeEffect(state, 'customerPatience')
+export function helperInterval(state: GameState): number | null {
+  const helper = state.skin.helper
+  if (!helper) return null
+  const upgrade = state.skin.upgrades.find(candidate => candidate.id === helper.upgradeId)
+  const rate = upgrade?.levels[upgradeLevel(state.save, helper.upgradeId) - 1]?.effect ?? 0
+  return rate > 0 ? 60 / rate : null
+}
 
 export function prepSeconds(state: GameState, item: string): number {
   const recipe = itemFor(state.skin, item).recipe
@@ -213,7 +222,7 @@ export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): Ga
   const machine = sources[skin.progression.startingStation]
   if (!machine) throw new Error(`unknown starting producer: ${skin.progression.startingStation}`)
   const rules = activeShiftRules(skin, saved)
-  return {
+  const state: GameState = {
     skin,
     rules,
     phase: 'ready',
@@ -223,6 +232,7 @@ export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): Ga
     sources,
     machine,
     prepStations,
+    helper: { targetCustomerId: null, remaining: 0 },
     counter: { stock: 0, items: emptyInventory(skin), serveTimer: 0, servingCustomerId: null },
     customers: [customer(skin, saved, rules, 1, 0)],
     flyingCoins: [],
@@ -233,6 +243,8 @@ export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): Ga
     sourceContact: null,
     save: saved,
   }
+  state.helper.remaining = helperInterval(state) ?? 0
+  return state
 }
 
 function freshShift(rules: ActiveShiftRules): ShiftState {
@@ -377,11 +389,54 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
   }
 
   updateCustomers(state, dt)
+  updateHelper(state, dt)
   updateCoins(state, dt)
   state.events.forEach(event => { event.age += dt })
   state.events = state.events.filter(event => event.age < .9)
   state.shift.remaining = Math.max(0, state.shift.remaining - dt)
   if (state.shift.remaining < 1e-9) finishShift(state)
+}
+
+function updateHelper(state: GameState, dt: number): void {
+  const interval = helperInterval(state)
+  const front = state.customers.find(customer => !customer.served && !customer.missed)
+  const helper = state.skin.helper
+  const recipe = front && itemFor(state.skin, front.order.item).recipe
+  if (interval === null || !front || !helper || recipe?.station !== helper.prepStation) {
+    state.helper.targetCustomerId = null
+    state.helper.remaining = interval ?? 0
+    return
+  }
+  if (state.helper.targetCustomerId !== front.id) {
+    state.helper.targetCustomerId = front.id
+    state.helper.remaining = interval
+    return
+  }
+
+  state.helper.remaining = Math.max(0, state.helper.remaining - dt)
+  if (state.helper.remaining > 0) return
+
+  if (stagedProducts(state, front.order.item) >= front.order.quantity
+    || hasRecipeInputs(state.player.trayItems, recipe.inputs)) return
+  const prep = state.prepStations[helper.prepStation]
+  const station = state.skin.prepStations[helper.prepStation]
+  if (!prep || !station || prep.job || inventoryTotal(prep.outputs) >= station.capacity) return
+
+  const ingredients = Object.entries(recipe.inputs).map(([item, quantity]) => {
+    const source = Object.entries(state.sources).find(([, candidate]) => candidate.item === item)
+    return source && source[1].stock >= quantity ? [source[1], quantity] as const : null
+  })
+  if (ingredients.some(ingredient => ingredient === null)) return
+  for (const ingredient of ingredients) {
+    if (ingredient) ingredient[0].stock -= ingredient[1]
+  }
+  prep.job = { item: front.order.item, remaining: prepSeconds(state, front.order.item), assisted: true }
+  state.helper.remaining = interval
+  emit(state, 'prep-start', prepPoint(state.skin, helper.prepStation), {
+    item: front.order.item,
+    station: helper.prepStation,
+    source: 'helper',
+  })
 }
 
 function updatePrepStations(state: GameState, dt: number, capacity: number): void {
@@ -580,6 +635,17 @@ function matchingRecipe(state: GameState, station: string): string | undefined {
     return recipe?.station === station
       && Object.entries(recipe.inputs).every(([input, quantity]) => (state.player.trayItems[input] ?? 0) >= quantity)
   })
+}
+
+function hasRecipeInputs(inventory: Inventory, inputs: Inventory): boolean {
+  return Object.entries(inputs).every(([item, quantity]) => (inventory[item] ?? 0) >= quantity)
+}
+
+function stagedProducts(state: GameState, item: string): number {
+  return (state.player.trayItems[item] ?? 0)
+    + (state.counter.items[item] ?? 0)
+    + Object.values(state.prepStations).reduce((total, prep) =>
+      total + (prep.outputs[item] ?? 0) + (prep.job?.item === item ? 1 : 0), 0)
 }
 
 function hasAvailablePrepCapacity(state: GameState): boolean {

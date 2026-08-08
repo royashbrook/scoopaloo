@@ -518,7 +518,7 @@ canvas {
 }
 .shop-wallet span { display: block; font-size: 12px; font-weight: 900; letter-spacing: .055em; }
 .shop-wallet strong { display: block; margin-top: .1rem; color: #0c6a58; font-size: 24px; line-height: 1; }
-.upgrade-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+.upgrade-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem .65rem; }
 .upgrade-card {
   min-width: 0;
   padding: .72rem;
@@ -548,8 +548,55 @@ canvas {
 .upgrade-change small { grid-column: 1 / -1; color: #4a3b45; font-size: 11px; font-weight: 900; letter-spacing: .035em; }
 .upgrade-card button { width: 100%; min-width: 0; min-height: 44px; padding: .5rem .25rem; font-size: 14px; }
 .upgrade-card button:disabled { opacity: 1; background: #fff3e6; box-shadow: 0 .22rem 0 #4a3b45; }
-.shop-actions { margin-top: .9rem; }
-.shop-actions button { min-width: 0; flex: 0 1 10rem; white-space: nowrap; }
+.helper-upgrade {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 100px;
+  align-items: center;
+  gap: 10px;
+  min-height: 92px;
+  padding: 5px 10px;
+  background: rgb(99 205 180 / .14);
+  text-align: left;
+}
+.helper-upgrade .helper-avatar { width: 48px; height: 58px; object-fit: contain; }
+.helper-copy { min-width: 0; }
+.helper-upgrade h2 { min-height: 0; font-size: 20px; line-height: 1; }
+.helper-role {
+  margin: 3px 0;
+  color: #946119;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .035em;
+  line-height: 1.05;
+}
+.helper-description {
+  margin: 0;
+  color: #4a3b45;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.08;
+}
+.helper-offer { display: grid; gap: 3px; min-width: 0; }
+.helper-change {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  color: #13856f;
+  text-align: center;
+}
+.helper-change strong { min-width: 0; font-size: 14px; white-space: nowrap; }
+.helper-change span { color: #4a3b45; font-size: 12px; font-weight: 900; }
+.helper-change small {
+  grid-column: 1 / -1;
+  color: #4a3b45;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .02em;
+  line-height: 1;
+}
+.shop-actions { margin-top: .75rem; }
+.shop-actions button { min-width: 0; flex: 1 1 auto; white-space: nowrap; }
 .purchase-status {
   position: absolute;
   width: 1px;
@@ -574,6 +621,9 @@ canvas {
 
 @media (min-width: 700px) {
   .upgrade-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .helper-upgrade { grid-template-columns: 56px minmax(0, 1fr) 150px; }
+  .helper-upgrade .helper-avatar { width: 54px; height: 64px; }
+  .helper-description { white-space: nowrap; }
 }
 
 @media (max-width: 899px) {
