@@ -10,6 +10,12 @@ type Drawable = { anchor: Point; draw: () => void }
 
 const TAU = Math.PI * 2
 const REDUCED_MOTION_SCALE = .28
+
+export function roomPropAnchor(draw: number[]): Point {
+  const [x, y, width, height] = draw
+  return { x: x + width / 2, y: y + height }
+}
+
 const PLAYER_EYES = { x: 17, y: -68, tone: '#fdcca9' }
 const CUSTOMER_EYES = [
   { x: 15, y: -68, tone: '#fdcca9' },
@@ -133,6 +139,8 @@ export class Renderer {
   readonly context: CanvasRenderingContext2D
   readonly atlas = new Image()
   readonly itemImages = new Map<string, HTMLImageElement>()
+  readonly roomBackdrop = new Image()
+  readonly roomFloorProp = new Image()
   reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 
   constructor(readonly canvas: HTMLCanvasElement, readonly skin: GameSkin) {
@@ -140,6 +148,8 @@ export class Renderer {
     if (!context) throw new Error('canvas unavailable')
     this.context = context
     this.atlas.src = skin.spriteSheet
+    this.roomBackdrop.src = skin.room.backdrop.image
+    this.roomFloorProp.src = skin.room.floorProp.image
     for (const [id, item] of Object.entries(skin.items)) {
       const image = new Image()
       image.src = item.icon
@@ -149,6 +159,8 @@ export class Renderer {
 
   assetsReady(): boolean {
     return this.atlas.complete && this.atlas.naturalWidth > 0
+      && this.roomBackdrop.complete && this.roomBackdrop.naturalWidth > 0
+      && this.roomFloorProp.complete && this.roomFloorProp.naturalWidth > 0
       && [...this.itemImages.values()].every(image => image.complete && image.naturalWidth > 0)
   }
 
@@ -160,12 +172,16 @@ export class Renderer {
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
     const k = view.dpr * view.scale
     ctx.setTransform(k, 0, 0, k, -view.originX * k, -view.originY * k)
-    this.drawRoom(state.time, view)
+    this.drawRoom(view)
 
     // every drawable is one grounded unit (#14): sprite, shadow, stock, rings all
     // scale together around the unit's ground-contact anchor. byDepth is the ONLY
-    // ordering rule; ties keep this list's order (stations, then creatures).
+    // ordering rule; ties keep this list's order (room prop, stations, creatures).
     const things: (Drawable & { anchor: Point })[] = [
+      {
+        anchor: roomPropAnchor(this.skin.room.floorProp.draw),
+        draw: () => this.drawRoomFloorProp(),
+      },
       ...Object.entries(this.skin.producers).map(([source, producer]) => ({
         anchor: { x: producerPoint(this.skin, source).x, y: producer.depth },
         draw: () => this.drawProducer(state, source),
@@ -207,7 +223,7 @@ export class Renderer {
     ctx.restore()
   }
 
-  private drawRoom(time: number, view: Viewport): void {
+  private drawRoom(view: Viewport): void {
     const ctx = this.context
     // paint the FULL visible world rect: portrait shows more wall above and more
     // floor below, wide screens show the room continuing left and right. no bars.
@@ -215,36 +231,46 @@ export class Renderer {
     const top = view.originY
     const right = view.originX + view.viewWidth
     const bottom = view.originY + view.viewHeight
-    ctx.fillStyle = this.skin.palette.cream
+    const { room } = this.skin
+    ctx.fillStyle = room.wall
     ctx.fillRect(left, top, view.viewWidth, view.viewHeight)
-    ctx.fillStyle = '#ffe7ca'
-    ctx.fillRect(left, top, view.viewWidth, 165 - top)
+    if (this.roomBackdrop.complete && this.roomBackdrop.naturalWidth > 0) {
+      ctx.drawImage(this.roomBackdrop, ...room.backdrop.draw as [number, number, number, number])
+    }
+    ctx.fillStyle = room.floor
+    ctx.fillRect(left, room.horizon, view.viewWidth, bottom - room.horizon)
     // perspective floor (#14): rays converge on one vanishing point at the center
     // of the wall/floor seam, rows compress toward the seam, so walking down the
     // screen reads as walking TOWARD the counter instead of across a flat sheet.
-    ctx.strokeStyle = 'rgba(255,143,171,.16)'
+    ctx.save()
+    ctx.globalAlpha = .16
+    ctx.strokeStyle = this.skin.palette.strawberry
     ctx.lineWidth = 2
-    const vanish = { x: left + view.viewWidth / 2, y: 165 }
+    const vanish = { x: left + view.viewWidth / 2, y: room.horizon }
     for (let footX = left - view.viewWidth; footX <= right + view.viewWidth; footX += 96) {
       ctx.beginPath(); ctx.moveTo(vanish.x, vanish.y); ctx.lineTo(footX, bottom); ctx.stroke()
     }
-    let rowY = 165
+    let rowY = room.horizon
     let gap = 9
     while (rowY < bottom) {
       rowY += gap
       gap *= 1.22
       ctx.beginPath(); ctx.moveTo(left, rowY); ctx.lineTo(right, rowY); ctx.stroke()
     }
-    ctx.fillStyle = this.skin.palette.strawberry
-    rounded(ctx, 295, 35, 370, 92, 42)
-    ctx.fill()
-    ctx.fillStyle = this.skin.palette.cream
-    for (let i = 0; i < 7; i++) {
-      const x = 340 + i * 47
-      ctx.beginPath(); ctx.arc(x, 82 + Math.sin(time * 2 + i) * 2, 15, 0, Math.PI * 2); ctx.fill()
-    }
-    ctx.fillStyle = 'rgba(74,59,69,.08)'
-    ctx.fillRect(left, 158, view.viewWidth, 10)
+    ctx.restore()
+    ctx.save()
+    ctx.globalAlpha = .08
+    ctx.fillStyle = this.skin.palette.cocoa
+    ctx.fillRect(left, room.horizon - 6, view.viewWidth, 12)
+    ctx.restore()
+  }
+
+  private drawRoomFloorProp(): void {
+    if (!this.roomFloorProp.complete || !this.roomFloorProp.naturalWidth) return
+    const draw = this.skin.room.floorProp.draw as [number, number, number, number]
+    const anchor = roomPropAnchor(draw)
+    this.shadow(anchor.x, anchor.y - 2, 30, 8)
+    this.context.drawImage(this.roomFloorProp, ...draw)
   }
 
   private drawProducer(state: GameState, sourceId: string): void {
