@@ -2,7 +2,15 @@ import type { Point } from './engine'
 
 export type StationKey = 'machine' | 'counter' | 'register'
 export type UpgradeEffect = { kind: 'walkSpeed' | 'trayCapacity' | 'machineInterval'; value: number }
-export type SkinOrder = { item: string; label: string; quantity: number; icon: 'item' }
+export type SkinOrder = { item: string; quantity: number }
+export type SkinItem = {
+  label: string
+  price: number
+  icon: string
+  color: string
+  recipe: { source: string }
+}
+export type CustomerOrder = SkinOrder & Pick<SkinItem, 'label' | 'icon' | 'color'> & { price: number }
 export type ShiftRules = {
   dayLabel: string
   duration: number
@@ -10,7 +18,15 @@ export type ShiftRules = {
   customerPatience: number
   basePrice: number
   starThresholds: number[]
-  order: SkinOrder
+}
+export type ProducerStation = {
+  interaction: number[]
+  depth: number
+  draw: number[]
+  sprite: number[]
+  stockDisplay: { origin: number[]; step: number[]; size: number[] }
+  interval: number
+  capacity: number
 }
 export type SkinUpgrade = {
   id: string
@@ -23,7 +39,10 @@ export type GameSkin = {
   id: string
   spriteSheet: string
   shift: ShiftRules
-  progression: { startingStation: string }
+  items: Record<string, SkinItem>
+  orderDeck: SkinOrder[]
+  producers: Record<string, ProducerStation>
+  progression: { startingStation: string; startingStations: string[] }
   upgrades: SkinUpgrade[]
   palette: {
     strawberry: string
@@ -53,6 +72,17 @@ export type GameSkin = {
 export function stationPoint(skin: GameSkin, key: StationKey): Point {
   const [x, y] = skin.stations[key].interaction
   return { x, y }
+}
+
+export function producerPoint(skin: GameSkin, source: string): Point {
+  const [x, y] = skin.producers[source].interaction
+  return { x, y }
+}
+
+export function itemFor(skin: GameSkin, id: string): SkinItem {
+  const item = skin.items[id]
+  if (!item) throw new Error(`unknown item: ${id}`)
+  return item
 }
 
 export function upgradeSpot(upgrade: SkinUpgrade): Point {

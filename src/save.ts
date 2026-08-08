@@ -55,12 +55,16 @@ function base64UrlToBytes(value: string): Uint8Array<ArrayBuffer> {
 function migrateSave(skin: GameSkin, parsed: Partial<SaveV1>): SaveV1 {
   const fallback = defaultSave(skin)
   const upgrades = parsed.upgrades && typeof parsed.upgrades === 'object' ? parsed.upgrades : {}
+  const unlockedStations = Array.isArray(parsed.unlockedStations)
+    ? parsed.unlockedStations.filter(value => typeof value === 'string')
+    : [...fallback.unlockedStations]
+  for (const station of fallback.unlockedStations) {
+    if (!unlockedStations.includes(station)) unlockedStations.push(station)
+  }
   return {
     version: 1,
     coins: Number.isFinite(parsed.coins) ? parsed.coins ?? 0 : 0,
-    unlockedStations: Array.isArray(parsed.unlockedStations)
-      ? parsed.unlockedStations.filter(value => typeof value === 'string')
-      : fallback.unlockedStations,
+    unlockedStations,
     upgrades: { ...fallback.upgrades, ...upgrades },
     skin: typeof parsed.skin === 'string' ? parsed.skin : fallback.skin,
     text: true,

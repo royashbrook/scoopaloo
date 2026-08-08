@@ -5,22 +5,75 @@
     "dayLabel": "DAY 1",
     "duration": 90,
     "cashGoal": 60,
-    "customerPatience": 14,
+    "customerPatience": 24,
     "basePrice": 6,
     "starThresholds": [
       60,
       75,
       90
-    ],
-    "order": {
-      "item": "vanilla-cone",
+    ]
+  },
+  "items": {
+    "vanilla-cone": {
       "label": "VANILLA CONE",
-      "quantity": 1,
-      "icon": "item"
+      "price": 6,
+      "icon": "/assets/items/vanilla-cone.svg",
+      "color": "#FF8FAB",
+      "recipe": {
+        "source": "soft-serve"
+      }
+    },
+    "sundae": {
+      "label": "SUNDAE",
+      "price": 8,
+      "icon": "/assets/items/sundae.svg",
+      "color": "#63CDB4",
+      "recipe": {
+        "source": "sundae-cart"
+      }
+    }
+  },
+  "orderDeck": [
+    { "item": "vanilla-cone", "quantity": 1 },
+    { "item": "vanilla-cone", "quantity": 1 },
+    { "item": "sundae", "quantity": 1 },
+    { "item": "vanilla-cone", "quantity": 2 },
+    { "item": "sundae", "quantity": 2 },
+    { "item": "vanilla-cone", "quantity": 1 },
+    { "item": "sundae", "quantity": 1 },
+    { "item": "vanilla-cone", "quantity": 2 }
+  ],
+  "producers": {
+    "soft-serve": {
+      "interaction": [190, 260],
+      "depth": 266,
+      "draw": [100, 105, 175, 190],
+      "sprite": [1, 2],
+      "stockDisplay": {
+        "origin": [145, 273],
+        "step": [34, -3],
+        "size": [48, 58]
+      },
+      "interval": 1.7,
+      "capacity": 3
+    },
+    "sundae-cart": {
+      "interaction": [620, 335],
+      "depth": 352,
+      "draw": [525, 200, 245, 195],
+      "sprite": [2, 2],
+      "stockDisplay": {
+        "origin": [590, 238],
+        "step": [42, 0],
+        "size": [52, 63]
+      },
+      "interval": 2.1,
+      "capacity": 3
     }
   },
   "progression": {
-    "startingStation": "soft-serve"
+    "startingStation": "soft-serve",
+    "startingStations": ["soft-serve", "sundae-cart"]
   },
   "palette": {
     "strawberry": "#FF8FAB",
@@ -210,18 +263,18 @@
     },
     "counter": {
       "interaction": [
-        620,
+        760,
         335
       ],
-      "depth": 352,
+      "depth": 340,
       "draw": [
-        525,
-        200,
-        245,
-        195
+        704,
+        235,
+        110,
+        105
       ],
       "sprite": [
-        2,
+        3,
         2
       ]
     },
@@ -255,7 +308,7 @@
         "kind": "walkSpeed",
         "value": 25
       },
-      "unlocks": "sundae-cart"
+      "unlocks": "speedy-sneakers"
     },
     {
       "id": "tray",

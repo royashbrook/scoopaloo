@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createGame,
   goalMet,
+  inventoryTotal,
   machineInterval,
   retryShift,
   runFor,
@@ -15,7 +16,7 @@ import {
 } from './engine'
 import { loadSave, storeSave } from './save'
 import type { GameSkin } from './skin'
-import { nextUpgrade, stationPoint, upgradeSpot } from './skin'
+import { itemFor, nextUpgrade, producerPoint, stationPoint, upgradeSpot } from './skin'
 import skinData from './skins/ice-cream.json'
 
 const skin = skinData as GameSkin
@@ -24,13 +25,14 @@ describe('ice cream stand loop', () => {
   it('takes interaction geometry from the selected skin', () => {
     expect(stationPoint(skin, 'machine')).toEqual({ x: skin.stations.machine.interaction[0], y: skin.stations.machine.interaction[1] })
     expect(stationPoint(skin, 'counter')).toEqual({ x: skin.stations.counter.interaction[0], y: skin.stations.counter.interaction[1] })
+    expect(producerPoint(skin, 'sundae-cart')).toEqual({ x: 620, y: 335 })
   })
 
   it('produces, carries, serves, pays, and upgrades', () => {
     const game = createGame(skin)
     startShift(game)
     runFor(game, 2)
-    Object.assign(game.player, stationPoint(skin, 'machine'))
+    Object.assign(game.player, producerPoint(skin, skin.progression.startingStation))
     runFor(game, 4)
     expect(game.player.tray).toBeGreaterThan(0)
 
@@ -108,10 +110,113 @@ describe('data-driven progression (#12)', () => {
     expect(restored.save.coins).toBe(50 - skin.upgrades[0].price - skin.upgrades[1].price)
     expect(restored.save.upgrades).toEqual({ shoes: 1, tray: 1, machine: 0 })
     expect(restored.save.unlockedStations).toEqual([
-      skin.progression.startingStation, skin.upgrades[0].unlocks, skin.upgrades[1].unlocks,
+      ...skin.progression.startingStations, skin.upgrades[0].unlocks, skin.upgrades[1].unlocks,
     ])
     expect(walkSpeed(restored)).toBe(walkSpeed(game))
     expect(nextUpgrade(skin, restored.save.upgrades)?.id).toBe('machine')
+  })
+})
+
+describe('typed mixed orders (#24)', () => {
+  const started = () => {
+    const game = createGame(skin)
+    startShift(game)
+    return game
+  }
+
+  const orderAt = (index: number) => {
+    const request = skin.orderDeck[index]
+    const item = itemFor(skin, request.item)
+    return { ...request, label: item.label, price: item.price * request.quantity, icon: item.icon, color: item.color }
+  }
+
+  it('keeps item definitions, producer art geometry, and the order deck in skin data', () => {
+    expect(Object.keys(skin.items)).toHaveLength(2)
+    expect(new Set(Object.values(skin.items).map(item => item.recipe.source)).size).toBe(2)
+    expect(Object.values(skin.items).every(item => item.icon.startsWith('/assets/items/'))).toBe(true)
+    expect(skin.orderDeck.slice(0, 2)).toEqual([
+      { item: 'vanilla-cone', quantity: 1 },
+      { item: 'vanilla-cone', quantity: 1 },
+    ])
+    expect(skin.orderDeck.slice(2)).toHaveLength(6)
+  })
+
+  it('picks up and drops typed stock from two distinct producers', () => {
+    const game = started()
+    for (const source of Object.values(game.sources)) source.stock = 1
+
+    Object.assign(game.player, producerPoint(skin, itemFor(skin, 'vanilla-cone').recipe.source))
+    step(game, .05)
+    Object.assign(game.player, producerPoint(skin, itemFor(skin, 'sundae').recipe.source))
+    runFor(game, .4)
+
+    expect(game.player.trayItems).toMatchObject({ 'vanilla-cone': 1, sundae: 1 })
+    expect(game.player.tray).toBe(2)
+
+    Object.assign(game.player, stationPoint(skin, 'counter'))
+    runFor(game, .8)
+    expect(game.counter.items).toMatchObject({ 'vanilla-cone': 1, sundae: 1 })
+    expect(game.counter.stock).toBe(2)
+    expect(game.player.tray).toBe(0)
+  })
+
+  it('rejects wrong stock without consuming the item or customer patience', () => {
+    const game = started()
+    const front = game.customers[0]
+    game.player.trayItems.sundae = 1
+    game.player.tray = 1
+    Object.assign(game.player, stationPoint(skin, 'counter'))
+    const patience = front.patience
+
+    step(game, .05)
+
+    expect(game.events).toContainEqual(expect.objectContaining({
+      kind: 'reject',
+      item: 'sundae',
+      expectedItem: front.order.item,
+    }))
+    expect(game.counter.items.sundae).toBe(1)
+    expect(front.served).toBe(false)
+    expect(front.patience).toBeCloseTo(patience - .05)
+    runFor(game, .8)
+    expect(game.counter.items.sundae).toBe(1)
+    expect(front.served).toBe(false)
+  })
+
+  it('consumes only the requested product and mixed quantity', () => {
+    const game = started()
+    const front = game.customers[0]
+    front.order = orderAt(3)
+    game.counter.items = { 'vanilla-cone': 1, sundae: 1 }
+    game.counter.stock = inventoryTotal(game.counter.items)
+    runFor(game, .8)
+    expect(front.served).toBe(false)
+    expect(game.counter.items).toEqual({ 'vanilla-cone': 1, sundae: 1 })
+
+    game.counter.items['vanilla-cone']++
+    game.counter.stock++
+    runFor(game, .8)
+    expect(front.served).toBe(true)
+    expect(game.counter.items).toEqual({ 'vanilla-cone': 0, sundae: 1 })
+    expect(game.events.find(event => event.kind === 'pay')).toMatchObject({
+      item: 'vanilla-cone',
+      amount: expect.any(Number),
+    })
+  })
+
+  it('deals a deterministic sequence and wraps without depending on live customers', () => {
+    const game = started()
+    const orders = [game.customers[0].order]
+    for (let index = 1; index < skin.orderDeck.length + 2; index++) {
+      game.customers = []
+      game.spawnTimer = 0
+      step(game, .05)
+      orders.push(game.customers[0].order)
+    }
+    expect(orders.map(({ item, quantity }) => ({ item, quantity }))).toEqual([
+      ...skin.orderDeck,
+      ...skin.orderDeck.slice(0, 2),
+    ])
   })
 })
 
@@ -130,7 +235,7 @@ describe('timed Day 1 shift (#22)', () => {
       served: false,
       missed: false,
       patience,
-      order: { ...skin.shift.order },
+      order: { ...game.customers[0].order },
       x: 900,
       y: 345,
       exit: 0,
@@ -138,7 +243,10 @@ describe('timed Day 1 shift (#22)', () => {
   }
 
   const serveFront = (game: GameState) => {
-    game.counter.stock = 1
+    const front = game.customers.find(customer => !customer.served && !customer.missed)
+    if (!front) throw new Error('no waiting customer')
+    game.counter.items[front.order.item] = front.order.quantity
+    game.counter.stock = inventoryTotal(game.counter.items)
     game.counter.serveTimer = .66
     step(game, .05)
   }
@@ -173,10 +281,12 @@ describe('timed Day 1 shift (#22)', () => {
     expect(tipFor(0, 14)).toBe(0)
 
     const game = started()
-    game.customers[0].patience = 7.05
+    game.customers[0].patience = skin.shift.customerPatience / 2 + .05
+    const basePrice = game.customers[0].order.price
     serveFront(game)
-    const payout = skin.shift.basePrice + 2
+    const payout = basePrice + 2
     expect(game.events.find(event => event.kind === 'pay')?.amount).toBe(payout)
+    expect(game.events.find(event => event.kind === 'pay')?.tip).toBe(2)
     expect(game.flyingCoins.reduce((total, coin) => total + coin.value, 0)).toBe(payout)
     expect(game.shift.revenue).toBe(0)
     Object.assign(game.player, { x: 55, y: 592 })
@@ -248,29 +358,55 @@ describe('timed Day 1 shift (#22)', () => {
     expect(game).toEqual(frozen)
   })
 
-  it('makes the goal achievable by a competent route and impossible by idling', () => {
+  it('makes a mixed route beatable without perfect play and better than camping one source', () => {
     const idle = started()
     runFor(idle, skin.shift.duration)
     expect(idle.shift.revenue).toBe(0)
     expect(goalMet(idle)).toBe(false)
 
-    const played = started()
-    const moveTo = (target: Point) => {
-      while (played.phase === 'playing') {
-        const dx = target.x - played.player.x
-        const dy = target.y - played.player.y
-        const distance = Math.hypot(dx, dy)
-        if (distance < 20) break
-        step(played, .05, { x: dx / distance, y: dy / distance })
+    const play = (chooseSource: (game: GameState) => string, openingDelay = 0) => {
+      const game = started()
+      runFor(game, openingDelay)
+      const moveTo = (target: Point) => {
+        while (game.phase === 'playing') {
+          const dx = target.x - game.player.x
+          const dy = target.y - game.player.y
+          const distance = Math.hypot(dx, dy)
+          if (distance < 20) break
+          step(game, .05, { x: dx / distance, y: dy / distance })
+        }
       }
+      while (game.phase === 'playing') {
+        const front = game.customers.find(customer => !customer.served && !customer.missed)
+        if (!front) {
+          runFor(game, .1)
+          continue
+        }
+        const source = chooseSource(game)
+        moveTo(producerPoint(skin, source))
+        while (game.phase === 'playing' && !front.served && !front.missed
+          && (game.player.trayItems[front.order.item] ?? 0) < front.order.quantity) {
+          runFor(game, .2)
+          if (source !== itemFor(skin, front.order.item).recipe.source) break
+        }
+        moveTo(stationPoint(skin, 'counter'))
+        runFor(game, 1.4)
+      }
+      return game
     }
-    while (played.phase === 'playing') {
-      moveTo(stationPoint(skin, 'machine'))
-      runFor(played, .8)
-      moveTo(stationPoint(skin, 'counter'))
-      runFor(played, .8)
-    }
+
+    const played = play(game => {
+      const front = game.customers.find(customer => !customer.served && !customer.missed)
+      if (!front) return skin.progression.startingStation
+      return itemFor(skin, front.order.item).recipe.source
+    }, 4)
+    const camped = play(() => skin.progression.startingStation)
+
     expect(goalMet(played)).toBe(true)
     expect(played.shift.served).toBeGreaterThan(0)
+    expect(played.shift.missed).toBeGreaterThan(0)
+    expect(camped.shift.revenue).toBeLessThan(played.shift.revenue)
+    expect(camped.shift.served).toBeLessThan(played.shift.served)
+    expect(camped.shift.stars).toBeLessThan(played.shift.stars)
   })
 })

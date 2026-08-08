@@ -20,7 +20,7 @@ describe('save v1', () => {
   })
 
   it('round trips an sc1 deflate-raw code', async () => {
-    const save = { ...defaultSave(skin), coins: 21, unlockedStations: [skin.progression.startingStation, skin.upgrades[0].unlocks] }
+    const save = { ...defaultSave(skin), coins: 21, unlockedStations: [...skin.progression.startingStations, skin.upgrades[0].unlocks] }
     const code = await encodeSave(save)
     expect(code.startsWith('sc1.')).toBe(true)
     expect(await decodeSave(skin, code)).toEqual(save)
@@ -39,6 +39,7 @@ describe('save v1', () => {
     expect(restored).toMatchObject({
       version: 1,
       coins: 19,
+      unlockedStations: skin.progression.startingStations,
       upgrades: { shoes: 1, tray: 0, machine: 0 },
       text: true,
       bestRevenue: 0,
@@ -63,7 +64,11 @@ describe('save v1', () => {
     expect(loadSave(skin, storage)).toEqual({
       version: 1,
       coins: 37,
-      unlockedStations: [skin.progression.startingStation, skin.upgrades[0].unlocks],
+      unlockedStations: [
+        skin.progression.startingStation,
+        skin.upgrades[0].unlocks,
+        skin.progression.startingStations[1],
+      ],
       upgrades: { shoes: 1, tray: 0, machine: 0 },
       skin: skin.id,
       text: true,

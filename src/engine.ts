@@ -1,9 +1,10 @@
-import type { GameSkin, SkinOrder } from './skin'
-import { effectTotal, nextUpgrade, stationPoint, upgradeSpot } from './skin'
+import type { CustomerOrder, GameSkin } from './skin'
+import { effectTotal, itemFor, nextUpgrade, producerPoint, stationPoint, upgradeSpot } from './skin'
 
 export type Point = { x: number; y: number }
 export type Input = Point
-export type EventKind = 'pickup' | 'drop' | 'pour' | 'pay' | 'build'
+export type EventKind = 'pickup' | 'drop' | 'pour' | 'pay' | 'reject' | 'build'
+export type Inventory = Record<string, number>
 
 export type SaveV1 = {
   version: 1
@@ -33,7 +34,7 @@ export type Customer = {
   served: boolean
   missed: boolean
   patience: number
-  order: SkinOrder
+  order: CustomerOrder
   x: number
   y: number
   exit: number
@@ -48,20 +49,33 @@ export type FlyingCoin = Point & {
   value: number
 }
 
-export type GameEvent = Point & { kind: EventKind; age: number; amount?: number }
+export type GameEvent = Point & {
+  kind: EventKind
+  age: number
+  amount?: number
+  tip?: number
+  item?: string
+  expectedItem?: string
+  source?: string
+}
+
+export type ProducerState = { item: string; stock: number; timer: number }
 
 export type GameState = {
   skin: GameSkin
   phase: ShiftPhase
   shift: ShiftState
   time: number
-  player: Point & { facing: number; moving: boolean; tray: number; trayWobble: number }
-  machine: { stock: number; timer: number }
-  counter: { stock: number; serveTimer: number }
+  player: Point & { facing: number; moving: boolean; tray: number; trayItems: Inventory; trayWobble: number }
+  sources: Record<string, ProducerState>
+  /** Compatibility alias for the original renderer; sources is authoritative. */
+  machine: ProducerState
+  counter: { stock: number; items: Inventory; serveTimer: number }
   customers: Customer[]
   flyingCoins: FlyingCoin[]
   events: GameEvent[]
   spawnTimer: number
+  nextOrder: number
   pickupCooldown: number
   lifetimeCoins: number
   save: SaveV1
@@ -71,7 +85,7 @@ export const WORLD = { width: 960, height: 640 }
 export const defaultSave = (skin: GameSkin): SaveV1 => ({
   version: 1,
   coins: 0,
-  unlockedStations: [skin.progression.startingStation],
+  unlockedStations: [...new Set(skin.progression.startingStations)],
   upgrades: Object.fromEntries(skin.upgrades.map(upgrade => [upgrade.id, 0])),
   skin: skin.id,
   text: true,
@@ -83,21 +97,30 @@ export const defaultSave = (skin: GameSkin): SaveV1 => ({
 // whatever the owned upgrades declare, so a skin can retune without engine edits.
 export const walkSpeed = (state: GameState): number => 185 + effectTotal(state.skin, state.save.upgrades, 'walkSpeed')
 export const trayCapacity = (state: GameState): number => 2 + effectTotal(state.skin, state.save.upgrades, 'trayCapacity')
-export const machineInterval = (state: GameState): number => Math.max(.4, 1.7 - effectTotal(state.skin, state.save.upgrades, 'machineInterval'))
+export const machineInterval = (state: GameState, source = state.skin.progression.startingStation): number =>
+  Math.max(.4, state.skin.producers[source].interval - effectTotal(state.skin, state.save.upgrades, 'machineInterval'))
 
 export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): GameState {
+  const sources = Object.fromEntries(Object.entries(skin.items).map(([item, definition]) => {
+    const source = definition.recipe.source
+    return [source, { item, stock: 0, timer: skin.producers[source].interval }]
+  }))
+  const machine = sources[skin.progression.startingStation]
+  if (!machine) throw new Error(`unknown starting producer: ${skin.progression.startingStation}`)
   return {
     skin,
     phase: 'ready',
     shift: freshShift(skin),
     time: 0,
-    player: { x: 430, y: 470, facing: 1, moving: false, tray: 0, trayWobble: 0 },
-    machine: { stock: 0, timer: 1.4 },
-    counter: { stock: 0, serveTimer: 0 },
+    player: { x: 430, y: 470, facing: 1, moving: false, tray: 0, trayItems: emptyInventory(skin), trayWobble: 0 },
+    sources,
+    machine,
+    counter: { stock: 0, items: emptyInventory(skin), serveTimer: 0 },
     customers: [customer(skin, 1, 0)],
     flyingCoins: [],
     events: [],
     spawnTimer: 2,
+    nextOrder: 1,
     pickupCooldown: 0,
     lifetimeCoins: save.coins,
     save: structuredClone(save),
@@ -117,13 +140,22 @@ function freshShift(skin: GameSkin): ShiftState {
 }
 
 function customer(skin: GameSkin, id: number, look: number): Customer {
+  const request = skin.orderDeck[look % skin.orderDeck.length]
+  if (!request) throw new Error('order deck is empty')
+  const item = itemFor(skin, request.item)
   return {
     id,
     look: look % 4,
     served: false,
     missed: false,
     patience: skin.shift.customerPatience,
-    order: { ...skin.shift.order },
+    order: {
+      ...request,
+      label: item.label,
+      price: item.price * request.quantity,
+      icon: item.icon,
+      color: item.color,
+    },
     x: 900,
     y: 345,
     exit: 0,
@@ -155,28 +187,43 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
   }
   state.player.trayWobble += dt * (state.player.moving ? 12 : 4)
 
-  state.machine.timer -= dt
-  if (state.machine.timer <= 0 && state.machine.stock < 3) {
-    state.machine.stock++
-    state.machine.timer = machineInterval(state)
-    emit(state, 'pour', stationPoint(state.skin, 'machine'))
+  for (const [sourceId, source] of Object.entries(state.sources)) {
+    source.timer -= dt
+    const producer = state.skin.producers[sourceId]
+    if (source.timer <= 0 && source.stock < producer.capacity) {
+      source.stock++
+      source.timer = machineInterval(state, sourceId)
+      emit(state, 'pour', producerPoint(state.skin, sourceId), { item: source.item, source: sourceId })
+    }
   }
 
   const capacity = trayCapacity(state)
-  const machine = stationPoint(state.skin, 'machine')
   const counter = stationPoint(state.skin, 'counter')
-  if (state.pickupCooldown === 0 && near(state.player, machine) && state.machine.stock > 0 && state.player.tray < capacity) {
-    state.machine.stock--
-    state.player.tray++
+  for (const [sourceId, source] of Object.entries(state.sources)) {
+    if (state.pickupCooldown > 0 || !near(state.player, producerPoint(state.skin, sourceId))
+      || source.stock <= 0 || inventoryTotal(state.player.trayItems) >= capacity) continue
+    source.stock--
+    addStock(state.player.trayItems, source.item, 1)
+    state.player.tray = inventoryTotal(state.player.trayItems)
     state.pickupCooldown = .35
-    emit(state, 'pickup', state.player)
+    emit(state, 'pickup', state.player, { item: source.item, source: sourceId })
+    break
   }
 
-  if (state.pickupCooldown === 0 && near(state.player, counter) && state.player.tray > 0) {
-    state.player.tray--
-    state.counter.stock++
+  if (state.pickupCooldown === 0 && near(state.player, counter) && inventoryTotal(state.player.trayItems) > 0) {
+    const front = state.customers.find(item => !item.served && !item.missed)
+    const item = front && (state.player.trayItems[front.order.item] ?? 0) > 0
+      ? front.order.item
+      : firstStock(state.skin, state.player.trayItems)
+    addStock(state.player.trayItems, item, -1)
+    addStock(state.counter.items, item, 1)
+    state.player.tray = inventoryTotal(state.player.trayItems)
+    state.counter.stock = inventoryTotal(state.counter.items)
     state.pickupCooldown = .35
-    emit(state, 'drop', counter)
+    emit(state, 'drop', counter, { item })
+    if (front && front.order.item !== item) {
+      emit(state, 'reject', counter, { item, expectedItem: front.order.item })
+    }
   }
 
   updateCustomers(state, dt)
@@ -192,8 +239,9 @@ function updateCustomers(state: GameState, dt: number): void {
   const register = stationPoint(state.skin, 'register')
   state.spawnTimer -= dt
   if (state.spawnTimer <= 0 && state.customers.filter(item => !item.served && !item.missed).length < 4) {
-    const id = Math.max(0, ...state.customers.map(item => item.id)) + 1
-    state.customers.push(customer(state.skin, id, id))
+    const id = state.nextOrder + 1
+    state.customers.push(customer(state.skin, id, state.nextOrder))
+    state.nextOrder++
     state.spawnTimer = 3.8
   }
 
@@ -216,18 +264,19 @@ function updateCustomers(state: GameState, dt: number): void {
   })
 
   const front = waiting[0]
-  if (front && state.counter.stock > 0) {
+  if (front && (state.counter.items[front.order.item] ?? 0) >= front.order.quantity) {
     state.counter.serveTimer += dt
     if (state.counter.serveTimer >= .7) {
-      state.counter.stock--
+      addStock(state.counter.items, front.order.item, -front.order.quantity)
+      state.counter.stock = inventoryTotal(state.counter.items)
       state.counter.serveTimer = 0
       front.served = true
       state.shift.served++
       state.shift.streak++
       state.shift.bestStreak = Math.max(state.shift.bestStreak, state.shift.streak)
-      const payout = state.skin.shift.basePrice * front.order.quantity
-        + tipFor(front.patience, state.skin.shift.customerPatience)
-      emit(state, 'pay', register, payout)
+      const tip = tipFor(front.patience, state.skin.shift.customerPatience)
+      const payout = front.order.price + tip
+      emit(state, 'pay', register, { amount: payout, tip, item: front.order.item })
       for (let i = 0; i < 4; i++) {
         const angle = -2.7 + i * .45
         state.flyingCoins.push({
@@ -294,12 +343,35 @@ function updateBuildSpot(state: GameState): void {
   emit(state, 'build', spot)
 }
 
-function emit(state: GameState, kind: EventKind, at: Point, amount?: number): void {
-  state.events.push({ kind, x: at.x, y: at.y, age: 0, ...(amount === undefined ? {} : { amount }) })
+function emit(
+  state: GameState,
+  kind: EventKind,
+  at: Point,
+  details: Pick<GameEvent, 'amount' | 'tip' | 'item' | 'expectedItem' | 'source'> = {},
+): void {
+  state.events.push({ kind, x: at.x, y: at.y, age: 0, ...details })
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
+}
+
+function emptyInventory(skin: GameSkin): Inventory {
+  return Object.fromEntries(Object.keys(skin.items).map(item => [item, 0]))
+}
+
+function addStock(inventory: Inventory, item: string, quantity: number): void {
+  inventory[item] = Math.max(0, (inventory[item] ?? 0) + quantity)
+}
+
+function firstStock(skin: GameSkin, inventory: Inventory): string {
+  const item = Object.keys(skin.items).find(id => (inventory[id] ?? 0) > 0)
+  if (!item) throw new Error('inventory is empty')
+  return item
+}
+
+export function inventoryTotal(inventory: Inventory): number {
+  return Object.values(inventory).reduce((total, quantity) => total + quantity, 0)
 }
 
 export function runFor(state: GameState, seconds: number, input: Input = { x: 0, y: 0 }): void {
