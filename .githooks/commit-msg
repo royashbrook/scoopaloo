@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# commit-msg — every commit references an issue: (refs #N) or (closes #N).
+# WHY: issue-first discipline slips without a mechanical gate; the durable fix is a hook,
+# not memory. Merge commits are exempt (their message is generated).
+# Enable once per clone: git config core.hooksPath .githooks
+
+msg="$(cat "$1")"
+
+case "$msg" in
+  Merge*) exit 0 ;;
+esac
+
+if printf '%s' "$msg" | grep -qE '\((refs|closes) #[0-9]+\)'; then
+  exit 0
+fi
+
+echo "commit-msg: message must reference an issue: '(refs #N)' or '(closes #N)'." >&2
+echo "  file one first if none exists; the issue is the lab notebook." >&2
+exit 1
