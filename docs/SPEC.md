@@ -1,15 +1,15 @@
-# scoopaloo — spec
+# scoopaloo - spec
 
-a tiny kawaii ice cream stand game for kids. free pwa, no ads, no purchases, no accounts,
-nothing to read. one engine, many shop skins; ice cream is skin one.
+a kawaii restaurant-rush game for kids 8+ and adults. free pwa, no ads, no purchases,
+no accounts. one engine, many shop skins; ice cream is skin one.
 
 ## pillars (the non-negotiables)
 
 1. **kid-safe by construction.** zero network requests after load. no analytics, no accounts,
    no notifications. there is nothing to collect, so there is nothing to disclose.
-2. **playable with zero text.** every affordance is spatial: dashed circles, arrows, stacks,
-   coin piles, hearts. a text layer exists (labels, digits) but OFF is the contract: if the loop
-   needs words, the loop is broken.
+2. **readable pressure.** icons teach spatial actions; concise labels and real numbers explain
+   goals, orders, time, value, and performance. text is ON and functional. the player should
+   always know what to make, how long is left, what it pays, and why a shift succeeded or failed.
 3. **animation is the product.** the art is deliberately simple; the slickness comes from motion.
    every interaction has a response (see animation spec). 60fps on a 2018 ipad is the budget.
 4. **a skin is data, not code.** the engine never mentions ice cream. if skin two (candy shop)
@@ -41,16 +41,20 @@ toca-boca-adjacent kawaii, from the approved concept board:
 2. player walks into the dashed circle by the machine; cones hop one-by-one onto the tray
    (squash-stretch hop, tray dips under the weight).
 3. carry to the counter; cones slide off to the display.
-4. customers walk in, queue at the counter, get served in order; served customer pops a heart
-   plus sparkle and waddles out happy.
-5. payment: coins fountain out and lie on the floor near the register; the player collects by
+4. customers walk in with readable order tickets and patience, queue at the counter, and get
+   served only by matching stock. a walkout is visible and resets the service streak.
+5. payment: base price plus a remaining-patience tip appears as a number; coins fountain out and
+   lie on the floor near the register. the player collects by
    walking near (small magnet radius, coins fly to the player with a pop).
-6. spend at dashed **build spots** to unlock: more flavors, a second machine, faster machine,
-   bigger tray, a helper.
-7. helpers automate one leg (machine→counter) so the game becomes gently idle. player is always
+6. a timed shift shows its cash goal, clock, served, missed, and streak. results show revenue,
+   goal, best streak, and 1-3 stars before retry, upgrade, or next day.
+7. spend between shifts to choose: more flavors, a second machine, faster machine, bigger tray,
+   more patience, or better tips.
+8. helpers eventually automate one leg (machine→counter) so the game becomes gently idle. player is always
    strictly faster than a helper, so playing beats watching.
 
-progression = station graph defined by the skin. no fail state, no timer pressure, no lose.
+progression = shifts, order deck, goals, station graph, and upgrade values defined by the skin.
+missing a goal means retry, never punishment or lost purchases.
 
 ## animation spec (build these, in this order)
 
@@ -72,7 +76,7 @@ easing: everything springs or ease-out-backs. nothing moves linearly. respect
 
 - one thumb: touch-drag anywhere = virtual joystick (the floating ring in the reference games).
 - keyboard (desktop dev/testing): wasd/arrows.
-- no other gestures. taps only in menus.
+- no other gestures. taps start shifts and operate results/shop menus.
 
 ## tech
 
@@ -86,7 +90,8 @@ easing: everything springs or ease-out-backs. nothing moves linearly. respect
 ## save + migration
 
 - save = versioned json in localStorage (`scoopaloo_save_v1`): coins, unlocked stations,
-  upgrade levels, skin id, text-layer toggle. small on purpose.
+  upgrade levels, current day, stars/best revenue, and skin id. small on purpose. old saves with
+  the retired text toggle still import safely.
 - **save ticket**: settings drawer (not front and center) shows the save as a QR. the QR carries
   a LINK to `rescue.html` with the save compressed into the url fragment (deflate-raw +
   base64url, prefix `sc1.`), because ios cameras scan links natively: no camera permission, no
@@ -103,7 +108,7 @@ skin = `skins/<name>.json` + one sprite sheet. the json declares:
 - palette (the named colors above)
 - station graph: producers, transformers, sinks, their rates, prices, unlock order
 - item definitions (what rides the tray, what customers want)
-- text strings for the optional text layer (a skin with no strings is valid)
+- text strings for tickets, hud, results, upgrades, and day challenges
 
 engine owns: grid + movement, carrying, station scheduling, customers + queueing, economy,
 helpers, save, input, render, animation. skin two (candy shop) is the contract's proof and is
@@ -112,7 +117,7 @@ not started until skin one is fun.
 ## quality gates (definition of done, per slice)
 
 1. ci green (typecheck + vitest + build).
-2. playable start-to-first-upgrade with the text layer OFF, by someone who cannot read.
+2. a first-time player can read the shift goal, order, timer, payout, result, and next choice.
 3. 60fps on the oldest device on hand; no frame budget regressions in the perf smoke.
 4. save survives: reload, offline reload, export → rescue → import roundtrip.
 5. reviewed by the second pair of eyes before merge. no self-merges.
