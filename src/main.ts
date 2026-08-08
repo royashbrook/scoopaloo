@@ -15,8 +15,10 @@ import {
   runFor,
   startShift,
   step,
+  tipFor,
   upgradeOffer,
   upcomingOrders,
+  type Customer,
   type GameState,
   type Point,
 } from './engine'
@@ -107,6 +109,10 @@ let previous = performance.now()
 let saveClock = 0
 let previousSoundPhase = state.phase
 const heardEvents = new WeakSet<object>()
+const hurriedCustomers = new WeakSet<Customer>()
+let hurriedCustomer: Customer | undefined
+let hurrySerial = 0
+const HURRY_SECONDS = 10
 
 // paused = deterministic evidence mode (#14): the loop keeps RENDERING so
 // captures show the live scene, but the engine only steps via the advance hook
@@ -140,6 +146,20 @@ function updateSound(): void {
     sound.play(event.kind === 'reject' && event.reason !== 'wrong-item' ? 'blocked'
       : reachedComboTier ? 'combo' : event.kind)
   }
+  const front = state.customers.find(customer => !customer.served && !customer.missed)
+  if (state.phase === 'playing' && front && front.patience > 0
+    && front.patience <= HURRY_SECONDS && !hurriedCustomers.has(front)) {
+    hurriedCustomers.add(front)
+    hurriedCustomer = front
+    hurrySerial++
+    sound.play('hurry')
+  }
+}
+
+function serviceStake(customer: Customer): { tip: number; combo: number; payout: number } {
+  const tip = tipFor(customer.patience, customerPatience(state))
+  const combo = comboBonus(state, state.shift.streak + 1)
+  return { tip, combo, payout: customer.order.price + tip + combo }
 }
 
 function updateShiftUi(): void {
@@ -153,11 +173,18 @@ function updateShiftUi(): void {
   let order = null
   let recipe = null
   if (front) {
+    const stake = serviceStake(front)
     order = {
       label: front.order.label,
       quantity: front.order.quantity,
       price: front.order.price,
       patience: front.patience / customerPatience(state),
+      patienceSeconds: Math.max(0, Math.ceil(front.patience)),
+      patienceMax: Math.ceil(customerPatience(state)),
+      tip: stake.tip,
+      potentialCombo: stake.combo,
+      potentialPayout: stake.payout,
+      urgent: front.patience > 0 && front.patience <= HURRY_SECONDS,
       icon: front.order.icon,
     }
     const definition = skin.items[front.order.item]
@@ -208,6 +235,7 @@ function updateShiftUi(): void {
       kind: comboFeedback.kind === 'combo-break' ? 'break' : 'gain',
       streak: comboFeedback.streak ?? 0,
     } : undefined,
+    urgentEvent: front && hurriedCustomer === front ? { serial: hurrySerial } : undefined,
     bestStreak: state.shift.bestStreak,
     stars: state.shift.stars,
     success: goalMet(state),
@@ -227,6 +255,9 @@ function updateShiftUi(): void {
       quantity: upcoming.quantity,
       patience: waitingCustomers[index + 1]
         ? waitingCustomers[index + 1].patience / customerPatience(state)
+        : null,
+      seconds: waitingCustomers[index + 1]
+        ? Math.max(0, Math.ceil(waitingCustomers[index + 1].patience))
         : null,
     })),
     order,

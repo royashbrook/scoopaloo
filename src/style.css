@@ -170,6 +170,19 @@ canvas {
 }
 .next-position { top: 4px; left: 5px; }
 .next-orders b { right: 4px; bottom: 5px; padding: 1px 2px; border-radius: .3rem; background: rgb(255 243 230 / .9); font-size: 13px; }
+.next-seconds {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  padding: 1px 2px;
+  border-radius: .3rem;
+  color: #fff3e6;
+  background: #4a3b45;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
 .next-patience {
   position: absolute;
   bottom: 0;
@@ -179,12 +192,16 @@ canvas {
 }
 
 .ticket-heading {
-  display: flex;
-  justify-content: space-between;
-  padding: .42rem .65rem;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: .45rem;
+  padding: .36rem .65rem;
   color: #fff3e6;
   background: #4a3b45;
 }
+.ticket-heading > * { min-width: 0; white-space: nowrap; }
+.ticket-heading > b { color: #ffd45e; font-size: 13px; }
 
 .ticket-body {
   display: grid;
@@ -203,13 +220,44 @@ canvas {
   height: 47px;
   object-fit: contain;
 }
-.patience-track { height: 8px; background: rgb(74 59 69 / .16); }
+.patience-track {
+  position: relative;
+  height: 16px;
+  overflow: hidden;
+  background: rgb(74 59 69 / .16);
+}
 .patience-track i {
-  display: block;
+  position: absolute;
+  inset: 0 auto 0 0;
   width: 100%;
-  height: 100%;
   background: linear-gradient(90deg, #ff8fab, #ffd45e 45%, #63cdb4 75%);
   transition: width .1s linear;
+}
+.patience-values {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: .55fr 1fr 1.4fr;
+  align-items: center;
+  gap: .18rem;
+  padding: 0 .35rem;
+  color: #4a3b45;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 1px #fff3e6;
+}
+.patience-values b { min-width: 0; white-space: nowrap; }
+.patience-values b:nth-child(2) { text-align: center; }
+.patience-values b:last-child { text-align: right; }
+.order-ticket.is-urgent {
+  border-color: #b73052;
+  animation: ticket-urgent .72s ease-in-out infinite alternate;
+}
+.order-ticket.is-urgent .ticket-heading > span::after {
+  content: " · HURRY";
+  color: #ffd45e;
+  font-size: 12px;
 }
 .order-ticket.is-wrong { border-color: #d63e64; animation: ticket-wrong .16s ease-in-out 2; }
 .ticket-guidance {
@@ -279,6 +327,9 @@ canvas {
 .inventory-readout em { font-size: 12px; font-style: normal; font-weight: 800; opacity: .55; }
 @keyframes ticket-wrong {
   50% { translate: .3rem 0; }
+}
+@keyframes ticket-urgent {
+  to { box-shadow: 0 .35rem 0 rgb(183 48 82 / .34), 0 0 0 3px rgb(255 212 94 / .42); }
 }
 @keyframes combo-gain {
   50% { color: #0c6a58; background: #ffd45e; scale: 1.12; }
@@ -530,7 +581,7 @@ button, a {
   50% { margin-bottom: .5rem; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .update-toast, .order-ticket.is-wrong { animation: none; }
+  .update-toast, .order-ticket.is-wrong, .order-ticket.is-urgent { animation: none; }
   .hud-combo.is-gain { animation-name: combo-gain-color; }
   .hud-combo.is-break { animation-name: combo-break-color; }
 }

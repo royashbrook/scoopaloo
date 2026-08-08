@@ -49,7 +49,8 @@ toca-boca-adjacent kawaii, from the approved concept board:
 4. carry the finished cone or sundae to the counter; it slides into the display.
 5. customers walk in with readable order tickets and patience, queue at the counter, and get
    served only by matching stock. the next two orders stay visible for batching and planning.
-   a walkout is visible and resets the service streak.
+   the live ticket exposes whole seconds, tip, next-service combo, and the maximum payout at
+   current patience. a walkout is visible and resets the service streak.
 6. payment: base price plus a remaining-patience tip and explicit streak bonus appears as a
    number; flat bonuses unlock at 2/4/6 consecutive serves. coins fountain out and
    lie on the floor near the register. the player collects by
@@ -88,7 +89,8 @@ easing: everything springs or ease-out-backs. nothing moves linearly. respect
 ## sound
 
 - short procedural cues confirm start, production, pickup/drop, prep start/ready, blocked raw
-  delivery, payment, wrong items, results, upgrades, and day changes. cues support the
+  delivery, payment, wrong items, one ten-second hurry threshold, results, upgrades, and day
+  changes. cues support the
   numeric/visual feedback; they never replace it.
 - web audio unlocks on the first tap for mobile autoplay rules. sound defaults on; one fixed
   button outside the portrait play lane mutes it, and that choice persists across reloads.
