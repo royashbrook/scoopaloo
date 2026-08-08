@@ -69,4 +69,3 @@ dialog form { position: absolute; right: .7rem; top: .5rem; }
 .save-mark { font-size: 2rem; color: #ff8fab; }
 #save-qr { display: block; width: min(17rem, 100%); margin: .4rem auto 1rem; border-radius: 1rem; }
 #rescue-link { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; margin: auto; border: .2rem solid #4a3b45; border-radius: 50%; font-size: 1.6rem; }
-
