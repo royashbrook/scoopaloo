@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Scoopaloo soft-serve mark</title>
+  <desc id="desc">A strawberry S-shaped soft serve in a waffle cone with a star coin.</desc>
+  <defs>
+    <clipPath id="cone-clip">
+      <path d="M178 298h156l-43 116a28 28 0 0 1-27 20h-16a28 28 0 0 1-27-20z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Flat and full-bleed so this master can be exported directly as a launcher icon. -->
+  <rect width="512" height="512" fill="#63CDB4"/>
+
+  <!-- Cone and waffle lines sit behind the soft-serve S. -->
+  <path d="M178 298h156l-43 116a28 28 0 0 1-27 20h-16a28 28 0 0 1-27-20z"
+        fill="#FFD9B8" stroke="#FFF3E6" stroke-width="34" stroke-linejoin="round"/>
+  <path d="M178 298h156l-43 116a28 28 0 0 1-27 20h-16a28 28 0 0 1-27-20z"
+        fill="#FFD9B8" stroke="#4A3B45" stroke-width="18" stroke-linejoin="round"/>
+  <g clip-path="url(#cone-clip)" fill="none" stroke="#FF8FAB" stroke-width="7" opacity=".58">
+    <path d="M173 327l142 142M166 375l103 103M212 290l116 116M339 314L211 442M348 358l-91 91M300 293L199 394"/>
+  </g>
+  <path d="M174 301q82 25 164 0" fill="none" stroke="#4A3B45" stroke-width="20" stroke-linecap="round"/>
+  <path d="M180 297q76 19 152 0" fill="none" stroke="#FFD45E" stroke-width="9" stroke-linecap="round"/>
+
+  <!-- One broad centerline makes a clear S even at 32px. -->
+  <g transform="translate(0 28) scale(1 .88)">
+  <path d="M297 84c55 31 53 84 10 106-35 18-94 8-124 28-39 26-23 69 22 79 52 12 103-10 131-42 10 45-22 80-82 83-58 3-111-22-126-62"
+        fill="none" stroke="#FFF3E6" stroke-width="106" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M297 84c55 31 53 84 10 106-35 18-94 8-124 28-39 26-23 69 22 79 52 12 103-10 131-42 10 45-22 80-82 83-58 3-111-22-126-62"
+        fill="none" stroke="#4A3B45" stroke-width="84" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M297 84c55 31 53 84 10 106-35 18-94 8-124 28-39 26-23 69 22 79 52 12 103-10 131-42 10 45-22 80-82 83-58 3-111-22-126-62"
+        fill="none" stroke="#FF8FAB" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M293 95c29 18 31 43 18 59M172 246c4-12 16-21 32-27M160 298c17 18 44 28 73 28"
+        fill="none" stroke="#FFF3E6" stroke-width="12" stroke-linecap="round" opacity=".9"/>
+  </g>
+
+  <!-- Sunshine star-coin, kept inside the maskable safe circle. -->
+  <circle cx="354" cy="368" r="66" fill="#FFF3E6"/>
+  <circle cx="354" cy="368" r="54" fill="#FFD45E" stroke="#4A3B45" stroke-width="14"/>
+  <path d="m354 329 11 22 25 4-18 18 4 25-22-12-22 12 4-25-18-18 25-4z"
+        fill="#FFF3E6" stroke="#4A3B45" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m390 302 7 15 15 7-15 7-7 15-7-15-15-7 15-7z" fill="#FFF3E6"/>
+</svg>
