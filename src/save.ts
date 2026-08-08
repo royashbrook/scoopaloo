@@ -54,21 +54,50 @@ function base64UrlToBytes(value: string): Uint8Array<ArrayBuffer> {
 
 function migrateSave(skin: GameSkin, parsed: Partial<SaveV1>): SaveV1 {
   const fallback = defaultSave(skin)
-  const upgrades = parsed.upgrades && typeof parsed.upgrades === 'object' ? parsed.upgrades : {}
+  const coins = finite(parsed.coins)
+  const bestRevenue = finite(parsed.bestRevenue)
+  const bestStars = clamp(Math.floor(finite(parsed.bestStars)), 0, 3)
+  const upgrades = { ...fallback.upgrades }
+  if (parsed.upgrades && typeof parsed.upgrades === 'object') {
+    for (const [id, level] of Object.entries(parsed.upgrades)) {
+      upgrades[id] = clamp(Math.floor(finite(level)), 0, 3)
+    }
+  }
   const unlockedStations = Array.isArray(parsed.unlockedStations)
     ? parsed.unlockedStations.filter(value => typeof value === 'string')
     : [...fallback.unlockedStations]
   for (const station of fallback.unlockedStations) {
     if (!unlockedStations.includes(station)) unlockedStations.push(station)
   }
+  const dayStars = records(parsed.dayStars, value => clamp(Math.floor(value), 0, 3))
+  const dayBestRevenue = records(parsed.dayBestRevenue, value => Math.max(0, value))
+  dayStars[0] = Math.max(dayStars[0], bestStars)
+  dayBestRevenue[0] = Math.max(dayBestRevenue[0], bestRevenue)
   return {
     version: 1,
-    coins: Number.isFinite(parsed.coins) ? parsed.coins ?? 0 : 0,
+    coins,
     unlockedStations,
-    upgrades: { ...fallback.upgrades, ...upgrades },
+    upgrades,
     skin: typeof parsed.skin === 'string' ? parsed.skin : fallback.skin,
     text: true,
-    bestRevenue: Number.isFinite(parsed.bestRevenue) ? Math.max(0, parsed.bestRevenue ?? 0) : 0,
-    bestStars: Number.isFinite(parsed.bestStars) ? Math.max(0, Math.min(3, Math.floor(parsed.bestStars ?? 0))) : 0,
+    bestRevenue: Math.max(bestRevenue, ...dayBestRevenue),
+    bestStars: Math.max(bestStars, ...dayStars),
+    currentDay: clamp(Math.floor(finite(parsed.currentDay)), 0, skin.days.length - 1),
+    lifetimeCash: Number.isFinite(parsed.lifetimeCash) ? finite(parsed.lifetimeCash) : coins,
+    dayStars,
+    dayBestRevenue,
   }
+}
+
+function records(value: unknown, clean: (value: number) => number): [number, number, number] {
+  const source = Array.isArray(value) ? value : []
+  return [0, 1, 2].map(index => clean(finite(source[index]))) as [number, number, number]
+}
+
+function finite(value: unknown, fallback = 0): number {
+  return Number.isFinite(value) ? Math.max(0, value as number) : fallback
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
 }

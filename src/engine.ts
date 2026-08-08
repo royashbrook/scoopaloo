@@ -1,5 +1,5 @@
-import type { CustomerOrder, GameSkin } from './skin'
-import { effectTotal, itemFor, nextUpgrade, producerPoint, stationPoint, upgradeSpot } from './skin'
+import type { CustomerOrder, GameSkin, SkinDay, SkinUpgrade, UpgradeKind } from './skin'
+import { itemFor, producerPoint, stationPoint } from './skin'
 
 export type Point = { x: number; y: number }
 export type Input = Point
@@ -15,9 +15,13 @@ export type SaveV1 = {
   text: boolean
   bestRevenue: number
   bestStars: number
+  currentDay: number
+  lifetimeCash: number
+  dayStars: [number, number, number]
+  dayBestRevenue: [number, number, number]
 }
 
-export type ShiftPhase = 'ready' | 'playing' | 'results'
+export type ShiftPhase = 'ready' | 'playing' | 'results' | 'shop'
 export type ShiftState = {
   remaining: number
   revenue: number
@@ -77,8 +81,16 @@ export type GameState = {
   spawnTimer: number
   nextOrder: number
   pickupCooldown: number
-  lifetimeCoins: number
   save: SaveV1
+}
+
+export type UpgradeOffer = {
+  level: number
+  price: number | null
+  before: number
+  after: number
+  affordable: boolean
+  capped: boolean
 }
 
 export const WORLD = { width: 960, height: 640 }
@@ -91,45 +103,90 @@ export const defaultSave = (skin: GameSkin): SaveV1 => ({
   text: true,
   bestRevenue: 0,
   bestStars: 0,
+  currentDay: 0,
+  lifetimeCash: 0,
+  dayStars: [0, 0, 0],
+  dayBestRevenue: [0, 0, 0],
 })
 
-// Effects are skin data: every number below starts at the engine's base and adds
-// whatever the owned upgrades declare, so a skin can retune without engine edits.
-export const walkSpeed = (state: GameState): number => 185 + effectTotal(state.skin, state.save.upgrades, 'walkSpeed')
-export const trayCapacity = (state: GameState): number => 2 + effectTotal(state.skin, state.save.upgrades, 'trayCapacity')
-export const machineInterval = (state: GameState, source = state.skin.progression.startingStation): number =>
-  Math.max(.4, state.skin.producers[source].interval - effectTotal(state.skin, state.save.upgrades, 'machineInterval'))
+export function upgradeLevel(save: SaveV1, id: string): number {
+  return clamp(Math.floor(Number.isFinite(save.upgrades[id]) ? save.upgrades[id] : 0), 0, 3)
+}
+
+function savedUpgradeEffect(skin: GameSkin, save: SaveV1, kind: UpgradeKind): number {
+  return skin.upgrades.reduce((total, upgrade) => {
+    if (upgrade.kind !== kind) return total
+    return total + (upgrade.levels[upgradeLevel(save, upgrade.id) - 1]?.effect ?? 0)
+  }, 0)
+}
+
+export function upgradeEffect(state: GameState, kind: UpgradeKind): number {
+  return savedUpgradeEffect(state.skin, state.save, kind)
+}
+
+export function upgradeOffer(state: GameState, upgrade: SkinUpgrade): UpgradeOffer {
+  const level = upgradeLevel(state.save, upgrade.id)
+  const next = upgrade.levels[level]
+  const before = upgrade.levels[level - 1]?.effect ?? 0
+  return {
+    level,
+    price: next?.price ?? null,
+    before,
+    after: next?.effect ?? before,
+    affordable: Boolean(next && state.save.coins >= next.price),
+    capped: !next,
+  }
+}
+
+export function currentDay(state: GameState): SkinDay {
+  const day = state.skin.days[clamp(Math.floor(state.save.currentDay), 0, state.skin.days.length - 1)]
+  if (!day) throw new Error('campaign has no days')
+  return day
+}
+
+export const walkSpeed = (state: GameState): number => 185 + upgradeEffect(state, 'walkSpeed')
+export const trayCapacity = (state: GameState): number => 2 + upgradeEffect(state, 'trayCapacity')
+export const producerInterval = (state: GameState, source = state.skin.progression.startingStation): number =>
+  Math.max(.4, state.skin.producers[source].interval - upgradeEffect(state, 'churnTime'))
+export const machineInterval = producerInterval
+export const customerPatience = (state: GameState): number => currentDay(state).customerPatience + upgradeEffect(state, 'customerPatience')
 
 export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): GameState {
+  const saved = structuredClone(save)
   const sources = Object.fromEntries(Object.entries(skin.items).map(([item, definition]) => {
     const source = definition.recipe.source
-    return [source, { item, stock: 0, timer: skin.producers[source].interval }]
+    return [source, {
+      item,
+      stock: 0,
+      timer: Math.max(.4, skin.producers[source].interval - savedUpgradeEffect(skin, saved, 'churnTime')),
+    }]
   }))
   const machine = sources[skin.progression.startingStation]
   if (!machine) throw new Error(`unknown starting producer: ${skin.progression.startingStation}`)
   return {
     skin,
     phase: 'ready',
-    shift: freshShift(skin),
+    shift: freshShift(skin, saved),
     time: 0,
     player: { x: 430, y: 470, facing: 1, moving: false, tray: 0, trayItems: emptyInventory(skin), trayWobble: 0 },
     sources,
     machine,
     counter: { stock: 0, items: emptyInventory(skin), serveTimer: 0 },
-    customers: [customer(skin, 1, 0)],
+    customers: [customer(skin, saved, 1, 0)],
     flyingCoins: [],
     events: [],
     spawnTimer: 2,
     nextOrder: 1,
     pickupCooldown: 0,
-    lifetimeCoins: save.coins,
-    save: structuredClone(save),
+    save: saved,
   }
 }
 
-function freshShift(skin: GameSkin): ShiftState {
+function freshShift(skin: GameSkin, save: SaveV1): ShiftState {
+  const day = skin.days[clamp(Math.floor(save.currentDay), 0, skin.days.length - 1)]
+  if (!day) throw new Error('campaign has no days')
   return {
-    remaining: skin.shift.duration,
+    remaining: day.duration,
     revenue: 0,
     served: 0,
     missed: 0,
@@ -139,8 +196,10 @@ function freshShift(skin: GameSkin): ShiftState {
   }
 }
 
-function customer(skin: GameSkin, id: number, look: number): Customer {
-  const request = skin.orderDeck[look % skin.orderDeck.length]
+function customer(skin: GameSkin, save: SaveV1, id: number, look: number): Customer {
+  const day = skin.days[clamp(Math.floor(save.currentDay), 0, skin.days.length - 1)]
+  if (!day) throw new Error('campaign has no days')
+  const request = day.orderDeck[look % day.orderDeck.length]
   if (!request) throw new Error('order deck is empty')
   const item = itemFor(skin, request.item)
   return {
@@ -148,7 +207,7 @@ function customer(skin: GameSkin, id: number, look: number): Customer {
     look: look % 4,
     served: false,
     missed: false,
-    patience: skin.shift.customerPatience,
+    patience: day.customerPatience + savedUpgradeEffect(skin, save, 'customerPatience'),
     order: {
       ...request,
       label: item.label,
@@ -228,7 +287,6 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
 
   updateCustomers(state, dt)
   updateCoins(state, dt)
-  updateBuildSpot(state)
   state.events.forEach(event => { event.age += dt })
   state.events = state.events.filter(event => event.age < .9)
   state.shift.remaining = Math.max(0, state.shift.remaining - dt)
@@ -240,9 +298,9 @@ function updateCustomers(state: GameState, dt: number): void {
   state.spawnTimer -= dt
   if (state.spawnTimer <= 0 && state.customers.filter(item => !item.served && !item.missed).length < 4) {
     const id = state.nextOrder + 1
-    state.customers.push(customer(state.skin, id, state.nextOrder))
+    state.customers.push(customer(state.skin, state.save, id, state.nextOrder))
     state.nextOrder++
-    state.spawnTimer = 3.8
+    state.spawnTimer = currentDay(state).spawnInterval
   }
 
   let walkedOut = false
@@ -274,7 +332,7 @@ function updateCustomers(state: GameState, dt: number): void {
       state.shift.served++
       state.shift.streak++
       state.shift.bestStreak = Math.max(state.shift.bestStreak, state.shift.streak)
-      const tip = tipFor(front.patience, state.skin.shift.customerPatience)
+      const tip = tipFor(front.patience, customerPatience(state))
       const payout = front.order.price + tip
       emit(state, 'pay', register, { amount: payout, tip, item: front.order.item })
       for (let i = 0; i < 4; i++) {
@@ -320,27 +378,12 @@ function updateCoins(state: GameState, dt: number): void {
       if (distance(coin, target) < 25) {
         coin.collected = true
         state.save.coins += coin.value
-        state.lifetimeCoins += coin.value
+        state.save.lifetimeCash += coin.value
         state.shift.revenue += coin.value
       }
     }
   }
   state.flyingCoins = state.flyingCoins.filter(coin => !coin.collected)
-}
-
-// Purchases follow the skin's declared order: only the NEXT unowned upgrade has a
-// live spot, so a later spot cannot be bought early no matter where the player
-// stands. Buying flips the owned level, which advances nextUpgrade, so a held
-// position cannot deduct twice.
-function updateBuildSpot(state: GameState): void {
-  const upgrade = nextUpgrade(state.skin, state.save.upgrades)
-  if (!upgrade || state.save.coins < upgrade.price) return
-  const spot = upgradeSpot(upgrade)
-  if (!near(state.player, spot, 76)) return
-  state.save.coins -= upgrade.price
-  state.save.upgrades[upgrade.id] = 1
-  state.save.unlockedStations.push(upgrade.unlocks)
-  emit(state, 'build', spot)
 }
 
 function emit(
@@ -382,10 +425,46 @@ export function startShift(state: GameState): void {
   if (state.phase === 'ready') state.phase = 'playing'
 }
 
-export function retryShift(state: GameState): void {
+function resetShift(state: GameState, phase: 'ready' | 'playing'): void {
   const fresh = createGame(state.skin, state.save)
   Object.assign(state, fresh)
-  state.phase = 'playing'
+  state.phase = phase
+}
+
+export function retryShift(state: GameState): boolean {
+  if (state.phase !== 'results' && state.phase !== 'shop') return false
+  resetShift(state, 'playing')
+  return true
+}
+
+export function enterShop(state: GameState): boolean {
+  if (state.phase !== 'results') return false
+  state.phase = 'shop'
+  return true
+}
+
+export function leaveShop(state: GameState): boolean {
+  if (state.phase !== 'shop') return false
+  state.phase = 'results'
+  return true
+}
+
+export function purchaseUpgrade(state: GameState, id: string): boolean {
+  if (state.phase !== 'shop') return false
+  const upgrade = state.skin.upgrades.find(candidate => candidate.id === id)
+  if (!upgrade) return false
+  const offer = upgradeOffer(state, upgrade)
+  if (offer.price === null || !offer.affordable) return false
+  state.save.coins -= offer.price
+  state.save.upgrades[id] = offer.level + 1
+  return true
+}
+
+export function nextDay(state: GameState): boolean {
+  if (state.phase !== 'shop' || !goalMet(state)) return false
+  state.save.currentDay = Math.min(state.skin.days.length - 1, state.save.currentDay + 1)
+  resetShift(state, 'ready')
+  return true
 }
 
 export function tipFor(remaining: number, patience: number): number {
@@ -394,18 +473,23 @@ export function tipFor(remaining: number, patience: number): number {
 }
 
 export function goalMet(state: GameState): boolean {
-  return state.shift.revenue >= state.skin.shift.cashGoal
+  return state.shift.revenue >= currentDay(state).cashGoal
 }
 
-export function starsFor(skin: GameSkin, revenue: number): number {
-  return skin.shift.starThresholds.filter(threshold => revenue >= threshold).length
+export function starsFor(skin: GameSkin, revenue: number, dayIndex = 0): number {
+  const day = skin.days[clamp(Math.floor(dayIndex), 0, skin.days.length - 1)]
+  if (!day) throw new Error('campaign has no days')
+  return day.starThresholds.filter(threshold => revenue >= threshold).length
 }
 
 function finishShift(state: GameState): void {
   if (state.phase !== 'playing') return
+  const dayIndex = clamp(Math.floor(state.save.currentDay), 0, state.skin.days.length - 1)
   state.phase = 'results'
   state.shift.remaining = 0
-  state.shift.stars = starsFor(state.skin, state.shift.revenue)
+  state.shift.stars = starsFor(state.skin, state.shift.revenue, dayIndex)
+  state.save.dayBestRevenue[dayIndex] = Math.max(state.save.dayBestRevenue[dayIndex], state.shift.revenue)
+  state.save.dayStars[dayIndex] = Math.max(state.save.dayStars[dayIndex], state.shift.stars)
   state.save.bestRevenue = Math.max(state.save.bestRevenue, state.shift.revenue)
   state.save.bestStars = Math.max(state.save.bestStars, state.shift.stars)
   state.player.moving = false

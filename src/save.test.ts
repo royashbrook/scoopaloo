@@ -69,11 +69,39 @@ describe('save v1', () => {
         skin.upgrades[0].unlocks,
         skin.progression.startingStations[1],
       ],
-      upgrades: { shoes: 1, tray: 0, machine: 0 },
+      upgrades: { shoes: 1, tray: 0, machine: 0, patience: 0 },
       skin: skin.id,
       text: true,
       bestRevenue: 0,
       bestStars: 0,
+      currentDay: 0,
+      lifetimeCash: 37,
+      dayStars: [0, 0, 0],
+      dayBestRevenue: [0, 0, 0],
     })
+  })
+
+  it('migrates campaign fields without losing unknown station or upgrade history', () => {
+    const values = new Map<string, string>()
+    values.set(SAVE_KEY, JSON.stringify({
+      version: 1,
+      coins: 42,
+      unlockedStations: ['retired-cart'],
+      upgrades: { shoes: 8, tray: -2, machine: 1, 'retired-upgrade': 2 },
+      skin: skin.id,
+      bestRevenue: 74,
+      bestStars: 2,
+      currentDay: 99,
+    }))
+    const restored = loadSave(skin, { getItem: key => values.get(key) ?? null })
+    expect(restored).toMatchObject({
+      coins: 42,
+      currentDay: 2,
+      lifetimeCash: 42,
+      dayStars: [2, 0, 0],
+      dayBestRevenue: [74, 0, 0],
+      upgrades: { shoes: 3, tray: 0, machine: 1, patience: 0, 'retired-upgrade': 2 },
+    })
+    expect(restored.unlockedStations).toEqual(['retired-cart', ...skin.progression.startingStations])
   })
 })

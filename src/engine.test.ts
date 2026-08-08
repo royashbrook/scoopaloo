@@ -1,22 +1,32 @@
 import { describe, expect, it } from 'vitest'
 import {
+  currentDay,
+  customerPatience,
   createGame,
+  defaultSave,
+  enterShop,
   goalMet,
   inventoryTotal,
+  leaveShop,
   machineInterval,
+  nextDay,
+  producerInterval,
+  purchaseUpgrade,
   retryShift,
   runFor,
   startShift,
   step,
   tipFor,
   trayCapacity,
+  upgradeEffect,
+  upgradeLevel,
+  upgradeOffer,
   walkSpeed,
   type GameState,
   type Point,
 } from './engine'
-import { loadSave, storeSave } from './save'
 import type { GameSkin } from './skin'
-import { itemFor, nextUpgrade, producerPoint, stationPoint, upgradeSpot } from './skin'
+import { itemFor, producerPoint, stationPoint } from './skin'
 import skinData from './skins/ice-cream.json'
 
 const skin = skinData as GameSkin
@@ -28,7 +38,7 @@ describe('ice cream stand loop', () => {
     expect(producerPoint(skin, 'sundae-cart')).toEqual({ x: 620, y: 335 })
   })
 
-  it('produces, carries, serves, pays, and upgrades', () => {
+  it('produces, carries, serves, and pays', () => {
     const game = createGame(skin)
     startShift(game)
     runFor(game, 2)
@@ -38,82 +48,102 @@ describe('ice cream stand loop', () => {
 
     Object.assign(game.player, stationPoint(skin, 'counter'))
     runFor(game, 2)
-    expect(game.counter.stock + game.flyingCoins.length + game.lifetimeCoins).toBeGreaterThan(0)
+    expect(game.counter.stock + game.flyingCoins.length + game.save.lifetimeCash).toBeGreaterThan(0)
 
     Object.assign(game.player, stationPoint(skin, 'register'))
     runFor(game, 4)
-    expect(game.lifetimeCoins).toBeGreaterThan(0)
+    expect(game.save.lifetimeCash).toBeGreaterThan(0)
 
-    game.save.coins = 8
-    Object.assign(game.player, upgradeSpot(skin.upgrades[0]))
-    runFor(game, .1)
-    expect(game.save.upgrades.shoes).toBe(1)
-    expect(game.save.unlockedStations).toContain(skin.upgrades[0].unlocks)
   })
 })
 
-// The five purchase states of issue 12: locked, unaffordable, affordable,
-// purchased, restored. Deterministic time via runFor throughout.
-describe('data-driven progression (#12)', () => {
-  const freshAt = (spotIndex: number, coins: number) => {
-    const game = createGame(skin)
-    startShift(game)
-    game.save.coins = coins
-    Object.assign(game.player, upgradeSpot(skin.upgrades[spotIndex]))
-    return game
+describe('three-day shop campaign (#25)', () => {
+  const finishAt = (game: GameState, revenue: number) => {
+    if (game.phase === 'ready') startShift(game)
+    game.shift.revenue = revenue
+    game.shift.remaining = .01
+    step(game, .01)
   }
 
-  it('LOCKED: a later spot does nothing while an earlier upgrade is unowned', () => {
-    const game = freshAt(1, 999)
-    runFor(game, 1)
-    expect(game.save.upgrades.tray).toBe(0)
-    expect(game.save.coins).toBe(999)
+  it('keeps days and all twelve cumulative upgrade levels in skin data', () => {
+    expect(skin.days).toHaveLength(3)
+    expect(skin.days.map(day => day.cashGoal)).toEqual([60, 100, 130])
+    expect(skin.days.map(day => day.customerPatience)).toEqual([24, 20, 17])
+    expect(skin.days.map(day => day.spawnInterval)).toEqual([3.8, 3.2, 2.8])
+    expect(skin.days.every(day => day.challenge && day.unlockBanner && day.orderDeck.length > 0)).toBe(true)
+    expect(skin.upgrades.map(upgrade => upgrade.levels.length)).toEqual([3, 3, 3, 3])
+    expect(skin.upgrades.map(upgrade => upgrade.levels[0].price)).toEqual([35, 50, 80, 120])
   })
 
-  it('UNAFFORDABLE: standing on the live spot without the price does nothing', () => {
-    const game = freshAt(0, skin.upgrades[0].price - 1)
-    runFor(game, 1)
-    expect(game.save.upgrades.shoes).toBe(0)
-    expect(game.save.coins).toBe(skin.upgrades[0].price - 1)
-  })
-
-  it('AFFORDABLE: buying deducts the price exactly once, even held for seconds', () => {
-    const game = freshAt(0, skin.upgrades[0].price)
-    runFor(game, 3) // stay parked on the spot well past the purchase tick
-    expect(game.save.upgrades.shoes).toBe(1)
-    expect(game.save.coins).toBe(0)
-  })
-
-  it('PURCHASED: each upgrade has an observable mechanical effect', () => {
+  it('offers independent cards and purchases only inside the shop', () => {
     const game = createGame(skin)
-    const baseSpeed = walkSpeed(game)
-    const baseCapacity = trayCapacity(game)
-    const baseInterval = machineInterval(game)
-    for (const upgrade of skin.upgrades) game.save.upgrades[upgrade.id] = 1
-    expect(walkSpeed(game)).toBe(baseSpeed + 25)
-    expect(trayCapacity(game)).toBe(baseCapacity + 1)
-    expect(machineInterval(game)).toBeCloseTo(baseInterval - .45)
+    game.save.coins = 79
+    const [shoes, tray, machine, patience] = skin.upgrades
+    expect([shoes, tray, machine, patience].map(upgrade => upgradeOffer(game, upgrade).affordable))
+      .toEqual([true, true, false, false])
+    expect(purchaseUpgrade(game, shoes.id)).toBe(false)
+
+    finishAt(game, currentDay(game).cashGoal)
+    expect(enterShop(game)).toBe(true)
+    expect(upgradeOffer(game, shoes)).toEqual({
+      level: 0, price: 35, before: 0, after: 25, affordable: true, capped: false,
+    })
+    expect(purchaseUpgrade(game, shoes.id)).toBe(true)
+    expect(game.save).toMatchObject({ coins: 44, upgrades: { shoes: 1 } })
+    expect(upgradeOffer(game, shoes)).toMatchObject({ level: 1, price: 85, before: 25, after: 50, affordable: false })
+    expect(leaveShop(game)).toBe(true)
+    expect(purchaseUpgrade(game, tray.id)).toBe(false)
   })
 
-  it('RESTORED: a reloaded save keeps coins, upgrades, unlock order, and effects', () => {
-    const game = freshAt(0, 50)
-    runFor(game, 1) // buys shoes
-    Object.assign(game.player, upgradeSpot(skin.upgrades[1]))
-    runFor(game, 1) // buys tray
-    const values = new Map<string, string>()
-    const storage = {
-      getItem: (key: string) => values.get(key) ?? null,
-      setItem: (key: string, value: string) => { values.set(key, value) },
+  it('caps levels and applies every effect to the live rules', () => {
+    const game = createGame(skin)
+    finishAt(game, currentDay(game).cashGoal)
+    enterShop(game)
+    game.save.coins = 999
+    const shoes = skin.upgrades[0]
+    expect([purchaseUpgrade(game, shoes.id), purchaseUpgrade(game, shoes.id), purchaseUpgrade(game, shoes.id)])
+      .toEqual([true, true, true])
+    expect(purchaseUpgrade(game, shoes.id)).toBe(false)
+    expect(upgradeOffer(game, shoes)).toEqual({ level: 3, price: null, before: 75, after: 75, affordable: false, capped: true })
+
+    Object.assign(game.save.upgrades, { tray: 1, machine: 1, patience: 1 })
+    expect(upgradeLevel(game.save, 'shoes')).toBe(3)
+    expect(upgradeEffect(game, 'walkSpeed')).toBe(75)
+    expect(walkSpeed(game)).toBe(260)
+    expect(trayCapacity(game)).toBe(3)
+    expect(customerPatience(game)).toBe(currentDay(game).customerPatience + 1.5)
+    for (const source of Object.keys(skin.producers)) {
+      expect(producerInterval(game, source)).toBeCloseTo(skin.producers[source].interval - .45)
     }
-    storeSave(game.save, storage)
-    const restored = createGame(skin, loadSave(skin, storage))
-    expect(restored.save.coins).toBe(50 - skin.upgrades[0].price - skin.upgrades[1].price)
-    expect(restored.save.upgrades).toEqual({ shoes: 1, tray: 1, machine: 0 })
-    expect(restored.save.unlockedStations).toEqual([
-      ...skin.progression.startingStations, skin.upgrades[0].unlocks, skin.upgrades[1].unlocks,
-    ])
-    expect(walkSpeed(restored)).toBe(walkSpeed(game))
-    expect(nextUpgrade(skin, restored.save.upgrades)?.id).toBe('machine')
+    expect(machineInterval(game)).toBe(producerInterval(game, skin.progression.startingStation))
+  })
+
+  it('records each day, gates advancement through the shop, and replays Day 3', () => {
+    const game = createGame(skin)
+    finishAt(game, skin.days[0].starThresholds[1])
+    expect(game.save.dayBestRevenue).toEqual([75, 0, 0])
+    expect(game.save.dayStars).toEqual([2, 0, 0])
+    expect(nextDay(game)).toBe(false)
+    enterShop(game)
+    expect(nextDay(game)).toBe(true)
+    expect(game).toMatchObject({ phase: 'ready', save: { currentDay: 1 }, nextOrder: 1 })
+    expect(currentDay(game).id).toBe(skin.days[1].id)
+    expect(game.customers[0].order).toMatchObject(skin.days[1].orderDeck[0])
+
+    finishAt(game, skin.days[1].cashGoal - 1)
+    enterShop(game)
+    expect(nextDay(game)).toBe(false)
+    expect(retryShift(game)).toBe(true)
+    expect(game).toMatchObject({ phase: 'playing', save: { currentDay: 1 }, nextOrder: 1 })
+    finishAt(game, skin.days[1].cashGoal)
+    enterShop(game)
+    expect(nextDay(game)).toBe(true)
+    expect(game.save.currentDay).toBe(2)
+
+    finishAt(game, skin.days[2].cashGoal)
+    enterShop(game)
+    expect(nextDay(game)).toBe(true)
+    expect(game).toMatchObject({ phase: 'ready', save: { currentDay: 2 }, nextOrder: 1 })
   })
 })
 
@@ -296,6 +326,7 @@ describe('timed Day 1 shift (#22)', () => {
     Object.assign(game.player, { x: game.flyingCoins[0].x, y: game.flyingCoins[0].y + 55 })
     step(game, .01)
     expect(game.shift.revenue).toBeGreaterThan(0)
+    expect([game.save.coins, game.save.lifetimeCash]).toEqual([game.shift.revenue, game.shift.revenue])
     expect(game.shift.revenue + game.flyingCoins.reduce((total, coin) => total + coin.value, 0)).toBe(payout)
   })
 
@@ -358,14 +389,23 @@ describe('timed Day 1 shift (#22)', () => {
     expect(game).toEqual(frozen)
   })
 
-  it('makes a mixed route beatable without perfect play and better than camping one source', () => {
+  it('keeps a purchased-upgrade route beatable across all days and better than camping one source', () => {
     const idle = started()
     runFor(idle, skin.shift.duration)
     expect(idle.shift.revenue).toBe(0)
     expect(goalMet(idle)).toBe(false)
 
-    const play = (chooseSource: (game: GameState) => string, openingDelay = 0) => {
-      const game = started()
+    const play = (
+      dayIndex: number,
+      chooseSource: (game: GameState) => string,
+      openingDelay = 0,
+      upgrades: Record<string, number> = {},
+    ) => {
+      const save = defaultSave(skin)
+      save.currentDay = dayIndex
+      Object.assign(save.upgrades, upgrades)
+      const game = createGame(skin, save)
+      startShift(game)
       runFor(game, openingDelay)
       const moveTo = (target: Point) => {
         while (game.phase === 'playing') {
@@ -395,12 +435,18 @@ describe('timed Day 1 shift (#22)', () => {
       return game
     }
 
-    const played = play(game => {
+    const followOrder = (game: GameState) => {
       const front = game.customers.find(customer => !customer.served && !customer.missed)
       if (!front) return skin.progression.startingStation
       return itemFor(skin, front.order.item).recipe.source
-    }, 4)
-    const camped = play(() => skin.progression.startingStation)
+    }
+    const played = play(0, followOrder, 4)
+    const camped = play(0, () => skin.progression.startingStation)
+    const campaign = [
+      played,
+      play(1, followOrder, 0, { shoes: 1 }),
+      play(2, followOrder, 0, { shoes: 1, tray: 1, machine: 1 }),
+    ]
 
     expect(goalMet(played)).toBe(true)
     expect(played.shift.served).toBeGreaterThan(0)
@@ -408,5 +454,7 @@ describe('timed Day 1 shift (#22)', () => {
     expect(camped.shift.revenue).toBeLessThan(played.shift.revenue)
     expect(camped.shift.served).toBeLessThan(played.shift.served)
     expect(camped.shift.stars).toBeLessThan(played.shift.stars)
+    expect(campaign.map(game => game.shift.revenue)).toEqual([79, 111, 218])
+    expect(campaign.every(goalMet)).toBe(true)
   })
 })

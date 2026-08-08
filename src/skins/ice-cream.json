@@ -13,6 +13,71 @@
       90
     ]
   },
+  "days": [
+    {
+      "id": "opening-day",
+      "label": "DAY 1",
+      "challenge": "OPENING DAY",
+      "unlockBanner": "THE UPGRADE SHOP IS OPEN",
+      "duration": 90,
+      "cashGoal": 60,
+      "starThresholds": [60, 75, 90],
+      "customerPatience": 24,
+      "spawnInterval": 3.8,
+      "orderDeck": [
+        { "item": "vanilla-cone", "quantity": 1 },
+        { "item": "vanilla-cone", "quantity": 1 },
+        { "item": "sundae", "quantity": 1 },
+        { "item": "vanilla-cone", "quantity": 2 },
+        { "item": "sundae", "quantity": 2 },
+        { "item": "vanilla-cone", "quantity": 1 },
+        { "item": "sundae", "quantity": 1 },
+        { "item": "vanilla-cone", "quantity": 2 }
+      ]
+    },
+    {
+      "id": "double-scoop-dash",
+      "label": "DAY 2",
+      "challenge": "DOUBLE-SCOOP DASH",
+      "unlockBanner": "FINAL DAY UNLOCKED",
+      "duration": 90,
+      "cashGoal": 100,
+      "starThresholds": [100, 140, 180],
+      "customerPatience": 20,
+      "spawnInterval": 3.2,
+      "orderDeck": [
+        { "item": "vanilla-cone", "quantity": 1 },
+        { "item": "sundae", "quantity": 1 },
+        { "item": "vanilla-cone", "quantity": 2 },
+        { "item": "sundae", "quantity": 2 },
+        { "item": "sundae", "quantity": 1 },
+        { "item": "vanilla-cone", "quantity": 2 },
+        { "item": "sundae", "quantity": 2 },
+        { "item": "vanilla-cone", "quantity": 1 }
+      ]
+    },
+    {
+      "id": "scoop-storm",
+      "label": "DAY 3",
+      "challenge": "SCOOP STORM",
+      "unlockBanner": "SCORE CHASE UNLOCKED",
+      "duration": 90,
+      "cashGoal": 130,
+      "starThresholds": [130, 220, 310],
+      "customerPatience": 17,
+      "spawnInterval": 2.8,
+      "orderDeck": [
+        { "item": "sundae", "quantity": 2 },
+        { "item": "vanilla-cone", "quantity": 2 },
+        { "item": "sundae", "quantity": 1 },
+        { "item": "vanilla-cone", "quantity": 2 },
+        { "item": "sundae", "quantity": 2 },
+        { "item": "vanilla-cone", "quantity": 1 },
+        { "item": "sundae", "quantity": 2 },
+        { "item": "vanilla-cone", "quantity": 2 }
+      ]
+    }
+  ],
   "items": {
     "vanilla-cone": {
       "label": "VANILLA CONE",
@@ -299,7 +364,15 @@
   "upgrades": [
     {
       "id": "shoes",
-      "price": 8,
+      "name": "RUN SPEED",
+      "kind": "walkSpeed",
+      "unit": "SPEED",
+      "levels": [
+        { "price": 35, "effect": 25 },
+        { "price": 85, "effect": 50 },
+        { "price": 150, "effect": 75 }
+      ],
+      "price": 35,
       "spot": [
         205,
         505
@@ -312,7 +385,15 @@
     },
     {
       "id": "tray",
-      "price": 14,
+      "name": "TRAY CAPACITY",
+      "kind": "trayCapacity",
+      "unit": "ITEM",
+      "levels": [
+        { "price": 50, "effect": 1 },
+        { "price": 110, "effect": 2 },
+        { "price": 190, "effect": 3 }
+      ],
+      "price": 50,
       "spot": [
         460,
         550
@@ -325,16 +406,42 @@
     },
     {
       "id": "machine",
-      "price": 22,
+      "name": "CHURN TIME",
+      "kind": "churnTime",
+      "unit": "SEC FASTER",
+      "levels": [
+        { "price": 80, "effect": 0.45 },
+        { "price": 145, "effect": 0.75 },
+        { "price": 230, "effect": 1 }
+      ],
+      "price": 80,
       "spot": [
         740,
         505
       ],
       "effect": {
-        "kind": "machineInterval",
+        "kind": "churnTime",
         "value": 0.45
       },
       "unlocks": "turbo-churner"
+    },
+    {
+      "id": "patience",
+      "name": "CUSTOMER PATIENCE",
+      "kind": "customerPatience",
+      "unit": "SEC",
+      "levels": [
+        { "price": 120, "effect": 1.5 },
+        { "price": 190, "effect": 3 },
+        { "price": 280, "effect": 5 }
+      ],
+      "price": 120,
+      "spot": [580, 505],
+      "effect": {
+        "kind": "customerPatience",
+        "value": 1.5
+      },
+      "unlocks": "customer-coaching"
     }
   ]
 }
