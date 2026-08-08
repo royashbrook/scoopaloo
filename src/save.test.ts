@@ -20,7 +20,7 @@ describe('save v1', () => {
   })
 
   it('round trips an sc1 deflate-raw code', async () => {
-    const save = { ...defaultSave(skin), coins: 21, unlockedStations: [skin.progression.startingStation, skin.progression.firstBuildUnlock] }
+    const save = { ...defaultSave(skin), coins: 21, unlockedStations: [skin.progression.startingStation, skin.upgrades[0].unlocks] }
     const code = await encodeSave(save)
     expect(code.startsWith('sc1.')).toBe(true)
     expect(await decodeSave(skin, code)).toEqual(save)

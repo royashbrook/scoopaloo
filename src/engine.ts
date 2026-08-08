@@ -1,5 +1,5 @@
 import type { GameSkin } from './skin'
-import { stationPoint } from './skin'
+import { effectTotal, nextUpgrade, stationPoint, upgradeSpot } from './skin'
 
 export type Point = { x: number; y: number }
 export type Input = Point
@@ -53,10 +53,16 @@ export const defaultSave = (skin: GameSkin): SaveV1 => ({
   version: 1,
   coins: 0,
   unlockedStations: [skin.progression.startingStation],
-  upgrades: { shoes: 0, tray: 0 },
+  upgrades: Object.fromEntries(skin.upgrades.map(upgrade => [upgrade.id, 0])),
   skin: skin.id,
   text: false,
 })
+
+// Effects are skin data: every number below starts at the engine's base and adds
+// whatever the owned upgrades declare, so a skin can retune without engine edits.
+export const walkSpeed = (state: GameState): number => 185 + effectTotal(state.skin, state.save.upgrades, 'walkSpeed')
+export const trayCapacity = (state: GameState): number => 2 + effectTotal(state.skin, state.save.upgrades, 'trayCapacity')
+export const machineInterval = (state: GameState): number => Math.max(.4, 1.7 - effectTotal(state.skin, state.save.upgrades, 'machineInterval'))
 
 export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): GameState {
   return {
@@ -88,7 +94,7 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
   state.pickupCooldown = Math.max(0, state.pickupCooldown - dt)
 
   const length = Math.hypot(input.x, input.y)
-  const speed = 185 + state.save.upgrades.shoes * 25
+  const speed = walkSpeed(state)
   const nx = length > 1 ? input.x / length : input.x
   const ny = length > 1 ? input.y / length : input.y
   state.player.moving = length > 0.05
@@ -102,11 +108,11 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
   state.machine.timer -= dt
   if (state.machine.timer <= 0 && state.machine.stock < 3) {
     state.machine.stock++
-    state.machine.timer = 1.7
+    state.machine.timer = machineInterval(state)
     emit(state, 'pour', stationPoint(state.skin, 'machine'))
   }
 
-  const capacity = 2 + Math.min(1, state.save.upgrades.tray)
+  const capacity = trayCapacity(state)
   const machine = stationPoint(state.skin, 'machine')
   const counter = stationPoint(state.skin, 'counter')
   if (state.pickupCooldown === 0 && near(state.player, machine) && state.machine.stock > 0 && state.player.tray < capacity) {
@@ -125,7 +131,7 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
 
   updateCustomers(state, dt)
   updateCoins(state, dt)
-  updateBuildSpot(state, dt)
+  updateBuildSpot(state)
   state.events.forEach(event => { event.age += dt })
   state.events = state.events.filter(event => event.age < .9)
 }
@@ -202,14 +208,19 @@ function updateCoins(state: GameState, dt: number): void {
   state.flyingCoins = state.flyingCoins.filter(coin => !coin.collected)
 }
 
-function updateBuildSpot(state: GameState, dt: number): void {
-  const ready = state.save.coins >= 8 && state.save.upgrades.shoes === 0
-  if (!ready || !near(state.player, stationPoint(state.skin, 'build'), 76)) return
-  state.save.coins -= 8
-  state.save.upgrades.shoes = 1
-  state.save.unlockedStations.push(state.skin.progression.firstBuildUnlock)
-  emit(state, 'build', stationPoint(state.skin, 'build'))
-  state.player.y -= 20 * dt
+// Purchases follow the skin's declared order: only the NEXT unowned upgrade has a
+// live spot, so a later spot cannot be bought early no matter where the player
+// stands. Buying flips the owned level, which advances nextUpgrade, so a held
+// position cannot deduct twice.
+function updateBuildSpot(state: GameState): void {
+  const upgrade = nextUpgrade(state.skin, state.save.upgrades)
+  if (!upgrade || state.save.coins < upgrade.price) return
+  const spot = upgradeSpot(upgrade)
+  if (!near(state.player, spot, 76)) return
+  state.save.coins -= upgrade.price
+  state.save.upgrades[upgrade.id] = 1
+  state.save.unlockedStations.push(upgrade.unlocks)
+  emit(state, 'build', spot)
 }
 
 function emit(state: GameState, kind: EventKind, at: Point): void {
