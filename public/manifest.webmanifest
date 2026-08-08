@@ -3,6 +3,7 @@
   "short_name": "Scoopaloo",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#FFF3E6",
   "theme_color": "#FF8FAB",
   "icons": [

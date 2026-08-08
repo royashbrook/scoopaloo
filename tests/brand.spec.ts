@@ -54,6 +54,7 @@ test('ships decoded brand assets, exact manifest icons, and offline copies', asy
   }, pngs)
 
   expect(result.manifestOk).toBe(true)
+  expect(result.manifest.orientation).toBe('portrait-primary')
   expect(result.manifest.icons).toEqual([
     { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
     { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
