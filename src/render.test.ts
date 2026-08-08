@@ -1,12 +1,33 @@
 import { describe, expect, it } from 'vitest'
+import skinData from './skins/ice-cream.json'
 import {
   MOTION_TIMES,
   blinkPose,
   carryPose,
   machinePose,
+  roomPropAnchor,
   transferPose,
   walkPose,
 } from './render'
+
+describe('static parlor shell (#15)', () => {
+  it('pins the panoramic backdrop and grounded plant geometry', () => {
+    expect(skinData.room).toEqual({
+      horizon: 320,
+      wall: '#FFE7CA',
+      floor: '#FFF3E6',
+      backdrop: {
+        image: '/assets/room/ice-cream-wall.svg?v=1',
+        draw: [-416, 0, 1792, 320],
+      },
+      floorProp: {
+        image: '/assets/room/mint-plant.svg?v=1',
+        draw: [190, 400, 80, 112],
+      },
+    })
+    expect(roomPropAnchor(skinData.room.floorProp.draw)).toEqual({ x: 230, y: 512 })
+  })
+})
 
 describe('deterministic service motion (#16)', () => {
   it('samples two planted walk poses, a pass pose, and immediate idle', () => {

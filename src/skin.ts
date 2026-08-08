@@ -74,9 +74,18 @@ export type SkinUpgrade = {
   levels: UpgradeLevel[]
 }
 export type UpgradeLevel = { price: number; effect: number }
+export type SkinRoomImage = { image: string; draw: number[] }
+export type SkinRoom = {
+  horizon: number
+  wall: string
+  floor: string
+  backdrop: SkinRoomImage
+  floorProp: SkinRoomImage
+}
 export type GameSkin = {
   id: string
   spriteSheet: string
+  room: SkinRoom
   comboTiers: ComboTier[]
   days: SkinDay[]
   scoreChase?: SkinScoreChase

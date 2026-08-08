@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1792" height="320" viewBox="-416 0 1792 320" fill="none">
+  <defs>
+    <pattern id="wall-panels" x="-416" y="0" width="160" height="198" patternUnits="userSpaceOnUse" viewBox="0 0 160 198">
+      <rect x="20" y="62" width="120" height="82" rx="18" fill="#FFF3E6" fill-opacity=".32" stroke="#4A3B45" stroke-opacity=".07" stroke-width="3"/>
+    </pattern>
+  </defs>
+  <path fill="url(#wall-panels)" d="M-416 0h1792v198H-416z"/>
+  <path fill="#FFF3E6" d="M-416 198h1792v122H-416z"/>
+  <path stroke="#63CDB4" stroke-width="10" d="M-416 204h1792"/>
+  <path stroke="#4A3B45" stroke-opacity=".18" stroke-width="3" d="M-416 214h1792M-416 302h1792"/>
+  <path stroke="#FFD9B8" stroke-width="4" d="M-336 226v62m160-62v62m160-62v62m160-62v62m160-62v62m160-62v62m160-62v62m160-62v62m160-62v62m160-62v62m160-62v62"/>
+
+  <g stroke="#4A3B45" stroke-linecap="round" stroke-linejoin="round">
+    <path fill="#FFD9B8" stroke-width="5" d="M180 283h158v15H180z"/>
+    <path stroke-width="5" d="m202 298-12 17m126-17 12 17"/>
+    <g transform="translate(193 233)">
+      <path fill="#FFF8F0" stroke-width="4" d="M3 6h34l-3 45H6L3 6Z"/>
+      <path fill="#63CDB4" stroke-width="4" d="M0 0h40v10H0z"/>
+      <path stroke="#FF8FAB" stroke-width="3" d="m11 20 4 3m10-4 4 3m-18 10 4-2m10 5 4-3m-14 10 4-3"/>
+    </g>
+    <g transform="translate(243 238)">
+      <path fill="#FFF3E6" stroke-width="4" d="m0 3 30 1-4 16H4L0 3Z"/>
+      <path fill="#63CDB4" stroke-width="4" d="m2 17 28 1-4 16H6L2 17Z"/>
+      <path fill="#FF8FAB" stroke-width="4" d="m4 31 26 1-4 16H8L4 31Z"/>
+    </g>
+    <g transform="translate(285 226)">
+      <path fill="#63CDB4" stroke-width="4" d="M0 38h42l-6 23H6L0 38Z"/>
+      <path fill="#FFD9B8" stroke-width="3" d="M8 36 16 11l8 25H8Zm14 0L30 9l8 27H22Z"/>
+      <path stroke-width="2" d="m12 27 8 5m-6 0 7-5m5 0 8 5m-6 0 7-5"/>
+      <path fill="#FF8FAB" stroke-width="3" d="M8 11a8 8 0 0 1 16 0 8 8 0 0 1-16 0Zm14-2a8 8 0 0 1 16 0 8 8 0 0 1-16 0Z"/>
+    </g>
+  </g>
+
+  <g stroke="#4A3B45" stroke-linecap="round" stroke-linejoin="round">
+    <path fill="#FFD9B8" stroke-width="5" d="M626 283h158v15H626z"/>
+    <path stroke-width="5" d="m648 298-12 17m126-17 12 17"/>
+    <g transform="translate(639 233)">
+      <path fill="#FFF8F0" stroke-width="4" d="M3 6h34l-3 45H6L3 6Z"/>
+      <path fill="#63CDB4" stroke-width="4" d="M0 0h40v10H0z"/>
+      <path stroke="#FF8FAB" stroke-width="3" d="m11 20 4 3m10-4 4 3m-18 10 4-2m10 5 4-3m-14 10 4-3"/>
+    </g>
+    <g transform="translate(689 238)">
+      <path fill="#FFF3E6" stroke-width="4" d="m0 3 30 1-4 16H4L0 3Z"/>
+      <path fill="#63CDB4" stroke-width="4" d="m2 17 28 1-4 16H6L2 17Z"/>
+      <path fill="#FF8FAB" stroke-width="4" d="m4 31 26 1-4 16H8L4 31Z"/>
+    </g>
+    <g transform="translate(731 226)">
+      <path fill="#63CDB4" stroke-width="4" d="M0 38h42l-6 23H6L0 38Z"/>
+      <path fill="#FFD9B8" stroke-width="3" d="M8 36 16 11l8 25H8Zm14 0L30 9l8 27H22Z"/>
+      <path stroke-width="2" d="m12 27 8 5m-6 0 7-5m5 0 8 5m-6 0 7-5"/>
+      <path fill="#FF8FAB" stroke-width="3" d="M8 11a8 8 0 0 1 16 0 8 8 0 0 1-16 0Zm14-2a8 8 0 0 1 16 0 8 8 0 0 1-16 0Z"/>
+    </g>
+  </g>
+
+  <g stroke="#4A3B45" stroke-linecap="round" stroke-linejoin="round">
+    <path fill="#FFD9B8" stroke-width="5" d="M-300 270h150v15h-150zM1110 270h150v15h-150z"/>
+    <path stroke-width="5" d="M-278 285l-12 20M-172 285l12 20M1132 285l-12 20M1238 285l12 20"/>
+    <path fill="#FFF8F0" stroke-width="4" d="M-272 230h35l-4 37h-27l-4-37Zm1410 0h35l-4 37h-27l-4-37Z"/>
+    <path fill="#FF8FAB" stroke-width="4" d="M-216 238h42v29h-42zm1410 0h42v29h-42z"/>
+  </g>
+</svg>
