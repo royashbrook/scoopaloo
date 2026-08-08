@@ -4,6 +4,8 @@ import { createGame, runFor, step, type GameState, type Point } from './engine'
 import { Controls } from './input'
 import { Renderer } from './render'
 import { loadSave, rescueUrl, storeSave } from './save'
+import type { GameSkin } from './skin'
+import skinData from './skins/ice-cream.json'
 
 declare global {
   interface Window {
@@ -18,9 +20,10 @@ declare global {
 const canvas = document.querySelector<HTMLCanvasElement>('#game')
 if (!canvas) throw new Error('game canvas missing')
 
-const state = createGame(loadSave())
+const skin = skinData as GameSkin
+const state = createGame(skin, loadSave(skin))
 const controls = new Controls(canvas)
-const renderer = new Renderer(canvas)
+const renderer = new Renderer(canvas, skin)
 let previous = performance.now()
 let saveClock = 0
 

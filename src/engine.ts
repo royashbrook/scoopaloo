@@ -1,3 +1,6 @@
+import type { GameSkin } from './skin'
+import { stationPoint } from './skin'
+
 export type Point = { x: number; y: number }
 export type Input = Point
 export type EventKind = 'pickup' | 'drop' | 'pour' | 'pay' | 'build'
@@ -31,6 +34,7 @@ export type FlyingCoin = Point & {
 export type GameEvent = Point & { kind: EventKind; age: number }
 
 export type GameState = {
+  skin: GameSkin
   time: number
   player: Point & { facing: number; moving: boolean; tray: number; trayWobble: number }
   machine: { stock: number; timer: number }
@@ -45,24 +49,18 @@ export type GameState = {
 }
 
 export const WORLD = { width: 960, height: 640 }
-export const POSITIONS = {
-  machine: { x: 190, y: 260 },
-  counter: { x: 620, y: 335 },
-  register: { x: 760, y: 335 },
-  build: { x: 205, y: 505 },
-}
-
-export const defaultSave = (): SaveV1 => ({
+export const defaultSave = (skin: GameSkin): SaveV1 => ({
   version: 1,
   coins: 0,
-  unlockedStations: ['soft-serve'],
+  unlockedStations: [skin.progression.startingStation],
   upgrades: { shoes: 0, tray: 0 },
-  skin: 'ice-cream',
+  skin: skin.id,
   text: false,
 })
 
-export function createGame(save: SaveV1 = defaultSave()): GameState {
+export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): GameState {
   return {
+    skin,
     time: 0,
     player: { x: 430, y: 470, facing: 1, moving: false, tray: 0, trayWobble: 0 },
     machine: { stock: 0, timer: 1.4 },
@@ -105,22 +103,24 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
   if (state.machine.timer <= 0 && state.machine.stock < 3) {
     state.machine.stock++
     state.machine.timer = 1.7
-    emit(state, 'pour', POSITIONS.machine)
+    emit(state, 'pour', stationPoint(state.skin, 'machine'))
   }
 
   const capacity = 2 + Math.min(1, state.save.upgrades.tray)
-  if (state.pickupCooldown === 0 && near(state.player, POSITIONS.machine) && state.machine.stock > 0 && state.player.tray < capacity) {
+  const machine = stationPoint(state.skin, 'machine')
+  const counter = stationPoint(state.skin, 'counter')
+  if (state.pickupCooldown === 0 && near(state.player, machine) && state.machine.stock > 0 && state.player.tray < capacity) {
     state.machine.stock--
     state.player.tray++
     state.pickupCooldown = .35
     emit(state, 'pickup', state.player)
   }
 
-  if (state.pickupCooldown === 0 && near(state.player, POSITIONS.counter) && state.player.tray > 0) {
+  if (state.pickupCooldown === 0 && near(state.player, counter) && state.player.tray > 0) {
     state.player.tray--
     state.counter.stock++
     state.pickupCooldown = .35
-    emit(state, 'drop', POSITIONS.counter)
+    emit(state, 'drop', counter)
   }
 
   updateCustomers(state, dt)
@@ -131,6 +131,7 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
 }
 
 function updateCustomers(state: GameState, dt: number): void {
+  const register = stationPoint(state.skin, 'register')
   state.spawnTimer -= dt
   if (state.spawnTimer <= 0 && state.customers.length < 4) {
     const id = Math.max(0, ...state.customers.map(item => item.id)) + 1
@@ -152,13 +153,13 @@ function updateCustomers(state: GameState, dt: number): void {
       state.counter.stock--
       state.counter.serveTimer = 0
       front.served = true
-      emit(state, 'pay', POSITIONS.register)
+      emit(state, 'pay', register)
       for (let i = 0; i < 4; i++) {
         const angle = -2.7 + i * .45
         state.flyingCoins.push({
           id: state.time * 1000 + i,
-          x: POSITIONS.register.x,
-          y: POSITIONS.register.y - 35,
+          x: register.x,
+          y: register.y - 35,
           vx: Math.cos(angle) * (80 + i * 12),
           vy: Math.sin(angle) * (95 + i * 8),
           age: 0,
@@ -203,11 +204,11 @@ function updateCoins(state: GameState, dt: number): void {
 
 function updateBuildSpot(state: GameState, dt: number): void {
   const ready = state.save.coins >= 8 && state.save.upgrades.shoes === 0
-  if (!ready || !near(state.player, POSITIONS.build, 76)) return
+  if (!ready || !near(state.player, stationPoint(state.skin, 'build'), 76)) return
   state.save.coins -= 8
   state.save.upgrades.shoes = 1
-  state.save.unlockedStations.push('sundae-cart')
-  emit(state, 'build', POSITIONS.build)
+  state.save.unlockedStations.push(state.skin.progression.firstBuildUnlock)
+  emit(state, 'build', stationPoint(state.skin, 'build'))
   state.player.y -= 20 * dt
 }
 

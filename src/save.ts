@@ -1,20 +1,22 @@
 import { defaultSave, type SaveV1 } from './engine'
+import type { GameSkin } from './skin'
 
 export const SAVE_KEY = 'scoopaloo_save_v1'
 const PREFIX = 'sc1.'
 
-export function loadSave(storage: Pick<Storage, 'getItem'> = localStorage): SaveV1 {
+export function loadSave(skin: GameSkin, storage: Pick<Storage, 'getItem'> = localStorage): SaveV1 {
+  const fallback = defaultSave(skin)
   try {
     const parsed = JSON.parse(storage.getItem(SAVE_KEY) || '') as Partial<SaveV1>
-    if (parsed.version !== 1) return defaultSave()
+    if (parsed.version !== 1) return fallback
     return {
-      ...defaultSave(),
+      ...fallback,
       ...parsed,
-      upgrades: { ...defaultSave().upgrades, ...parsed.upgrades },
+      upgrades: { ...fallback.upgrades, ...parsed.upgrades },
       text: false,
     }
   } catch {
-    return defaultSave()
+    return fallback
   }
 }
 
@@ -28,7 +30,7 @@ export async function encodeSave(save: SaveV1): Promise<string> {
   return PREFIX + bytesToBase64Url(new Uint8Array(await new Response(stream).arrayBuffer()))
 }
 
-export async function decodeSave(code: string): Promise<SaveV1> {
+export async function decodeSave(skin: GameSkin, code: string): Promise<SaveV1> {
   if (!code.startsWith(PREFIX)) throw new Error('unknown save code')
   const bytes = base64UrlToBytes(code.slice(PREFIX.length))
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
@@ -36,7 +38,7 @@ export async function decodeSave(code: string): Promise<SaveV1> {
   if (parsed.version !== 1 || !Number.isFinite(parsed.coins) || !Array.isArray(parsed.unlockedStations)) {
     throw new Error('invalid save')
   }
-  return { ...defaultSave(), ...parsed, text: false }
+  return { ...defaultSave(skin), ...parsed, text: false }
 }
 
 export async function rescueUrl(save: SaveV1): Promise<string> {

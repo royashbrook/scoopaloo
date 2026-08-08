@@ -1,6 +1,10 @@
 {
   "id": "ice-cream",
   "spriteSheet": "/assets/scoopaloo-atlas.png?v=2",
+  "progression": {
+    "startingStation": "soft-serve",
+    "firstBuildUnlock": "sundae-cart"
+  },
   "palette": {
     "strawberry": "#FF8FAB",
     "mint": "#63CDB4",
@@ -9,10 +13,23 @@
     "cream": "#FFF3E6",
     "cocoa": "#4A3B45"
   },
+  "spriteRects": [
+    [[92, 34, 196, 318], [386, 31, 186, 320], [690, 33, 196, 320], [993, 34, 191, 319]],
+    [[68, 371, 214, 309], [352, 365, 211, 315], [686, 365, 207, 315], [966, 358, 224, 322]],
+    [[76, 697, 190, 246], [326, 694, 232, 258], [610, 702, 307, 251], [963, 706, 230, 253]],
+    [[55, 979, 222, 207], [338, 989, 234, 192], [638, 975, 237, 215], [914, 994, 291, 197]]
+  ],
+  "sprites": {
+    "player": { "idle": [0, 0], "walkLeft": [1, 0], "walkRight": [2, 0], "carry": [3, 0] },
+    "customers": [[0, 1], [1, 1], [2, 1], [3, 1]],
+    "item": [0, 2],
+    "coin": [0, 3],
+    "heart": [1, 3]
+  },
   "stations": {
-    "machine": { "x": 180, "y": 190, "sprite": [1, 2] },
-    "counter": { "x": 650, "y": 255, "sprite": [2, 2] },
-    "register": { "x": 750, "y": 265, "sprite": [3, 2] },
-    "build": { "x": 205, "y": 475, "sprite": [3, 3] }
+    "machine": { "interaction": [190, 260], "depth": 190, "draw": [100, 105, 175, 190], "sprite": [1, 2] },
+    "counter": { "interaction": [620, 335], "depth": 255, "draw": [525, 200, 245, 195], "sprite": [2, 2] },
+    "register": { "interaction": [760, 335], "depth": 265, "draw": [704, 235, 110, 105], "sprite": [3, 2] },
+    "build": { "interaction": [205, 505], "depth": 475, "draw": [130, 420, 150, 125], "sprite": [3, 3] }
   }
 }

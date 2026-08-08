@@ -1,24 +1,17 @@
 import type { GameState, Point } from './engine'
-import { POSITIONS, WORLD } from './engine'
-import skin from './skins/ice-cream.json'
+import { WORLD } from './engine'
+import type { GameSkin } from './skin'
+import { stationPoint } from './skin'
 
 type Joystick = { active: boolean; origin: Point; current: Point }
 type Drawable = { y: number; draw: () => void }
-
-const palette = skin.palette
-const atlasRects = [
-  [[92, 34, 196, 318], [386, 31, 186, 320], [690, 33, 196, 320], [993, 34, 191, 319]],
-  [[68, 371, 214, 309], [352, 365, 211, 315], [686, 365, 207, 315], [966, 358, 224, 322]],
-  [[76, 697, 190, 246], [326, 694, 232, 258], [610, 702, 307, 251], [963, 706, 230, 253]],
-  [[55, 979, 222, 207], [338, 989, 234, 192], [638, 975, 237, 215], [914, 994, 291, 197]],
-] as const
 
 export class Renderer {
   readonly context: CanvasRenderingContext2D
   readonly atlas = new Image()
   reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 
-  constructor(readonly canvas: HTMLCanvasElement) {
+  constructor(readonly canvas: HTMLCanvasElement, readonly skin: GameSkin) {
     const context = canvas.getContext('2d')
     if (!context) throw new Error('canvas unavailable')
     this.context = context
@@ -31,9 +24,9 @@ export class Renderer {
     this.drawRoom(state.time)
 
     const things: Drawable[] = [
-      { y: 190, draw: () => this.drawMachine(state) },
-      { y: 255, draw: () => this.drawCounter(state) },
-      { y: 475, draw: () => this.drawBuild(state) },
+      { y: this.skin.stations.machine.depth, draw: () => this.drawMachine(state) },
+      { y: this.skin.stations.counter.depth, draw: () => this.drawCounter(state) },
+      { y: this.skin.stations.build.depth, draw: () => this.drawBuild(state) },
       ...state.customers.map(customer => ({ y: customer.y, draw: () => this.drawCustomer(customer.look, customer.x, customer.y, customer.served, state.time) })),
       { y: state.player.y, draw: () => this.drawPlayer(state) },
     ]
@@ -46,7 +39,7 @@ export class Renderer {
 
   private drawRoom(time: number): void {
     const ctx = this.context
-    ctx.fillStyle = palette.cream
+    ctx.fillStyle = this.skin.palette.cream
     ctx.fillRect(0, 0, WORLD.width, WORLD.height)
     ctx.fillStyle = '#ffe7ca'
     ctx.fillRect(0, 0, WORLD.width, 165)
@@ -58,10 +51,10 @@ export class Renderer {
     for (let y = 165; y < 640; y += 54) {
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(960, y); ctx.stroke()
     }
-    ctx.fillStyle = palette.strawberry
+    ctx.fillStyle = this.skin.palette.strawberry
     rounded(ctx, 295, 35, 370, 92, 42)
     ctx.fill()
-    ctx.fillStyle = palette.cream
+    ctx.fillStyle = this.skin.palette.cream
     for (let i = 0; i < 7; i++) {
       const x = 340 + i * 47
       ctx.beginPath(); ctx.arc(x, 82 + Math.sin(time * 2 + i) * 2, 15, 0, Math.PI * 2); ctx.fill()
@@ -71,11 +64,14 @@ export class Renderer {
   }
 
   private drawMachine(state: GameState): void {
-    this.shadow(POSITIONS.machine.x, POSITIONS.machine.y + 6, 76, 22)
-    this.sprite(1, 2, 100, 105, 175, 190)
+    const [x, y, width, height] = this.skin.stations.machine.draw
+    const [column, row] = this.skin.stations.machine.sprite
+    const machine = stationPoint(this.skin, 'machine')
+    this.shadow(machine.x, machine.y + 6, 76, 22)
+    this.sprite(column, row, x, y, width, height)
     const ctx = this.context
     ctx.save()
-    ctx.strokeStyle = palette.strawberry
+    ctx.strokeStyle = this.skin.palette.strawberry
     ctx.lineWidth = 6
     for (let i = 0; i < 3; i++) {
       ctx.beginPath()
@@ -83,26 +79,35 @@ export class Renderer {
       ctx.stroke()
     }
     ctx.restore()
-    for (let i = 0; i < state.machine.stock; i++) this.sprite(0, 2, 145 + i * 34, 273 - i * 3, 48, 58)
-    this.pickupRing(POSITIONS.machine.x, POSITIONS.machine.y + 35, state.time)
+    const [itemColumn, itemRow] = this.skin.sprites.item
+    for (let i = 0; i < state.machine.stock; i++) this.sprite(itemColumn, itemRow, 145 + i * 34, 273 - i * 3, 48, 58)
+    this.pickupRing(machine.x, machine.y + 35, state.time)
   }
 
   private drawCounter(state: GameState): void {
+    const [counterX, counterY, counterWidth, counterHeight] = this.skin.stations.counter.draw
+    const [counterColumn, counterRow] = this.skin.stations.counter.sprite
+    const [registerX, registerY, registerWidth, registerHeight] = this.skin.stations.register.draw
+    const [registerColumn, registerRow] = this.skin.stations.register.sprite
     this.shadow(650, 352, 150, 25)
-    this.sprite(2, 2, 525, 200, 245, 195)
-    this.sprite(3, 2, 704, 235, 110, 105)
-    for (let i = 0; i < state.counter.stock; i++) this.sprite(0, 2, 590 + i * 42, 238, 52, 63)
+    this.sprite(counterColumn, counterRow, counterX, counterY, counterWidth, counterHeight)
+    this.sprite(registerColumn, registerRow, registerX, registerY, registerWidth, registerHeight)
+    const [itemColumn, itemRow] = this.skin.sprites.item
+    for (let i = 0; i < state.counter.stock; i++) this.sprite(itemColumn, itemRow, 590 + i * 42, 238, 52, 63)
     if (state.counter.serveTimer > 0) {
       const ctx = this.context
-      ctx.strokeStyle = palette.mint
+      ctx.strokeStyle = this.skin.palette.mint
       ctx.lineWidth = 8
       ctx.beginPath(); ctx.arc(800, 250, 24, -.5 * Math.PI, (-.5 + state.counter.serveTimer / .7 * 2) * Math.PI); ctx.stroke()
     }
   }
 
   private drawBuild(state: GameState): void {
-    this.shadow(POSITIONS.build.x, POSITIONS.build.y + 18, 75, 18)
-    this.sprite(3, 3, 130, 420, 150, 125)
+    const [x, y, width, height] = this.skin.stations.build.draw
+    const [column, row] = this.skin.stations.build.sprite
+    const build = stationPoint(this.skin, 'build')
+    this.shadow(build.x, build.y + 18, 75, 18)
+    this.sprite(column, row, x, y, width, height)
     const upgraded = state.save.upgrades.shoes > 0
     if (!upgraded) {
       for (let i = 0; i < 8; i++) {
@@ -111,9 +116,9 @@ export class Renderer {
       }
     } else {
       const ctx = this.context
-      ctx.fillStyle = palette.mint
+      ctx.fillStyle = this.skin.palette.mint
       rounded(ctx, 164, 435, 82, 48, 18); ctx.fill()
-      ctx.fillStyle = palette.cream
+      ctx.fillStyle = this.skin.palette.cream
       ctx.beginPath(); ctx.ellipse(190, 458, 20, 8, -.25, 0, Math.PI * 2); ctx.fill()
       ctx.beginPath(); ctx.ellipse(220, 458, 20, 8, .25, 0, Math.PI * 2); ctx.fill()
     }
@@ -123,32 +128,29 @@ export class Renderer {
     const player = state.player
     const stride = player.moving && !this.reducedMotion ? Math.sin(state.time * 13) : 0
     const bob = Math.abs(stride) * -4
-    const col = player.tray > 0 ? 0 : player.moving ? (player.facing < 0 ? 1 : 2) : 0
+    const [column, row] = player.tray > 0
+      ? this.skin.sprites.player.carry
+      : player.moving
+        ? (player.facing < 0 ? this.skin.sprites.player.walkLeft : this.skin.sprites.player.walkRight)
+        : this.skin.sprites.player.idle
+    const carryWobble = player.tray > 0 && !this.reducedMotion ? Math.sin(player.trayWobble) * 2 : 0
     this.shadow(player.x, player.y + 5, 43 + Math.abs(stride) * 4, 13)
-    this.sprite(col, 0, player.x - 66, player.y - 130 + bob, 132, 142)
-    if (player.tray > 0) {
-      const wobble = this.reducedMotion ? 0 : Math.sin(player.trayWobble) * .06
-      const ctx = this.context
-      ctx.save()
-      ctx.translate(player.x, player.y - 58)
-      ctx.rotate(wobble)
-      ctx.fillStyle = palette.cocoa
-      rounded(ctx, -48, -5, 96, 10, 5); ctx.fill()
-      for (let i = 0; i < player.tray; i++) this.sprite(0, 2, -43 + i * 34, -48, 42, 50, true)
-      ctx.restore()
-    }
+    this.sprite(column, row, player.x - 66 + carryWobble, player.y - 130 + bob, 132, 142)
   }
 
   private drawCustomer(look: number, x: number, y: number, served: boolean, time: number): void {
     const bob = this.reducedMotion ? 0 : Math.sin(time * 4 + look) * 3
     this.shadow(x, y + 4, 40, 12)
-    this.sprite(look, 1, x - 58, y - 122 + bob, 116, 132)
-    if (served) this.sprite(1, 3, x - 18, y - 160 + bob, 36, 36)
+    const [customerColumn, customerRow] = this.skin.sprites.customers[look % this.skin.sprites.customers.length]
+    const [heartColumn, heartRow] = this.skin.sprites.heart
+    this.sprite(customerColumn, customerRow, x - 58, y - 122 + bob, 116, 132)
+    if (served) this.sprite(heartColumn, heartRow, x - 18, y - 160 + bob, 36, 36)
   }
 
   private drawCoin(x: number, y: number, age: number): void {
     const pulse = this.reducedMotion ? 1 : .9 + Math.sin(age * 12) * .1
-    this.sprite(0, 3, x - 15 * pulse, y - 15 * pulse, 30 * pulse, 30 * pulse)
+    const [column, row] = this.skin.sprites.coin
+    this.sprite(column, row, x - 15 * pulse, y - 15 * pulse, 30 * pulse, 30 * pulse)
   }
 
   private drawEvent(kind: string, x: number, y: number, age: number): void {
@@ -159,11 +161,13 @@ export class Renderer {
     if (kind === 'pickup' || kind === 'drop') {
       const direction = kind === 'pickup' ? -1 : 1
       const arcY = y - 45 - Math.sin(t * Math.PI) * 45 * direction
-      this.sprite(0, 2, x - 22 + t * 20 * direction, arcY, 44, 52)
+      const [column, row] = this.skin.sprites.item
+      this.sprite(column, row, x - 22 + t * 20 * direction, arcY, 44, 52)
     } else if (kind === 'pay') {
-      for (let i = 0; i < 5; i++) this.sprite(0, 3, x - 14 + Math.cos(i * 2) * t * 65, y - 40 - Math.sin(t * Math.PI) * (40 + i * 5), 28, 28)
+      const [column, row] = this.skin.sprites.coin
+      for (let i = 0; i < 5; i++) this.sprite(column, row, x - 14 + Math.cos(i * 2) * t * 65, y - 40 - Math.sin(t * Math.PI) * (40 + i * 5), 28, 28)
     } else {
-      ctx.strokeStyle = kind === 'build' ? palette.sunshine : palette.strawberry
+      ctx.strokeStyle = kind === 'build' ? this.skin.palette.sunshine : this.skin.palette.strawberry
       ctx.lineWidth = 8 * (1 - t)
       ctx.beginPath(); ctx.arc(x, y - 20, 18 + t * 75, 0, Math.PI * 2); ctx.stroke()
     }
@@ -174,10 +178,11 @@ export class Renderer {
     const ctx = this.context
     ctx.fillStyle = 'rgba(255,243,230,.9)'
     rounded(ctx, 24, 20, 54 + Math.min(10, state.save.coins) * 21, 58, 29); ctx.fill()
-    ctx.strokeStyle = palette.cocoa; ctx.lineWidth = 4; ctx.stroke()
-    this.sprite(0, 3, 34, 29, 39, 39)
+    ctx.strokeStyle = this.skin.palette.cocoa; ctx.lineWidth = 4; ctx.stroke()
+    const [coinColumn, coinRow] = this.skin.sprites.coin
+    this.sprite(coinColumn, coinRow, 34, 29, 39, 39)
     for (let i = 0; i < Math.min(10, state.save.coins); i++) {
-      ctx.fillStyle = palette.sunshine
+      ctx.fillStyle = this.skin.palette.sunshine
       ctx.beginPath(); ctx.arc(88 + i * 20, 49, 8, 0, Math.PI * 2); ctx.fill()
     }
   }
@@ -185,7 +190,7 @@ export class Renderer {
   private pickupRing(x: number, y: number, time: number): void {
     const ctx = this.context
     ctx.save()
-    ctx.strokeStyle = palette.mint
+    ctx.strokeStyle = this.skin.palette.mint
     ctx.lineWidth = 4
     ctx.setLineDash([10, 12])
     ctx.lineDashOffset = -time * 18
@@ -197,15 +202,15 @@ export class Renderer {
     const ctx = this.context
     ctx.save()
     ctx.globalAlpha = .65
-    ctx.fillStyle = palette.cream
-    ctx.strokeStyle = palette.cocoa
+    ctx.fillStyle = this.skin.palette.cream
+    ctx.strokeStyle = this.skin.palette.cocoa
     ctx.lineWidth = 5
     ctx.beginPath(); ctx.arc(joystick.origin.x, joystick.origin.y, 52, 0, Math.PI * 2); ctx.fill(); ctx.stroke()
     const dx = joystick.current.x - joystick.origin.x
     const dy = joystick.current.y - joystick.origin.y
     const length = Math.max(1, Math.hypot(dx, dy))
     const reach = Math.min(34, length)
-    ctx.fillStyle = palette.strawberry
+    ctx.fillStyle = this.skin.palette.strawberry
     ctx.beginPath(); ctx.arc(joystick.origin.x + dx / length * reach, joystick.origin.y + dy / length * reach, 22, 0, Math.PI * 2); ctx.fill(); ctx.stroke()
     ctx.restore()
   }
@@ -218,7 +223,7 @@ export class Renderer {
 
   private sprite(column: number, row: number, x: number, y: number, width: number, height: number, local = false): void {
     if (!this.atlas.complete || !this.atlas.naturalWidth) return
-    const [rx, ry, rw, rh] = atlasRects[row][column]
+    const [rx, ry, rw, rh] = this.skin.spriteRects[row][column]
     const scaleX = this.atlas.naturalWidth / 1254
     const scaleY = this.atlas.naturalHeight / 1254
     const ctx = this.context
