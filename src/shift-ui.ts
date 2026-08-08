@@ -120,8 +120,6 @@ export class ShiftUi {
     this.set('order-price', `$${state.order.price}`)
     const icon = this.fields['order-icon'] as HTMLImageElement
     if (state.order.icon && icon.getAttribute('src') !== state.order.icon) icon.src = state.order.icon
-    const position = `translate3d(${Math.round(state.order.x)}px, ${Math.round(state.order.y)}px, 0)`
-    if (ticket.style.transform !== position) ticket.style.transform = position
     this.fields.patience.style.width = `${Math.round(Math.max(0, Math.min(1, state.order.patience)) * 100)}%`
   }
 

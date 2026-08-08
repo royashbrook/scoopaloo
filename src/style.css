@@ -34,17 +34,20 @@ canvas {
   position: fixed;
   inset: 0;
   z-index: 10;
+  display: grid;
+  grid-template-columns: minmax(0, 34rem) 230px minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: .75rem;
+  align-items: start;
+  padding: max(.75rem, env(safe-area-inset-top)) max(5rem, calc(env(safe-area-inset-right) + 4.25rem)) max(.75rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left));
   pointer-events: none;
 }
 
 .shift-hud {
-  position: fixed;
-  top: max(.75rem, env(safe-area-inset-top));
-  left: max(.75rem, env(safe-area-inset-left));
-  right: max(5rem, calc(env(safe-area-inset-right) + 4.25rem));
   display: none;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  max-width: 34rem;
+  grid-column: 1;
+  width: 100%;
   overflow: hidden;
   border: 3px solid #4a3b45;
   border-radius: 1.15rem;
@@ -83,16 +86,13 @@ canvas {
 .hud-money small { font-size: 13px; }
 
 .order-ticket {
-  position: fixed;
-  top: 0;
-  left: 0;
+  grid-column: 2;
   width: min(230px, calc(100vw - 24px));
   overflow: hidden;
   border: 3px solid #4a3b45;
   border-radius: 1rem;
   background: #fff3e6;
   box-shadow: 0 .35rem 0 rgb(74 59 69 / .22);
-  will-change: transform;
 }
 
 .ticket-heading {
@@ -196,6 +196,12 @@ canvas {
   .shift-card img { width: 210px; margin-bottom: .35rem; }
   .shift-card > p:not(.card-kicker, .result-stars) { margin: .55rem auto; }
   .results-card dl { margin: .45rem 0; }
+}
+
+@media (max-width: 899px) {
+  .shift-ui { grid-template-columns: minmax(0, 1fr); }
+  .shift-hud { grid-column: 1; }
+  .order-ticket { grid-column: 1; grid-row: 2; justify-self: end; }
 }
 
 button, a {
