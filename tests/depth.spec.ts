@@ -16,6 +16,7 @@ test('depth scale, overlap boundary, and native-anchor interaction', async ({ pa
   await page.evaluate(() => window.__scoopaloo.pause(true))
   await page.waitForFunction(() => window.__scoopaloo.atlasReady())
   await page.evaluate(() => {
+    window.__scoopaloo.startShift()
     window.__scoopaloo.advance(24)
     window.__scoopaloo.setTime(1)
   })

@@ -3,6 +3,7 @@ import type { GameState, Point } from './engine'
 import type { GameSkin, SkinUpgrade } from './skin'
 import { nextUpgrade, stationPoint, upgradeSpot } from './skin'
 import type { Viewport } from './viewport'
+import { worldToClient } from './viewport'
 
 type Joystick = { active: boolean; origin: Point; current: Point }
 type Drawable = { anchor: Point; draw: () => void }
@@ -38,13 +39,13 @@ export class Renderer {
       { anchor: machineAnchor, draw: () => this.drawMachine(state) },
       { anchor: counterAnchor, draw: () => this.drawCounter(state) },
       ...this.upgradeSpots(state),
-      ...state.customers.map(customer => ({ anchor: { x: customer.x, y: customer.y }, draw: () => this.drawCustomer(customer.look, customer.x, customer.y, customer.served, state.time) })),
+      ...state.customers.map(customer => ({ anchor: { x: customer.x, y: customer.y }, draw: () => this.drawCustomer(customer.look, customer.x, customer.y, customer.served, customer.missed, state.time) })),
       { anchor: { x: state.player.x, y: state.player.y }, draw: () => this.drawPlayer(state) },
     ]
     things.sort(byDepth).forEach(item => this.grounded(item.anchor, item.draw))
     state.flyingCoins.forEach(coin => this.grounded({ x: coin.x, y: coin.y }, () => this.drawCoin(coin.x, coin.y, coin.age)))
     state.events.forEach(event => this.grounded({ x: event.x, y: event.y }, () => this.drawEvent(event.kind, event.x, event.y, event.age)))
-    this.drawHud(state, view)
+    state.events.filter(event => event.kind === 'pay' && event.amount).forEach(event => this.drawPayAmount(event.x, event.y, event.age, event.amount ?? 0, view))
     if (joystick.active) this.drawJoystick(joystick)
   }
 
@@ -206,13 +207,25 @@ export class Renderer {
     this.sprite(column, row, player.x - 66 + carryWobble, player.y - 130 + bob, 132, 142)
   }
 
-  private drawCustomer(look: number, x: number, y: number, served: boolean, time: number): void {
+  private drawCustomer(look: number, x: number, y: number, served: boolean, missed: boolean, time: number): void {
     const bob = this.reducedMotion ? 0 : Math.sin(time * 4 + look) * 3
     this.shadow(x, y + 4, 40, 12)
     const [customerColumn, customerRow] = this.skin.sprites.customers[look % this.skin.sprites.customers.length]
     const [heartColumn, heartRow] = this.skin.sprites.heart
     this.sprite(customerColumn, customerRow, x - 58, y - 122 + bob, 116, 132)
     if (served) this.sprite(heartColumn, heartRow, x - 18, y - 160 + bob, 36, 36)
+    if (missed) {
+      const ctx = this.context
+      ctx.fillStyle = this.skin.palette.strawberry
+      ctx.strokeStyle = this.skin.palette.cocoa
+      ctx.lineWidth = 4
+      ctx.beginPath(); ctx.arc(x, y - 144 + bob, 22, 0, Math.PI * 2); ctx.fill(); ctx.stroke()
+      ctx.fillStyle = this.skin.palette.cream
+      ctx.font = '900 30px system-ui'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('!', x, y - 143 + bob)
+    }
   }
 
   private drawCoin(x: number, y: number, age: number): void {
@@ -233,7 +246,7 @@ export class Renderer {
       this.sprite(column, row, x - 22 + t * 20 * direction, arcY, 44, 52)
     } else if (kind === 'pay') {
       const [column, row] = this.skin.sprites.coin
-      for (let i = 0; i < 5; i++) this.sprite(column, row, x - 14 + Math.cos(i * 2) * t * 65, y - 40 - Math.sin(t * Math.PI) * (40 + i * 5), 28, 28)
+      for (let i = 0; i < 4; i++) this.sprite(column, row, x - 14 + Math.cos(i * 2) * t * 65, y - 40 - Math.sin(t * Math.PI) * (40 + i * 5), 28, 28)
     } else {
       ctx.strokeStyle = kind === 'build' ? this.skin.palette.sunshine : this.skin.palette.strawberry
       ctx.lineWidth = 8 * (1 - t)
@@ -242,21 +255,24 @@ export class Renderer {
     ctx.restore()
   }
 
-  // HUD anchors to the visible top-left corner (plus the same safe inset the css
-  // gives the save button), so it stays on screen whatever shape the view is.
-  private drawHud(state: GameState, view: Viewport): void {
+  // Revenue is critical feedback, so its label stays in CSS pixels instead of
+  // shrinking with the world on tall phones.
+  private drawPayAmount(x: number, y: number, age: number, amount: number, view: Viewport): void {
     const ctx = this.context
-    const x = view.originX + 24
-    const y = view.originY + 20
-    ctx.fillStyle = 'rgba(255,243,230,.9)'
-    rounded(ctx, x, y, 54 + Math.min(10, state.save.coins) * 21, 58, 29); ctx.fill()
-    ctx.strokeStyle = this.skin.palette.cocoa; ctx.lineWidth = 4; ctx.stroke()
-    const [coinColumn, coinRow] = this.skin.sprites.coin
-    this.sprite(coinColumn, coinRow, x + 10, y + 9, 39, 39)
-    for (let i = 0; i < Math.min(10, state.save.coins); i++) {
-      ctx.fillStyle = this.skin.palette.sunshine
-      ctx.beginPath(); ctx.arc(x + 64 + i * 20, y + 29, 8, 0, Math.PI * 2); ctx.fill()
-    }
+    const point = worldToClient(view, { x, y: y - 80 })
+    const t = Math.min(1, age / .9)
+    ctx.save()
+    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0)
+    ctx.globalAlpha = 1 - t
+    ctx.font = '900 22px ui-rounded, system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.lineWidth = 5
+    ctx.strokeStyle = this.skin.palette.cocoa
+    ctx.fillStyle = this.skin.palette.sunshine
+    ctx.strokeText(`+$${amount}`, point.x, point.y - t * 24)
+    ctx.fillText(`+$${amount}`, point.x, point.y - t * 24)
+    ctx.restore()
   }
 
   private pickupRing(x: number, y: number, time: number): void {

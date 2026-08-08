@@ -1,12 +1,13 @@
 import QRCode from 'qrcode'
 import './style.css'
-import { createGame, runFor, step, type GameState, type Point } from './engine'
+import { createGame, goalMet, retryShift, runFor, startShift, step, type GameState, type Point } from './engine'
 import { Controls } from './input'
 import { Renderer } from './render'
 import { loadSave, rescueUrl, storeSave } from './save'
+import { ShiftUi } from './shift-ui'
 import type { GameSkin } from './skin'
 import skinData from './skins/ice-cream.json'
-import { backingSize, computeViewport, type Viewport } from './viewport'
+import { backingSize, computeViewport, worldToClient, type Viewport } from './viewport'
 
 declare global {
   interface Window {
@@ -19,6 +20,8 @@ declare global {
       pause: (on: boolean) => void
       setTime: (seconds: number) => void
       atlasReady: () => boolean
+      startShift: () => void
+      retryShift: () => void
     }
   }
 }
@@ -45,6 +48,13 @@ new ResizeObserver(fitViewport).observe(document.body)
 
 const controls = new Controls(canvas, () => viewport)
 const renderer = new Renderer(canvas, skin)
+const shiftRoot = document.querySelector<HTMLElement>('#shift-ui')
+if (!shiftRoot) throw new Error('shift UI missing')
+const shiftUi = new ShiftUi(shiftRoot, {
+  start: () => startShift(state),
+  retry: () => retryShift(state),
+  next: () => retryShift(state),
+})
 let previous = performance.now()
 let saveClock = 0
 
@@ -57,12 +67,44 @@ function frame(now: number): void {
   previous = now
   if (!paused) step(state, elapsed, controls.vector)
   renderer.draw(state, controls.joystick, viewport)
+  updateShiftUi()
   saveClock += elapsed
   if (saveClock >= 1) {
     saveClock = 0
     storeSave(state.save)
   }
   requestAnimationFrame(frame)
+}
+
+function updateShiftUi(): void {
+  const front = state.customers.find(customer => !customer.served && !customer.missed)
+  let order = null
+  if (front) {
+    const point = worldToClient(viewport, { x: front.x, y: front.y - 135 })
+    const width = Math.min(230, viewport.cssWidth - 24)
+    order = {
+      x: Math.max(12, Math.min(viewport.cssWidth - width - 12, point.x - width / 2)),
+      y: Math.max(132, Math.min(viewport.cssHeight - 132, point.y)),
+      label: front.order.label,
+      quantity: front.order.quantity,
+      price: skin.shift.basePrice * front.order.quantity,
+      patience: front.patience / skin.shift.customerPatience,
+    }
+  }
+  shiftUi.update({
+    phase: state.phase,
+    day: skin.shift.dayLabel,
+    secondsRemaining: state.shift.remaining,
+    revenue: state.shift.revenue,
+    goal: skin.shift.cashGoal,
+    served: state.shift.served,
+    missed: state.shift.missed,
+    streak: state.shift.streak,
+    bestStreak: state.shift.bestStreak,
+    stars: state.shift.stars,
+    success: goalMet(state),
+    order,
+  })
 }
 
 requestAnimationFrame(frame)
@@ -120,4 +162,6 @@ window.__scoopaloo = {
   // wiggles, so deterministic captures pin it to a chosen instant
   setTime: seconds => { state.time = seconds },
   atlasReady: () => renderer.atlas.complete && renderer.atlas.naturalWidth > 0,
+  startShift: () => startShift(state),
+  retryShift: () => retryShift(state),
 }

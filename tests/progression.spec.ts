@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test'
 
-// Issue 12's acceptance: with text off and a fresh save, earn and buy all three
-// upgrades in one session, each with an observable mechanical effect. Runs the
-// real built game; deterministic time through the advance hook.
-test('completes the wordless purchase path with all three effects', async ({ page }) => {
+// Issue 12's purchase path remains valid inside the new shift loop. A fresh
+// shift starts between operations when the current timer cannot fit one whole
+// deterministic action.
+test('completes the purchase path with all three effects', async ({ page }) => {
   await page.goto('/')
   await expect(page.locator('canvas')).toBeVisible()
 
@@ -12,8 +12,20 @@ test('completes the wordless purchase path with all three effects', async ({ pag
     const skin = game.snapshot().skin
     const [machineSpot, counterSpot] = [skin.stations.machine.interaction, skin.stations.counter.interaction]
 
+    const prepare = (seconds: number) => {
+      const state = game.snapshot()
+      if (state.phase === 'ready') game.startShift()
+      else if (state.phase === 'results' || state.shift.remaining < seconds + .05) game.retryShift()
+    }
+    const workAt = (spot: number[], seconds: number) => {
+      prepare(seconds)
+      game.movePlayer({ x: spot[0], y: spot[1] })
+      game.advance(seconds)
+    }
+
     // measured walk speed: one second of pure rightward input from a fixed point
     const measureSpeed = () => {
+      prepare(1)
       game.movePlayer({ x: 200, y: 470 })
       const before = game.snapshot().player.x
       game.advance(1, { x: 1, y: 0 })
@@ -24,13 +36,10 @@ test('completes the wordless purchase path with all three effects', async ({ pag
     // farm the loop until an upgrade is affordable, then stand on its spot
     const buy = (spot: number[], price: number) => {
       for (let round = 0; round < 60 && game.snapshot().save.coins < price; round++) {
-        game.movePlayer({ x: machineSpot[0], y: machineSpot[1] })
-        game.advance(4)
-        game.movePlayer({ x: counterSpot[0], y: counterSpot[1] })
-        game.advance(6)
+        workAt(machineSpot, 4)
+        workAt(counterSpot, 6)
       }
-      game.movePlayer({ x: spot[0], y: spot[1] })
-      game.advance(1)
+      workAt(spot, 1)
     }
 
     const [shoes, tray, machine] = skin.upgrades
@@ -39,8 +48,7 @@ test('completes the wordless purchase path with all three effects', async ({ pag
 
     buy(tray.spot, tray.price)
     // capacity: park at the machine and let the tray fill
-    game.movePlayer({ x: machineSpot[0], y: machineSpot[1] })
-    game.advance(10)
+    workAt(machineSpot, 10)
     const trayLoad = game.snapshot().player.tray
 
     // interval: the timer only re-arms on a refill tick, and at full stock it just
@@ -48,10 +56,9 @@ test('completes the wordless purchase path with all three effects', async ({ pag
     // with the upgrade broken. force a refill (drain one item, tick once) and read
     // the freshly re-armed value, before and after the machine purchase.
     const rearmedInterval = () => {
-      game.movePlayer({ x: counterSpot[0], y: counterSpot[1] })
-      game.advance(3) // empty the tray so the machine has somewhere to go
-      game.movePlayer({ x: machineSpot[0], y: machineSpot[1] })
-      game.advance(.1) // pick one item: stock drops below full
+      workAt(counterSpot, 3) // empty the tray so the machine has somewhere to go
+      workAt(machineSpot, .1) // pick one item: stock drops below full
+      prepare(.05)
       game.movePlayer({ x: 480, y: 600 })
       game.advance(.05) // exactly one tick: the refill fires and re-arms the timer
       return game.snapshot().machine.timer

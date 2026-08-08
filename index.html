@@ -4,13 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <meta name="theme-color" content="#FF8FAB" />
-    <meta name="description" content="A tiny ice cream stand you can play without words." />
+    <meta name="description" content="Run a fast, cheerful ice cream stand one shift at a time." />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Scoopaloo</title>
   </head>
   <body>
     <main>
       <canvas id="game" width="960" height="640" tabindex="0" aria-label="Scoopaloo ice cream stand game"></canvas>
+      <div id="shift-ui"></div>
       <button id="save-button" class="round-button" aria-label="Open save card">◆</button>
       <button id="update-toast" class="round-button update-toast" hidden aria-label="Update ready, tap to refresh">↻</button>
       <dialog id="save-dialog">

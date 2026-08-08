@@ -69,6 +69,7 @@ test('fills phone, tablet, and desktop with one live-resized page', async ({ pag
   await page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height })
   await page.goto('/')
   await expect(page.locator('canvas')).toBeVisible()
+  await page.evaluate(() => window.__scoopaloo.startShift())
   for (const size of SIZES) {
     await page.setViewportSize({ width: size.width, height: size.height })
     await assertSize(page, size.name)

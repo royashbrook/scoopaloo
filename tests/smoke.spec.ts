@@ -9,6 +9,7 @@ test('boots and completes the coin loop', async ({ page }) => {
       const [x, y] = game.snapshot().skin.stations[key].interaction
       return { x, y }
     }
+    game.startShift()
     game.advance(2)
     game.movePlayer(station('machine'))
     game.advance(4)
