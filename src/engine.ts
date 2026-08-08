@@ -66,6 +66,8 @@ export type FlyingCoin = Point & {
 export type GameEvent = Point & {
   kind: EventKind
   age: number
+  createdAt: number
+  from?: Point
   amount?: number
   tip?: number
   combo?: number
@@ -294,7 +296,11 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
     state.player.y = clamp(state.player.y + ny * speed * .72 * dt, 330, WORLD.height - 45)
     if (Math.abs(nx) > .1) state.player.facing = Math.sign(nx)
   }
-  state.player.trayWobble += dt * (state.player.moving ? 12 : 4)
+  state.player.trayWobble = clamp(
+    state.player.trayWobble + dt * (state.player.moving ? 4 : -2.5),
+    0,
+    1,
+  )
 
   for (const [sourceId, source] of Object.entries(state.sources)) {
     source.timer -= dt
@@ -312,15 +318,21 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
     state.sourceContact = null
   }
   for (const [sourceId, source] of Object.entries(state.sources)) {
+    const point = producerPoint(state.skin, sourceId)
     if (state.pickupCooldown > 0 || state.sourceContact === sourceId
-      || !near(state.player, producerPoint(state.skin, sourceId))
+      || !near(state.player, point)
       || source.stock <= 0 || inventoryTotal(state.player.trayItems) >= capacity) continue
     source.stock--
     addStock(state.player.trayItems, source.item, 1)
     state.player.tray = inventoryTotal(state.player.trayItems)
     state.pickupCooldown = INTERACTION_COOLDOWN
     state.sourceContact = sourceId
-    emit(state, 'pickup', state.player, { item: source.item, source: sourceId })
+    state.player.trayWobble = Math.max(state.player.trayWobble, .65)
+    emit(state, 'pickup', state.player, {
+      item: source.item,
+      source: sourceId,
+      from: { x: point.x, y: point.y },
+    })
     break
   }
 
@@ -347,11 +359,13 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
         emit(state, 'reject', counter, { item, expectedItem: front?.order.item, reason: 'needs-prep' })
       }
     } else {
+      const from = { x: state.player.x, y: state.player.y }
       addStock(state.player.trayItems, item, -1)
       addStock(state.counter.items, item, 1)
       state.player.tray = inventoryTotal(state.player.trayItems)
       state.counter.stock = inventoryTotal(state.counter.items)
-      emit(state, 'drop', counter, { item })
+      state.player.trayWobble = Math.max(state.player.trayWobble, .8)
+      emit(state, 'drop', counter, { item, from })
       if (front && front.order.item !== item) {
         emit(state, 'reject', counter, { item, expectedItem: front.order.item, reason: 'wrong-item' })
       }
@@ -377,7 +391,12 @@ function updatePrepStations(state: GameState, dt: number, capacity: number): voi
       addStock(state.player.trayItems, output, 1)
       state.player.tray = inventoryTotal(state.player.trayItems)
       state.pickupCooldown = INTERACTION_COOLDOWN
-      emit(state, 'pickup', state.player, { item: output, station: stationId })
+      state.player.trayWobble = Math.max(state.player.trayWobble, .65)
+      emit(state, 'pickup', state.player, {
+        item: output,
+        station: stationId,
+        from: { x: point.x, y: point.y },
+      })
       return
     }
 
@@ -508,9 +527,9 @@ function emit(
   state: GameState,
   kind: EventKind,
   at: Point,
-  details: Pick<GameEvent, 'amount' | 'tip' | 'combo' | 'streak' | 'item' | 'expectedItem' | 'source' | 'station' | 'reason'> = {},
+  details: Pick<GameEvent, 'from' | 'amount' | 'tip' | 'combo' | 'streak' | 'item' | 'expectedItem' | 'source' | 'station' | 'reason'> = {},
 ): void {
-  state.events.push({ kind, x: at.x, y: at.y, age: 0, ...details })
+  state.events.push({ kind, x: at.x, y: at.y, age: 0, createdAt: state.time, ...details })
 }
 
 function clamp(value: number, min: number, max: number): number {
