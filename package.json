@@ -1,0 +1,24 @@
+{
+  "name": "scoopaloo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "preview": "vite preview",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "check": "tsc -b && vitest run && vite build"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2",
+    "@types/qrcode": "^1.5.5",
+    "typescript": "^5.8.3",
+    "vite": "^7.1.1",
+    "vitest": "^3.2.4"
+  }
+}
