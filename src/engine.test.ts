@@ -76,6 +76,92 @@ describe('ice cream stand loop', () => {
   })
 })
 
+describe('kinetic service state (#16)', () => {
+  const started = () => {
+    const game = createGame(skin)
+    startShift(game)
+    return game
+  }
+
+  it('integrates bounded tray energy at +4 moving and -2.5 idle without idle drift', () => {
+    const game = started()
+    const start = { x: game.player.x, y: game.player.y }
+
+    step(game, .05, { x: 1, y: 0 })
+    expect(game.player.trayWobble).toBeCloseTo(.2)
+    runFor(game, .2, { x: 1, y: 0 })
+    expect(game.player.trayWobble).toBe(1)
+    expect(game.player).toMatchObject({ x: start.x + walkSpeed(game) * .25, y: start.y })
+
+    const stopped = { x: game.player.x, y: game.player.y }
+    runFor(game, .2)
+    expect(game.player.trayWobble).toBeCloseTo(.5)
+    runFor(game, .2)
+    expect(game.player.trayWobble).toBe(0)
+    expect(game.player).toMatchObject(stopped)
+  })
+
+  it('timestamps source and prep pickups with cloned interaction origins', () => {
+    const sourceGame = started()
+    const source = producerPoint(skin, 'soft-scoop')
+    sourceGame.sources['soft-scoop'].stock = 1
+    Object.assign(sourceGame.player, { x: source.x + 40, y: source.y })
+    step(sourceGame, .05)
+
+    const sourcePickup = sourceGame.events.find(event => event.kind === 'pickup')
+    expect(sourceGame.player.trayItems['soft-scoop']).toBe(1)
+    expect(sourceGame.sources['soft-scoop'].stock).toBe(0)
+    expect(sourceGame.player.trayWobble).toBe(.65)
+    expect(sourcePickup).toMatchObject({
+      kind: 'pickup', source: 'soft-scoop', item: 'soft-scoop', age: .05,
+      createdAt: sourceGame.time, from: source,
+      x: source.x + 40, y: source.y,
+    })
+    expect(sourcePickup?.from).not.toBe(sourceGame.player)
+
+    const prepGame = started()
+    const prep = prepPoint(skin, 'build-station')
+    prepGame.prepStations['build-station'].outputs['vanilla-cone'] = 1
+    Object.assign(prepGame.player, { x: prep.x + 40, y: prep.y })
+    step(prepGame, .05)
+
+    const prepPickup = prepGame.events.find(event => event.kind === 'pickup')
+    expect(prepGame.prepStations['build-station'].outputs['vanilla-cone']).toBe(0)
+    expect(prepGame.player.trayItems['vanilla-cone']).toBe(1)
+    expect(prepGame.player.trayWobble).toBe(.65)
+    expect(prepPickup).toMatchObject({
+      kind: 'pickup', station: 'build-station', item: 'vanilla-cone', age: .05,
+      createdAt: prepGame.time, from: prep,
+      x: prep.x + 40, y: prep.y,
+    })
+    expect(prepPickup?.from).not.toBe(prepGame.player)
+  })
+
+  it('timestamps a drop from a cloned player origin and kicks empty-tray energy to .8', () => {
+    const game = started()
+    const counter = stationPoint(skin, 'counter')
+    const from = { x: counter.x + 40, y: counter.y }
+    game.player.trayItems['vanilla-cone'] = 1
+    game.player.tray = 1
+    Object.assign(game.player, from)
+    step(game, .05)
+
+    const drop = game.events.find(event => event.kind === 'drop')
+    expect(game.player.trayItems['vanilla-cone']).toBe(0)
+    expect(game.player.tray).toBe(0)
+    expect(game.counter.items['vanilla-cone']).toBe(1)
+    expect(game.player.trayWobble).toBe(.8)
+    expect(drop).toMatchObject({
+      kind: 'drop', item: 'vanilla-cone', age: .05,
+      createdAt: game.time, from,
+      x: counter.x, y: counter.y,
+    })
+    expect(drop?.from).not.toBe(game.player)
+    game.player.x += 20
+    expect(drop?.from).toEqual(from)
+  })
+})
+
 describe('three-day shop campaign (#25)', () => {
   it('keeps days and all twelve cumulative upgrade levels in skin data', () => {
     expect(skin.days).toHaveLength(3)
