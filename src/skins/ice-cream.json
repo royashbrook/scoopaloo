@@ -1,6 +1,24 @@
 {
   "id": "ice-cream",
   "spriteSheet": "/assets/scoopaloo-atlas.png?v=2",
+  "shift": {
+    "dayLabel": "DAY 1",
+    "duration": 90,
+    "cashGoal": 60,
+    "customerPatience": 14,
+    "basePrice": 6,
+    "starThresholds": [
+      60,
+      75,
+      90
+    ],
+    "order": {
+      "item": "vanilla-cone",
+      "label": "VANILLA CONE",
+      "quantity": 1,
+      "icon": "item"
+    }
+  },
   "progression": {
     "startingStation": "soft-serve"
   },

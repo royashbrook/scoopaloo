@@ -1,4 +1,4 @@
-import type { GameSkin } from './skin'
+import type { GameSkin, SkinOrder } from './skin'
 import { effectTotal, nextUpgrade, stationPoint, upgradeSpot } from './skin'
 
 export type Point = { x: number; y: number }
@@ -12,12 +12,28 @@ export type SaveV1 = {
   upgrades: Record<string, number>
   skin: string
   text: boolean
+  bestRevenue: number
+  bestStars: number
+}
+
+export type ShiftPhase = 'ready' | 'playing' | 'results'
+export type ShiftState = {
+  remaining: number
+  revenue: number
+  served: number
+  missed: number
+  streak: number
+  bestStreak: number
+  stars: number
 }
 
 export type Customer = {
   id: number
   look: number
   served: boolean
+  missed: boolean
+  patience: number
+  order: SkinOrder
   x: number
   y: number
   exit: number
@@ -29,12 +45,15 @@ export type FlyingCoin = Point & {
   vy: number
   age: number
   collected: boolean
+  value: number
 }
 
-export type GameEvent = Point & { kind: EventKind; age: number }
+export type GameEvent = Point & { kind: EventKind; age: number; amount?: number }
 
 export type GameState = {
   skin: GameSkin
+  phase: ShiftPhase
+  shift: ShiftState
   time: number
   player: Point & { facing: number; moving: boolean; tray: number; trayWobble: number }
   machine: { stock: number; timer: number }
@@ -55,7 +74,9 @@ export const defaultSave = (skin: GameSkin): SaveV1 => ({
   unlockedStations: [skin.progression.startingStation],
   upgrades: Object.fromEntries(skin.upgrades.map(upgrade => [upgrade.id, 0])),
   skin: skin.id,
-  text: false,
+  text: true,
+  bestRevenue: 0,
+  bestStars: 0,
 })
 
 // Effects are skin data: every number below starts at the engine's base and adds
@@ -67,11 +88,13 @@ export const machineInterval = (state: GameState): number => Math.max(.4, 1.7 - 
 export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): GameState {
   return {
     skin,
+    phase: 'ready',
+    shift: freshShift(skin),
     time: 0,
     player: { x: 430, y: 470, facing: 1, moving: false, tray: 0, trayWobble: 0 },
     machine: { stock: 0, timer: 1.4 },
     counter: { stock: 0, serveTimer: 0 },
-    customers: [customer(1, 0)],
+    customers: [customer(skin, 1, 0)],
     flyingCoins: [],
     events: [],
     spawnTimer: 2,
@@ -81,15 +104,42 @@ export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): Ga
   }
 }
 
-function customer(id: number, look: number): Customer {
-  return { id, look: look % 4, served: false, x: 905, y: 345, exit: 0 }
+function freshShift(skin: GameSkin): ShiftState {
+  return {
+    remaining: skin.shift.duration,
+    revenue: 0,
+    served: 0,
+    missed: 0,
+    streak: 0,
+    bestStreak: 0,
+    stars: 0,
+  }
+}
+
+function customer(skin: GameSkin, id: number, look: number): Customer {
+  return {
+    id,
+    look: look % 4,
+    served: false,
+    missed: false,
+    patience: skin.shift.customerPatience,
+    order: { ...skin.shift.order },
+    x: 900,
+    y: 345,
+    exit: 0,
+  }
 }
 
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y)
 const near = (a: Point, b: Point, radius = 68) => distance(a, b) < radius
 
 export function step(state: GameState, seconds: number, input: Input = { x: 0, y: 0 }): void {
-  const dt = Math.min(Math.max(seconds, 0), 0.05)
+  if (state.phase !== 'playing') return
+  const dt = Math.min(Math.max(seconds, 0), 0.05, state.shift.remaining)
+  if (dt <= 0) {
+    finishShift(state)
+    return
+  }
   state.time += dt
   state.pickupCooldown = Math.max(0, state.pickupCooldown - dt)
 
@@ -134,20 +184,33 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
   updateBuildSpot(state)
   state.events.forEach(event => { event.age += dt })
   state.events = state.events.filter(event => event.age < .9)
+  state.shift.remaining = Math.max(0, state.shift.remaining - dt)
+  if (state.shift.remaining < 1e-9) finishShift(state)
 }
 
 function updateCustomers(state: GameState, dt: number): void {
   const register = stationPoint(state.skin, 'register')
   state.spawnTimer -= dt
-  if (state.spawnTimer <= 0 && state.customers.length < 4) {
+  if (state.spawnTimer <= 0 && state.customers.filter(item => !item.served && !item.missed).length < 4) {
     const id = Math.max(0, ...state.customers.map(item => item.id)) + 1
-    state.customers.push(customer(id, id))
+    state.customers.push(customer(state.skin, id, id))
     state.spawnTimer = 3.8
   }
 
-  const waiting = state.customers.filter(item => !item.served)
+  let walkedOut = false
+  state.customers.filter(item => !item.served && !item.missed).forEach(item => {
+    item.patience = Math.max(0, item.patience - dt)
+    if (item.patience > 0) return
+    item.missed = true
+    state.shift.missed++
+    state.shift.streak = 0
+    walkedOut = true
+  })
+  if (walkedOut) state.counter.serveTimer = 0
+
+  const waiting = state.customers.filter(item => !item.served && !item.missed)
   waiting.forEach((item, index) => {
-    const targetX = 815 + index * 60
+    const targetX = 815 + index * 28
     item.x += (targetX - item.x) * Math.min(1, dt * 5)
     item.y = 350 + index * 25
   })
@@ -159,7 +222,12 @@ function updateCustomers(state: GameState, dt: number): void {
       state.counter.stock--
       state.counter.serveTimer = 0
       front.served = true
-      emit(state, 'pay', register)
+      state.shift.served++
+      state.shift.streak++
+      state.shift.bestStreak = Math.max(state.shift.bestStreak, state.shift.streak)
+      const payout = state.skin.shift.basePrice * front.order.quantity
+        + tipFor(front.patience, state.skin.shift.customerPatience)
+      emit(state, 'pay', register, payout)
       for (let i = 0; i < 4; i++) {
         const angle = -2.7 + i * .45
         state.flyingCoins.push({
@@ -170,6 +238,7 @@ function updateCustomers(state: GameState, dt: number): void {
           vy: Math.sin(angle) * (95 + i * 8),
           age: 0,
           collected: false,
+          value: Math.floor(payout / 4) + (i < payout % 4 ? 1 : 0),
         })
       }
     }
@@ -178,30 +247,32 @@ function updateCustomers(state: GameState, dt: number): void {
   }
 
   state.customers.forEach(item => {
-    if (!item.served) return
+    if (!item.served && !item.missed) return
     item.exit += dt
     item.x += 115 * dt
-    item.y -= 18 * dt
+    item.y += (item.missed ? 18 : -18) * dt
   })
   state.customers = state.customers.filter(item => item.exit < 2)
 }
 
 function updateCoins(state: GameState, dt: number): void {
+  const target = { x: state.player.x, y: state.player.y - 55 }
   for (const coin of state.flyingCoins) {
     if (coin.collected) continue
     coin.age += dt
     if (coin.age < .55) {
       coin.vy += 240 * dt
-      coin.x += coin.vx * dt
-      coin.y += coin.vy * dt
-    } else if (distance(coin, state.player) < 140 || coin.age > 2.4) {
+      coin.x = clamp(coin.x + coin.vx * dt, 15, WORLD.width - 15)
+      coin.y = clamp(coin.y + coin.vy * dt, 15, WORLD.height - 15)
+    } else if (distance(coin, target) < 140) {
       const pull = Math.min(1, dt * 8)
-      coin.x += (state.player.x - coin.x) * pull
-      coin.y += (state.player.y - 55 - coin.y) * pull
-      if (distance(coin, state.player) < 25 || coin.age > 3.3) {
+      coin.x += (target.x - coin.x) * pull
+      coin.y += (target.y - coin.y) * pull
+      if (distance(coin, target) < 25) {
         coin.collected = true
-        state.save.coins++
-        state.lifetimeCoins++
+        state.save.coins += coin.value
+        state.lifetimeCoins += coin.value
+        state.shift.revenue += coin.value
       }
     }
   }
@@ -223,8 +294,8 @@ function updateBuildSpot(state: GameState): void {
   emit(state, 'build', spot)
 }
 
-function emit(state: GameState, kind: EventKind, at: Point): void {
-  state.events.push({ kind, x: at.x, y: at.y, age: 0 })
+function emit(state: GameState, kind: EventKind, at: Point, amount?: number): void {
+  state.events.push({ kind, x: at.x, y: at.y, age: 0, ...(amount === undefined ? {} : { amount }) })
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -232,5 +303,38 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 export function runFor(state: GameState, seconds: number, input: Input = { x: 0, y: 0 }): void {
-  for (let left = seconds; left > 0; left -= .05) step(state, Math.min(.05, left), input)
+  for (let left = seconds; left > 0 && state.phase === 'playing'; left -= .05) step(state, Math.min(.05, left), input)
+}
+
+export function startShift(state: GameState): void {
+  if (state.phase === 'ready') state.phase = 'playing'
+}
+
+export function retryShift(state: GameState): void {
+  const fresh = createGame(state.skin, state.save)
+  Object.assign(state, fresh)
+  state.phase = 'playing'
+}
+
+export function tipFor(remaining: number, patience: number): number {
+  if (remaining <= 0 || patience <= 0) return 0
+  return Math.ceil(clamp(remaining / patience, 0, 1) * 3)
+}
+
+export function goalMet(state: GameState): boolean {
+  return state.shift.revenue >= state.skin.shift.cashGoal
+}
+
+export function starsFor(skin: GameSkin, revenue: number): number {
+  return skin.shift.starThresholds.filter(threshold => revenue >= threshold).length
+}
+
+function finishShift(state: GameState): void {
+  if (state.phase !== 'playing') return
+  state.phase = 'results'
+  state.shift.remaining = 0
+  state.shift.stars = starsFor(state.skin, state.shift.revenue)
+  state.save.bestRevenue = Math.max(state.save.bestRevenue, state.shift.revenue)
+  state.save.bestStars = Math.max(state.save.bestStars, state.shift.stars)
+  state.player.moving = false
 }

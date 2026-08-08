@@ -2,6 +2,16 @@ import type { Point } from './engine'
 
 export type StationKey = 'machine' | 'counter' | 'register'
 export type UpgradeEffect = { kind: 'walkSpeed' | 'trayCapacity' | 'machineInterval'; value: number }
+export type SkinOrder = { item: string; label: string; quantity: number; icon: 'item' }
+export type ShiftRules = {
+  dayLabel: string
+  duration: number
+  cashGoal: number
+  customerPatience: number
+  basePrice: number
+  starThresholds: number[]
+  order: SkinOrder
+}
 export type SkinUpgrade = {
   id: string
   price: number
@@ -12,6 +22,7 @@ export type SkinUpgrade = {
 export type GameSkin = {
   id: string
   spriteSheet: string
+  shift: ShiftRules
   progression: { startingStation: string }
   upgrades: SkinUpgrade[]
   palette: {
