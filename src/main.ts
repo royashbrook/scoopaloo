@@ -79,6 +79,29 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   addEventListener('load', () => navigator.serviceWorker.register('/sw.js'))
 }
 
+// The update toast (#19): navigations are network-first (#18), so a reload IS
+// the update. This just tells a mid-session player one is waiting: probe the
+// served shell, compare against the shell we booted from, and show a wordless
+// refresh pill when they differ. Tap = reload. Probes ride visibility changes
+// (the natural "came back to the game" moment) plus a slow interval.
+const updateToast = document.querySelector<HTMLButtonElement>('#update-toast')
+if (import.meta.env.PROD && updateToast) {
+  let baseline: string | null = null
+  const probe = async (): Promise<void> => {
+    try {
+      const response = await fetch('/?update-probe', { cache: 'no-store' })
+      if (!response.ok) return
+      const text = await response.text()
+      if (baseline === null) baseline = text
+      else if (text !== baseline) updateToast.hidden = false
+    } catch { /* offline: nothing to say */ }
+  }
+  updateToast.addEventListener('click', () => location.reload())
+  probe()
+  setInterval(probe, 5 * 60 * 1000)
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) void probe() })
+}
+
 window.__scoopaloo = {
   snapshot: () => structuredClone(state),
   movePlayer: point => { state.player.x = point.x; state.player.y = point.y },

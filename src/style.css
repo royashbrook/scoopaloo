@@ -52,6 +52,26 @@ button, a {
 
 .round-button:active { transform: translateY(.2rem); box-shadow: 0 .1rem 0 #4a3b45; }
 
+/* wordless "new version" toast (#19): a bouncing refresh pill, tap = reload */
+.update-toast {
+  top: auto;
+  right: auto;
+  bottom: max(1.2rem, env(safe-area-inset-bottom));
+  left: 50%;
+  translate: -50% 0;
+  font-size: 1.4rem;
+  background: #ffd45e;
+  animation: toast-bob 1.6s ease-in-out infinite;
+}
+.update-toast:active { transform: translateY(.2rem); }
+@keyframes toast-bob {
+  0%, 100% { margin-bottom: 0; }
+  50% { margin-bottom: .5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-toast { animation: none; }
+}
+
 dialog {
   width: min(22rem, calc(100vw - 2rem));
   border: .25rem solid #4a3b45;

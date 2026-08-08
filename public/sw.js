@@ -23,18 +23,24 @@ self.addEventListener('activate', event => {
 
 function store(request, response) {
   const copy = response.clone()
-  caches.open(CACHE).then(cache => cache.put(request, copy))
+  return caches.open(CACHE).then(cache => cache.put(request, copy))
 }
 
 self.addEventListener('fetch', event => {
   const request = event.request
   if (request.method !== 'GET' || !request.url.startsWith(self.location.origin)) return
+  // the update probe must see the real server, never our cache: a cache-first
+  // answer here would hide every new deployment from the update toast (#19)
+  if (new URL(request.url).searchParams.has('update-probe')) return
 
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then(response => {
-          if (response.ok) store(request, response)
+          // waitUntil, not fire-and-forget: the worker may be killed right after
+          // respondWith settles, and a dropped put means the NEXT offline reload
+          // serves the previous deployment's shell.
+          if (response.ok) event.waitUntil(store(request, response))
           return response
         })
         .catch(() => caches.match(request).then(cached => cached || caches.match('/'))),
@@ -44,7 +50,7 @@ self.addEventListener('fetch', event => {
 
   event.respondWith(
     caches.match(request).then(cached => cached || fetch(request).then(response => {
-      if (response.ok) store(request, response)
+      if (response.ok) event.waitUntil(store(request, response))
       return response
     })),
   )

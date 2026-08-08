@@ -54,4 +54,28 @@ test('an installed client picks up a new deployment on an online reload', async 
   marker = 'BUILD-B' // the deployment changes; same origin, same worker
   await page.reload()
   await expect(page.locator('meta[name="build"]')).toHaveAttribute('content', 'BUILD-B')
+
+  // and the update must SURVIVE going offline: if the worker's cache put was
+  // dropped, this reload falls back to the BUILD-A shell and fails
+  await page.context().setOffline(true)
+  await page.reload()
+  await expect(page.locator('meta[name="build"]')).toHaveAttribute('content', 'BUILD-B')
+  await page.context().setOffline(false)
+})
+
+test('a mid-session player gets the update toast and one tap updates (#19)', async ({ page }) => {
+  marker = 'BUILD-A'
+  await page.goto('http://127.0.0.1:4180/')
+  await page.evaluate(() => navigator.serviceWorker.ready)
+  await page.waitForTimeout(150) // let the boot probe capture its baseline
+  await expect(page.locator('#update-toast')).toBeHidden()
+
+  marker = 'BUILD-B' // deploy happens while they play
+  // returning to the tab is the natural probe moment; drive it directly
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await expect(page.locator('#update-toast')).toBeVisible()
+
+  await page.click('#update-toast')
+  await expect(page.locator('meta[name="build"]')).toHaveAttribute('content', 'BUILD-B')
+  await expect(page.locator('#update-toast')).toBeHidden()
 })
