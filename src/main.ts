@@ -12,7 +12,7 @@ declare global {
     __scoopaloo: {
       snapshot: () => GameState
       movePlayer: (point: Point) => void
-      advance: (seconds: number) => void
+      advance: (seconds: number, input?: Point) => void
     }
   }
 }
@@ -64,5 +64,5 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 window.__scoopaloo = {
   snapshot: () => structuredClone(state),
   movePlayer: point => { state.player.x = point.x; state.player.y = point.y },
-  advance: seconds => runFor(state, seconds),
+  advance: (seconds, input) => runFor(state, seconds, input),
 }

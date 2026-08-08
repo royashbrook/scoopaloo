@@ -1,7 +1,7 @@
 import type { GameState, Point } from './engine'
 import { WORLD } from './engine'
-import type { GameSkin } from './skin'
-import { stationPoint } from './skin'
+import type { GameSkin, SkinUpgrade } from './skin'
+import { nextUpgrade, stationPoint, upgradeSpot } from './skin'
 
 type Joystick = { active: boolean; origin: Point; current: Point }
 type Drawable = { y: number; draw: () => void }
@@ -26,7 +26,7 @@ export class Renderer {
     const things: Drawable[] = [
       { y: this.skin.stations.machine.depth, draw: () => this.drawMachine(state) },
       { y: this.skin.stations.counter.depth, draw: () => this.drawCounter(state) },
-      { y: this.skin.stations.build.depth, draw: () => this.drawBuild(state) },
+      ...this.upgradeSpots(state),
       ...state.customers.map(customer => ({ y: customer.y, draw: () => this.drawCustomer(customer.look, customer.x, customer.y, customer.served, state.time) })),
       { y: state.player.y, draw: () => this.drawPlayer(state) },
     ]
@@ -102,26 +102,47 @@ export class Renderer {
     }
   }
 
-  private drawBuild(state: GameState): void {
-    const [x, y, width, height] = this.skin.stations.build.draw
-    const [column, row] = this.skin.stations.build.sprite
-    const build = stationPoint(this.skin, 'build')
-    this.shadow(build.x, build.y + 18, 75, 18)
-    this.sprite(column, row, x, y, width, height)
-    const upgraded = state.save.upgrades.shoes > 0
-    if (!upgraded) {
-      for (let i = 0; i < 8; i++) {
-        const angle = i / 8 * Math.PI * 2
-        this.drawCoin(205 + Math.cos(angle) * 53, 478 + Math.sin(angle) * 25, i * .1)
-      }
-    } else {
-      const ctx = this.context
-      ctx.fillStyle = this.skin.palette.mint
-      rounded(ctx, 164, 435, 82, 48, 18); ctx.fill()
-      ctx.fillStyle = this.skin.palette.cream
-      ctx.beginPath(); ctx.ellipse(190, 458, 20, 8, -.25, 0, Math.PI * 2); ctx.fill()
-      ctx.beginPath(); ctx.ellipse(220, 458, 20, 8, .25, 0, Math.PI * 2); ctx.fill()
+  private upgradeSpots(state: GameState): { y: number; draw: () => void }[] {
+    const next = nextUpgrade(this.skin, state.save.upgrades)
+    return this.skin.upgrades
+      .filter(upgrade => state.save.upgrades[upgrade.id] > 0 || upgrade === next)
+      .map(upgrade => ({
+        y: upgradeSpot(upgrade).y,
+        draw: () => this.drawUpgradeSpot(state, upgrade, state.save.upgrades[upgrade.id] > 0),
+      }))
+  }
+
+  // Upgrade spots follow the skin's declared order. Only the NEXT unowned spot is
+  // visible (a hidden future is a wordless "not yet"); owned spots keep a small
+  // sparkle marker so progress reads at a glance. Price coins are GHOSTS: faded,
+  // static, and ringed, so they cannot be mistaken for collectible floor coins (#5).
+  private drawUpgradeSpot(state: GameState, upgrade: SkinUpgrade, owned: boolean): void {
+    const ctx = this.context
+    const spot = upgradeSpot(upgrade)
+    this.shadow(spot.x, spot.y + 18, 75, 18)
+    this.sprite(3, 3, spot.x - 75, spot.y - 85, 150, 125)
+    if (owned) {
+      const [column, row] = this.skin.sprites.sparkle
+      this.sprite(column, row, spot.x - 16, spot.y - 55, 32, 32)
+      return
     }
+    const affordable = state.save.coins >= upgrade.price
+    const pulse = affordable && !this.reducedMotion ? 1 + Math.sin(state.time * 6) * .08 : 1
+    ctx.save()
+    ctx.strokeStyle = affordable ? this.skin.palette.mint : this.skin.palette.cocoa
+    ctx.globalAlpha = affordable ? .9 : .4
+    ctx.lineWidth = 5
+    ctx.setLineDash([12, 10])
+    ctx.beginPath(); ctx.ellipse(spot.x, spot.y - 4, 82 * pulse, 34 * pulse, 0, 0, Math.PI * 2); ctx.stroke()
+    // ghost coins: one per 2 price, faded and outlined, never pulsing like real ones
+    ctx.globalAlpha = .35
+    const ghosts = Math.max(3, Math.round(upgrade.price / 2))
+    const [column, row] = this.skin.sprites.coin
+    for (let i = 0; i < ghosts; i++) {
+      const angle = i / ghosts * Math.PI * 2
+      this.sprite(column, row, spot.x + Math.cos(angle) * 53 - 11, spot.y - 8 + Math.sin(angle) * 23 - 11, 22, 22)
+    }
+    ctx.restore()
   }
 
   private drawPlayer(state: GameState): void {
