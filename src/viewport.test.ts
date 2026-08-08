@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { WORLD } from './engine'
-import { backingSize, clientToWorld, computeViewport, worldToClient } from './viewport'
+import { backingSize, clientToWorld, computeViewport, PORTRAIT_LANE_WIDTH, worldToClient } from './viewport'
 
 describe('shared viewport (#13)', () => {
-  it('portrait: uniform scale fits width, extra world above and below, centered', () => {
+  it('portrait: zooms into the central play lane and biases the shop below the HUD', () => {
     const view = computeViewport(390, 844, 3)
-    expect(view.scale).toBeCloseTo(390 / WORLD.width)
-    expect(view.viewWidth).toBeCloseTo(WORLD.width)
+    expect(view.scale).toBeCloseTo(390 / PORTRAIT_LANE_WIDTH)
+    expect(view.viewWidth).toBeCloseTo(PORTRAIT_LANE_WIDTH)
     expect(view.viewHeight).toBeGreaterThan(WORLD.height)
-    expect(view.originX).toBeCloseTo(0)
-    // centered: as much extra world above as below
-    expect(view.originY).toBeCloseTo((WORLD.height - view.viewHeight) / 2)
+    expect(view.originX).toBeCloseTo((WORLD.width - PORTRAIT_LANE_WIDTH) / 2)
+    expect(view.originY).toBeLessThan((WORLD.height - view.viewHeight) / 2)
     expect(view.originY).toBeLessThan(0)
   })
 

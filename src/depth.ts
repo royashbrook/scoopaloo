@@ -3,9 +3,9 @@ import type { Point } from './engine'
 // The 3/4 depth rule (#14), pure and shared: things farther up the floor draw
 // smaller, nearer things larger, and ONE comparator decides overlap. Display
 // only: gameplay coordinates, collision, and interaction never see this scale.
-export const FAR_Y = 210
+export const FAR_Y = 430
 export const FAR_SCALE = 0.82
-export const NEAR_Y = 595
+export const NEAR_Y = 1030
 export const NEAR_SCALE = 1.10
 
 /** Scale for a ground-contact y: clamped at the floor's ends, linear between. */

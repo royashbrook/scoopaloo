@@ -4,6 +4,7 @@ test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true })
 
 test('keeps a 60 fps frame budget at tablet size', async ({ page }) => {
   await page.goto('/')
+  await page.evaluate(() => window.__scoopaloo.startShift())
   const frameTimes = await page.evaluate(() => new Promise<number[]>(resolve => {
     const samples: number[] = []
     let previous = performance.now()

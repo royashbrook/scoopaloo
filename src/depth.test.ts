@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { byDepth, depthScale, FAR_SCALE, FAR_Y, NEAR_SCALE, NEAR_Y } from './depth'
-import { createGame, runFor } from './engine'
+import { createGame, runFor, startShift } from './engine'
 import type { GameSkin } from './skin'
 import skinData from './skins/ice-cream.json'
 
@@ -47,9 +47,11 @@ describe('the one sort rule (#14)', () => {
 describe('display scale never leaks into gameplay (#14)', () => {
   it('walk distance per second is identical on the far and near floor', () => {
     const far = createGame(skin)
+    startShift(far)
     far.player.x = 200; far.player.y = 250
     runFor(far, 1, { x: 1, y: 0 })
     const near = createGame(skin)
+    startShift(near)
     near.player.x = 200; near.player.y = 560
     runFor(near, 1, { x: 1, y: 0 })
     expect(far.player.x - 200).toBeCloseTo(near.player.x - 200)

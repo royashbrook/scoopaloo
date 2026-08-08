@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Scoopaloo</title>
+  <rect width="512" height="512" fill="#63CDB4"/>
+  <path d="M178 298h156l-43 116a28 28 0 0 1-27 20h-16a28 28 0 0 1-27-20z"
+        fill="#FFD9B8" stroke="#4A3B45" stroke-width="24" stroke-linejoin="round"/>
+  <g transform="translate(0 28) scale(1 .88)">
+  <path d="M297 84c55 31 53 84 10 106-35 18-94 8-124 28-39 26-23 69 22 79 52 12 103-10 131-42 10 45-22 80-82 83-58 3-111-22-126-62"
+        fill="none" stroke="#FFF3E6" stroke-width="106" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M297 84c55 31 53 84 10 106-35 18-94 8-124 28-39 26-23 69 22 79 52 12 103-10 131-42 10 45-22 80-82 83-58 3-111-22-126-62"
+        fill="none" stroke="#4A3B45" stroke-width="84" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M297 84c55 31 53 84 10 106-35 18-94 8-124 28-39 26-23 69 22 79 52 12 103-10 131-42 10 45-22 80-82 83-58 3-111-22-126-62"
+        fill="none" stroke="#FF8FAB" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <circle cx="354" cy="368" r="66" fill="#FFF3E6"/>
+  <circle cx="354" cy="368" r="54" fill="#FFD45E" stroke="#4A3B45" stroke-width="14"/>
+  <path d="m354 329 11 22 25 4-18 18 4 25-22-12-22 12 4-25-18-18 25-4z"
+        fill="#FFF3E6" stroke="#4A3B45" stroke-width="7" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="330" viewBox="0 0 1200 330" role="img" aria-labelledby="title desc">
+  <title id="title">Scoopaloo</title>
+  <desc id="desc">Scoopaloo in compact strawberry arcade lettering with a mint shadow.</desc>
+  <defs>
+    <linearGradient id="strawberry" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFF3E6"/>
+      <stop offset=".17" stop-color="#FF8FAB"/>
+      <stop offset="1" stop-color="#FF8FAB"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Text stays editable; horizontal scaling makes one compact phone lockup. -->
+  <g transform="translate(48 0) scale(.6 1)"
+     font-family="Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif"
+     font-size="250" font-weight="900" letter-spacing="-4" text-anchor="start">
+    <text x="0" y="250" dy="18"
+          fill="#63CDB4" stroke="#63CDB4" stroke-width="38" stroke-linejoin="round">SCOOPALOO</text>
+    <text x="0" y="250"
+          fill="#FF8FAB" stroke="#FFF3E6" stroke-width="42" stroke-linejoin="round">SCOOPALOO</text>
+    <text x="0" y="250"
+          fill="url(#strawberry)" stroke="#4A3B45" stroke-width="25" stroke-linejoin="round"
+          paint-order="stroke fill">SCOOPALOO</text>
+  </g>
+  <path d="m1134 34 8 18 19 8-19 8-8 18-8-18-19-8 19-8z" fill="#FFD45E" stroke="#4A3B45" stroke-width="5" stroke-linejoin="round"/>
+</svg>

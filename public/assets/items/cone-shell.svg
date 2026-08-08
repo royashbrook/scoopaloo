@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <title>Empty cone</title>
+  <path d="M25 28h78L68 116a5 5 0 0 1-9 0L25 28Z" fill="#ffd9b8" stroke="#4a3b45" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m38 48 48 48M29 30l65 65M49 29l46 46M79 29 42 66M101 34 50 85M88 82l-27 27" fill="none" stroke="#c88954" stroke-width="4" stroke-linecap="round" opacity=".9"/>
+  <path d="M23 28h82" stroke="#ff8fab" stroke-width="9" stroke-linecap="round"/>
+</svg>

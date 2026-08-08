@@ -1,8 +1,9 @@
 import { byDepth, depthScale } from './depth'
-import type { GameState, Point } from './engine'
-import type { GameSkin, SkinUpgrade } from './skin'
-import { nextUpgrade, stationPoint, upgradeSpot } from './skin'
+import { inventoryTotal, prepSeconds, WORLD, type GameEvent, type GameState, type Point } from './engine'
+import type { GameSkin } from './skin'
+import { prepPoint, producerPoint, stationPoint } from './skin'
 import type { Viewport } from './viewport'
+import { worldToClient } from './viewport'
 
 type Joystick = { active: boolean; origin: Point; current: Point }
 type Drawable = { anchor: Point; draw: () => void }
@@ -10,6 +11,7 @@ type Drawable = { anchor: Point; draw: () => void }
 export class Renderer {
   readonly context: CanvasRenderingContext2D
   readonly atlas = new Image()
+  readonly itemImages = new Map<string, HTMLImageElement>()
   reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 
   constructor(readonly canvas: HTMLCanvasElement, readonly skin: GameSkin) {
@@ -17,6 +19,16 @@ export class Renderer {
     if (!context) throw new Error('canvas unavailable')
     this.context = context
     this.atlas.src = skin.spriteSheet
+    for (const [id, item] of Object.entries(skin.items)) {
+      const image = new Image()
+      image.src = item.icon
+      this.itemImages.set(id, image)
+    }
+  }
+
+  assetsReady(): boolean {
+    return this.atlas.complete && this.atlas.naturalWidth > 0
+      && [...this.itemImages.values()].every(image => image.complete && image.naturalWidth > 0)
   }
 
   draw(state: GameState, joystick: Joystick, view: Viewport): void {
@@ -31,20 +43,30 @@ export class Renderer {
 
     // every drawable is one grounded unit (#14): sprite, shadow, stock, rings all
     // scale together around the unit's ground-contact anchor. byDepth is the ONLY
-    // ordering rule; ties keep this list's order (stations, spots, creatures).
-    const machineAnchor = { x: stationPoint(this.skin, 'machine').x, y: this.skin.stations.machine.depth }
-    const counterAnchor = { x: stationPoint(this.skin, 'counter').x, y: this.skin.stations.counter.depth }
+    // ordering rule; ties keep this list's order (stations, then creatures).
     const things: (Drawable & { anchor: Point })[] = [
-      { anchor: machineAnchor, draw: () => this.drawMachine(state) },
-      { anchor: counterAnchor, draw: () => this.drawCounter(state) },
-      ...this.upgradeSpots(state),
-      ...state.customers.map(customer => ({ anchor: { x: customer.x, y: customer.y }, draw: () => this.drawCustomer(customer.look, customer.x, customer.y, customer.served, state.time) })),
+      ...Object.entries(this.skin.producers).map(([source, producer]) => ({
+        anchor: { x: producerPoint(this.skin, source).x, y: producer.depth },
+        draw: () => this.drawProducer(state, source),
+      })),
+      ...Object.entries(this.skin.prepStations).map(([station, prep]) => ({
+        anchor: { x: prepPoint(this.skin, station).x, y: prep.depth },
+        draw: () => this.drawPrepStation(state, station),
+      })),
+      {
+        anchor: { x: stationPoint(this.skin, 'counter').x, y: this.skin.stations.counter.depth },
+        draw: () => this.drawCounter(state),
+      },
+      ...state.customers.map(customer => ({ anchor: { x: customer.x, y: customer.y }, draw: () => this.drawCustomer(customer.look, customer.x, customer.y, customer.served, customer.missed, state.time) })),
       { anchor: { x: state.player.x, y: state.player.y }, draw: () => this.drawPlayer(state) },
     ]
     things.sort(byDepth).forEach(item => this.grounded(item.anchor, item.draw))
     state.flyingCoins.forEach(coin => this.grounded({ x: coin.x, y: coin.y }, () => this.drawCoin(coin.x, coin.y, coin.age)))
-    state.events.forEach(event => this.grounded({ x: event.x, y: event.y }, () => this.drawEvent(event.kind, event.x, event.y, event.age)))
-    this.drawHud(state, view)
+    state.events.forEach(event => this.grounded({ x: event.x, y: event.y }, () => this.drawEvent(event)))
+    state.events.filter(event => event.kind === 'pay' && event.amount).forEach(event =>
+      this.drawPayAmount(event.x, event.y, event.age, event.amount ?? 0, event.tip ?? 0, event.combo ?? 0, view))
+    state.events.filter(event => event.kind === 'combo-break').forEach(event =>
+      this.drawComboBreak(event.x, event.y, event.age, event.streak ?? 0, view))
     if (joystick.active) this.drawJoystick(joystick)
   }
 
@@ -101,118 +123,166 @@ export class Renderer {
     ctx.fillRect(left, 158, view.viewWidth, 10)
   }
 
-  private drawMachine(state: GameState): void {
-    const [x, y, width, height] = this.skin.stations.machine.draw
-    const [column, row] = this.skin.stations.machine.sprite
-    const machine = stationPoint(this.skin, 'machine')
-    this.shadow(machine.x, machine.y + 6, 76, 22)
+  private drawProducer(state: GameState, sourceId: string): void {
+    const producer = this.skin.producers[sourceId]
+    const source = state.sources[sourceId]
+    const [x, y, width, height] = producer.draw
+    const [column, row] = producer.sprite
+    const point = producerPoint(this.skin, sourceId)
+    if (!source) {
+      const ctx = this.context
+      ctx.save()
+      ctx.globalAlpha = .35
+      this.shadow(point.x, point.y + 6, width * .42, 22)
+      this.sprite(column, row, x, y, width, height)
+      ctx.restore()
+      this.drawProducerPlaque(point, producer.item, true)
+      return
+    }
+
+    this.shadow(point.x, point.y + 6, width * .42, 22)
     this.sprite(column, row, x, y, width, height)
+    this.drawProducerPlaque(point, source.item, false)
+    if (sourceId === this.skin.progression.startingStation) {
+      const ctx = this.context
+      ctx.save()
+      ctx.strokeStyle = this.skin.palette.strawberry
+      ctx.lineWidth = 6
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath()
+        ctx.ellipse(point.x, point.y - 47 + i * 7, 17 - i * 3, 5, 0, 0, Math.PI * 2)
+        ctx.stroke()
+      }
+      ctx.restore()
+    }
+    const { origin, step, size } = producer.stockDisplay
+    for (let i = 0; i < source.stock; i++) {
+      this.drawItem(source.item, origin[0] + step[0] * i, origin[1] + step[1] * i, size[0], size[1])
+    }
+    // Keep the nearest row's full ring on short tablet canvases while leaving
+    // its interaction point unchanged.
+    this.pickupRing(point.x, Math.min(point.y + 35, WORLD.height - 40), state.time)
+  }
+
+  private drawProducerPlaque(point: Point, item: string, locked: boolean): void {
     const ctx = this.context
     ctx.save()
-    ctx.strokeStyle = this.skin.palette.strawberry
-    ctx.lineWidth = 6
-    for (let i = 0; i < 3; i++) {
-      ctx.beginPath()
-      ctx.ellipse(190, 213 + i * 7, 17 - i * 3, 5, 0, 0, Math.PI * 2)
-      ctx.stroke()
+    const top = point.y - (locked ? 142 : 134)
+    const height = locked ? 82 : 66
+    ctx.fillStyle = this.skin.palette.cream
+    ctx.strokeStyle = this.skin.palette.cocoa
+    ctx.lineWidth = 3
+    rounded(ctx, point.x - 32, top, 64, height, 14); ctx.fill(); ctx.stroke()
+    if (locked) {
+      this.drawItem(item, point.x - 20, top + 3, 40, 44)
+      ctx.fillStyle = this.skin.palette.cocoa
+      ctx.font = '900 18px ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('DAY 2', point.x, top + 65)
+      ctx.restore()
+      return
     }
+    this.drawItem(item, point.x - 24, top + 5, 48, 56)
     ctx.restore()
-    const [itemColumn, itemRow] = this.skin.sprites.item
-    for (let i = 0; i < state.machine.stock; i++) this.sprite(itemColumn, itemRow, 145 + i * 34, 273 - i * 3, 48, 58)
-    this.pickupRing(machine.x, machine.y + 35, state.time)
   }
 
   private drawCounter(state: GameState): void {
-    const [counterX, counterY, counterWidth, counterHeight] = this.skin.stations.counter.draw
-    const [counterColumn, counterRow] = this.skin.stations.counter.sprite
-    const [registerX, registerY, registerWidth, registerHeight] = this.skin.stations.register.draw
-    const [registerColumn, registerRow] = this.skin.stations.register.sprite
-    this.shadow(650, 352, 150, 25)
-    this.sprite(counterColumn, counterRow, counterX, counterY, counterWidth, counterHeight)
-    this.sprite(registerColumn, registerRow, registerX, registerY, registerWidth, registerHeight)
-    const [itemColumn, itemRow] = this.skin.sprites.item
-    for (let i = 0; i < state.counter.stock; i++) this.sprite(itemColumn, itemRow, 590 + i * 42, 238, 52, 63)
+    const station = this.skin.stations.counter
+    const [x, y, width, height] = station.draw
+    const [column, row] = station.sprite
+    const counter = stationPoint(this.skin, 'counter')
+    this.shadow(counter.x, counter.y + 8, 65, 18)
+    this.sprite(column, row, x, y, width, height)
+    const stock = inventoryItems(state.counter.items)
+    if (stock.length > 0) {
+      const ctx = this.context
+      ctx.fillStyle = this.skin.palette.cream
+      ctx.strokeStyle = this.skin.palette.cocoa
+      ctx.lineWidth = 4
+      rounded(ctx, counter.x - 88, counter.y - 40, 82, 27, 12); ctx.fill(); ctx.stroke()
+      stock.slice(0, 4).forEach((item, index) =>
+        this.drawItem(item, counter.x - 82 + index * 20, counter.y - 71, 29, 38))
+    }
     if (state.counter.serveTimer > 0) {
       const ctx = this.context
       ctx.strokeStyle = this.skin.palette.mint
       ctx.lineWidth = 8
-      ctx.beginPath(); ctx.arc(800, 250, 24, -.5 * Math.PI, (-.5 + state.counter.serveTimer / .7 * 2) * Math.PI); ctx.stroke()
+      ctx.beginPath(); ctx.arc(counter.x, counter.y - 85, 24, -.5 * Math.PI, (-.5 + state.counter.serveTimer / .7 * 2) * Math.PI); ctx.stroke()
     }
   }
 
-  private upgradeSpots(state: GameState): Drawable[] {
-    const next = nextUpgrade(this.skin, state.save.upgrades)
-    return this.skin.upgrades
-      .filter(upgrade => state.save.upgrades[upgrade.id] > 0 || upgrade === next)
-      .map(upgrade => ({
-        anchor: upgradeSpot(upgrade),
-        draw: () => this.drawUpgradeSpot(state, upgrade, state.save.upgrades[upgrade.id] > 0),
-      }))
-  }
-
-  // Upgrade spots follow the skin's declared order. Only the NEXT unowned spot is
-  // visible (a hidden future is a wordless "not yet"); owned spots keep a small
-  // sparkle marker so progress reads at a glance. Price coins are GHOSTS: faded,
-  // static, and ringed, so they cannot be mistaken for collectible floor coins (#5).
-  private drawUpgradeSpot(state: GameState, upgrade: SkinUpgrade, owned: boolean): void {
-    const ctx = this.context
-    const spot = upgradeSpot(upgrade)
-    this.shadow(spot.x, spot.y + 18, 75, 18)
-    this.sprite(3, 3, spot.x - 75, spot.y - 85, 150, 125)
-    if (owned) {
-      const [column, row] = this.skin.sprites.sparkle
-      this.sprite(column, row, spot.x - 16, spot.y - 55, 32, 32)
-      return
+  private drawPrepStation(state: GameState, stationId: string): void {
+    const station = this.skin.prepStations[stationId]
+    const prep = state.prepStations[stationId]
+    const [x, y, width, height] = station.draw
+    const [column, row] = station.sprite
+    const point = prepPoint(this.skin, stationId)
+    this.shadow(point.x, point.y + 8, width * .42, 20)
+    this.sprite(column, row, x, y, width, height)
+    const { origin, step, size } = station.outputDisplay
+    inventoryItems(prep.outputs).slice(0, station.capacity).forEach((item, index) =>
+      this.drawItem(item, origin[0] + step[0] * index, origin[1] + step[1] * index, size[0], size[1]))
+    if (prep.job) {
+      const progress = 1 - prep.job.remaining / prepSeconds(state, prep.job.item)
+      const ctx = this.context
+      ctx.strokeStyle = this.skin.palette.mint
+      ctx.lineWidth = 9
+      ctx.beginPath()
+      ctx.arc(point.x, point.y - 92, 31, -.5 * Math.PI, (-.5 + Math.max(0, Math.min(1, progress)) * 2) * Math.PI)
+      ctx.stroke()
+      this.drawItem(prep.job.item, point.x - 18, point.y - 115, 36, 45)
     }
-    const affordable = state.save.coins >= upgrade.price
-    const pulse = affordable && !this.reducedMotion ? 1 + Math.sin(state.time * 6) * .08 : 1
-    ctx.save()
-    ctx.strokeStyle = affordable ? this.skin.palette.mint : this.skin.palette.cocoa
-    ctx.globalAlpha = affordable ? .9 : .4
-    ctx.lineWidth = 5
-    ctx.setLineDash([12, 10])
-    ctx.beginPath(); ctx.ellipse(spot.x, spot.y - 4, 82 * pulse, 34 * pulse, 0, 0, Math.PI * 2); ctx.stroke()
-    // ghost coins: exactly ONE per coin of price, because in a zero-text economy the
-    // coins ARE the price tag and a rounded count is a lie. concentric rings pack up
-    // to 22 (the dearest declared upgrade); a pricier future skin should rethink the
-    // marker before this draws misleadingly.
-    ctx.globalAlpha = .35
-    const [column, row] = this.skin.sprites.coin
-    const rings = [{ n: 12, r: 53 }, { n: 7, r: 33 }, { n: 3, r: 14 }]
-    let remaining = Math.min(upgrade.price, 22)
-    for (const ring of rings) {
-      const count = Math.min(remaining, ring.n)
-      for (let i = 0; i < count; i++) {
-        const angle = i / count * Math.PI * 2
-        this.sprite(column, row, spot.x + Math.cos(angle) * ring.r - 10, spot.y - 8 + Math.sin(angle) * ring.r * .42 - 10, 20, 20)
-      }
-      remaining -= count
-      if (remaining === 0) break
-    }
-    ctx.restore()
+    this.pickupRing(point.x, point.y + 34, state.time)
   }
 
   private drawPlayer(state: GameState): void {
     const player = state.player
     const stride = player.moving && !this.reducedMotion ? Math.sin(state.time * 13) : 0
     const bob = Math.abs(stride) * -4
-    const [column, row] = player.tray > 0
-      ? this.skin.sprites.player.carry
-      : player.moving
-        ? (player.facing < 0 ? this.skin.sprites.player.walkLeft : this.skin.sprites.player.walkRight)
-        : this.skin.sprites.player.idle
+    const carried = inventoryItems(player.trayItems)
+    const [column, row] = player.moving
+      ? (player.facing < 0 ? this.skin.sprites.player.walkLeft : this.skin.sprites.player.walkRight)
+      : this.skin.sprites.player.idle
     const carryWobble = player.tray > 0 && !this.reducedMotion ? Math.sin(player.trayWobble) * 2 : 0
     this.shadow(player.x, player.y + 5, 43 + Math.abs(stride) * 4, 13)
     this.sprite(column, row, player.x - 66 + carryWobble, player.y - 130 + bob, 132, 142)
+    if (carried.length > 0) {
+      const ctx = this.context
+      const itemWidth = Math.min(34, 82 / carried.length)
+      const trayWidth = Math.max(58, carried.length * itemWidth + 12)
+      const trayX = player.x - trayWidth / 2 + carryWobble
+      const trayY = player.y - 25 + bob
+      carried.slice(0, 5).forEach((item, index) => {
+        const start = player.x - carried.length * itemWidth / 2 + carryWobble
+        this.drawItem(item, start + index * itemWidth, trayY - 36, itemWidth, 40)
+      })
+      ctx.fillStyle = this.skin.palette.cocoa
+      ctx.strokeStyle = this.skin.palette.cocoa
+      ctx.lineWidth = 2
+      rounded(ctx, trayX, trayY, trayWidth, 8, 4); ctx.fill(); ctx.stroke()
+    }
   }
 
-  private drawCustomer(look: number, x: number, y: number, served: boolean, time: number): void {
+  private drawCustomer(look: number, x: number, y: number, served: boolean, missed: boolean, time: number): void {
     const bob = this.reducedMotion ? 0 : Math.sin(time * 4 + look) * 3
     this.shadow(x, y + 4, 40, 12)
     const [customerColumn, customerRow] = this.skin.sprites.customers[look % this.skin.sprites.customers.length]
     const [heartColumn, heartRow] = this.skin.sprites.heart
     this.sprite(customerColumn, customerRow, x - 58, y - 122 + bob, 116, 132)
     if (served) this.sprite(heartColumn, heartRow, x - 18, y - 160 + bob, 36, 36)
+    if (missed) {
+      const ctx = this.context
+      ctx.fillStyle = this.skin.palette.strawberry
+      ctx.strokeStyle = this.skin.palette.cocoa
+      ctx.lineWidth = 4
+      ctx.beginPath(); ctx.arc(x, y - 144 + bob, 22, 0, Math.PI * 2); ctx.fill(); ctx.stroke()
+      ctx.fillStyle = this.skin.palette.cream
+      ctx.font = '900 30px system-ui'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('!', x, y - 143 + bob)
+    }
   }
 
   private drawCoin(x: number, y: number, age: number): void {
@@ -221,42 +291,82 @@ export class Renderer {
     this.sprite(column, row, x - 15 * pulse, y - 15 * pulse, 30 * pulse, 30 * pulse)
   }
 
-  private drawEvent(kind: string, x: number, y: number, age: number): void {
+  private drawEvent(event: GameEvent): void {
     const ctx = this.context
-    const t = Math.min(1, age / .75)
+    const { kind, x, y } = event
+    const t = Math.min(1, event.age / .75)
     ctx.save()
     ctx.globalAlpha = 1 - t
-    if (kind === 'pickup' || kind === 'drop') {
+    if ((kind === 'pickup' || kind === 'drop') && event.item) {
       const direction = kind === 'pickup' ? -1 : 1
       const arcY = y - 45 - Math.sin(t * Math.PI) * 45 * direction
-      const [column, row] = this.skin.sprites.item
-      this.sprite(column, row, x - 22 + t * 20 * direction, arcY, 44, 52)
+      this.drawItem(event.item, x - 22 + t * 20 * direction, arcY, 44, 52)
+    } else if (kind === 'prep-ready' && event.item) {
+      this.drawItem(event.item, x - 24, y - 95 - Math.sin(t * Math.PI) * 24, 48, 58)
+      const [column, row] = this.skin.sprites.sparkle
+      for (let i = 0; i < 3; i++) {
+        const angle = i * Math.PI * 2 / 3
+        this.sprite(column, row, x - 12 + Math.cos(angle) * (30 + 24 * t), y - 80 + Math.sin(angle) * (22 + 20 * t), 24, 24)
+      }
     } else if (kind === 'pay') {
       const [column, row] = this.skin.sprites.coin
-      for (let i = 0; i < 5; i++) this.sprite(column, row, x - 14 + Math.cos(i * 2) * t * 65, y - 40 - Math.sin(t * Math.PI) * (40 + i * 5), 28, 28)
+      for (let i = 0; i < 4; i++) this.sprite(column, row, x - 14 + Math.cos(i * 2) * t * 65, y - 40 - Math.sin(t * Math.PI) * (40 + i * 5), 28, 28)
     } else {
-      ctx.strokeStyle = kind === 'build' ? this.skin.palette.sunshine : this.skin.palette.strawberry
+      ctx.strokeStyle = this.skin.palette.strawberry
       ctx.lineWidth = 8 * (1 - t)
       ctx.beginPath(); ctx.arc(x, y - 20, 18 + t * 75, 0, Math.PI * 2); ctx.stroke()
     }
     ctx.restore()
   }
 
-  // HUD anchors to the visible top-left corner (plus the same safe inset the css
-  // gives the save button), so it stays on screen whatever shape the view is.
-  private drawHud(state: GameState, view: Viewport): void {
+  // Revenue is critical feedback, so its label stays in CSS pixels instead of
+  // shrinking with the world on tall phones.
+  private drawPayAmount(x: number, y: number, age: number, amount: number, tip: number, combo: number, view: Viewport): void {
     const ctx = this.context
-    const x = view.originX + 24
-    const y = view.originY + 20
-    ctx.fillStyle = 'rgba(255,243,230,.9)'
-    rounded(ctx, x, y, 54 + Math.min(10, state.save.coins) * 21, 58, 29); ctx.fill()
-    ctx.strokeStyle = this.skin.palette.cocoa; ctx.lineWidth = 4; ctx.stroke()
-    const [coinColumn, coinRow] = this.skin.sprites.coin
-    this.sprite(coinColumn, coinRow, x + 10, y + 9, 39, 39)
-    for (let i = 0; i < Math.min(10, state.save.coins); i++) {
-      ctx.fillStyle = this.skin.palette.sunshine
-      ctx.beginPath(); ctx.arc(x + 64 + i * 20, y + 29, 8, 0, Math.PI * 2); ctx.fill()
-    }
+    const point = worldToClient(view, { x, y: y - 80 })
+    const t = Math.min(1, age / .9)
+    ctx.save()
+    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0)
+    ctx.globalAlpha = 1 - t
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.lineWidth = 5
+    ctx.strokeStyle = this.skin.palette.cocoa
+    ctx.fillStyle = this.skin.palette.sunshine
+    const top = `+$${amount} TOTAL`
+    const base = amount - tip - combo
+    const parts = [`$${base} ORDER`]
+    if (tip > 0) parts.push(`$${tip} TIP`)
+    if (combo > 0) parts.push(`$${combo} COMBO`)
+    const labelY = point.y - t * 24
+    ctx.font = '900 22px ui-rounded, system-ui, sans-serif'
+    ctx.strokeText(top, point.x, labelY - 9)
+    ctx.fillText(top, point.x, labelY - 9)
+    ctx.font = '900 13px ui-rounded, system-ui, sans-serif'
+    ctx.lineWidth = 4
+    const detail = parts.join(' · ')
+    ctx.strokeText(detail, point.x, labelY + 12)
+    ctx.fillText(detail, point.x, labelY + 12)
+    ctx.restore()
+  }
+
+  private drawComboBreak(x: number, y: number, age: number, streak: number, view: Viewport): void {
+    const ctx = this.context
+    const point = worldToClient(view, { x, y: y - 80 })
+    const t = Math.min(1, age / .9)
+    ctx.save()
+    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0)
+    ctx.globalAlpha = 1 - t
+    ctx.font = '900 19px ui-rounded, system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.lineWidth = 5
+    ctx.strokeStyle = this.skin.palette.cocoa
+    ctx.fillStyle = this.skin.palette.strawberry
+    const label = `COMBO LOST · ${streak}`
+    ctx.strokeText(label, point.x, point.y - t * 20)
+    ctx.fillText(label, point.x, point.y - t * 20)
+    ctx.restore()
   }
 
   private pickupRing(x: number, y: number, time: number): void {
@@ -305,6 +415,23 @@ export class Renderer {
     ctx.drawImage(this.atlas, rx * scaleX, ry * scaleY, rw * scaleX, rh * scaleY, 0, 0, width, height)
     ctx.restore()
   }
+
+  private drawItem(item: string, x: number, y: number, width: number, height: number): void {
+    const image = this.itemImages.get(item)
+    const ctx = this.context
+    if (image?.complete && image.naturalWidth > 0) {
+      ctx.drawImage(image, x, y, width, height)
+      return
+    }
+    ctx.fillStyle = this.skin.items[item]?.color ?? this.skin.palette.sunshine
+    ctx.strokeStyle = this.skin.palette.cocoa
+    ctx.lineWidth = 3
+    ctx.beginPath(); ctx.ellipse(x + width / 2, y + height / 2, width * .35, height * .35, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke()
+  }
+}
+
+function inventoryItems(inventory: Record<string, number>): string[] {
+  return Object.entries(inventory).flatMap(([item, count]) => Array(Math.max(0, count)).fill(item))
 }
 
 function rounded(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {
