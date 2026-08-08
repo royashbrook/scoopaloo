@@ -1,12 +1,29 @@
 import QRCode from 'qrcode'
 import './style.css'
-import { createGame, goalMet, retryShift, runFor, startShift, step, type GameState, type Point } from './engine'
+import {
+  createGame,
+  currentDay,
+  customerPatience,
+  enterShop,
+  goalMet,
+  leaveShop,
+  nextDay,
+  purchaseUpgrade,
+  retryShift,
+  runFor,
+  startShift,
+  step,
+  upgradeOffer,
+  type GameState,
+  type Point,
+} from './engine'
 import { Controls } from './input'
 import { Renderer } from './render'
 import { loadSave, rescueUrl, storeSave } from './save'
-import { ShiftUi } from './shift-ui'
-import type { GameSkin } from './skin'
+import { ShiftUi, type UpgradeUiItem } from './shift-ui'
+import type { GameSkin, SkinUpgrade } from './skin'
 import skinData from './skins/ice-cream.json'
+import { GameSound } from './sound'
 import { backingSize, computeViewport, type Viewport } from './viewport'
 
 declare global {
@@ -32,6 +49,9 @@ const canvas: HTMLCanvasElement = found
 
 const skin = skinData as GameSkin
 const state = createGame(skin, loadSave(skin))
+const sound = new GameSound()
+canvas.addEventListener('pointerdown', () => sound.unlock(), { passive: true })
+canvas.addEventListener('keydown', () => sound.unlock())
 
 // The one current viewport (#13): rendering and input both read this object and
 // nothing else, so a resize cannot leave the two disagreeing about the world.
@@ -51,12 +71,39 @@ const renderer = new Renderer(canvas, skin)
 const shiftRoot = document.querySelector<HTMLElement>('#shift-ui')
 if (!shiftRoot) throw new Error('shift UI missing')
 const shiftUi = new ShiftUi(shiftRoot, {
-  start: () => startShift(state),
-  retry: () => retryShift(state),
-  next: () => retryShift(state),
+  start: () => {
+    sound.unlock()
+    startShift(state)
+    sound.play('start')
+  },
+  retry: () => {
+    sound.unlock()
+    if (retryShift(state)) {
+      sound.play('start')
+      storeSave(state.save)
+    }
+  },
+  shop: () => { enterShop(state) },
+  back: () => { leaveShop(state) },
+  next: () => {
+    sound.unlock()
+    if (nextDay(state)) {
+      sound.play('next')
+      storeSave(state.save)
+    }
+  },
+  buy: id => {
+    sound.unlock()
+    if (purchaseUpgrade(state, id)) {
+      sound.play('buy')
+      storeSave(state.save)
+    }
+  },
 })
 let previous = performance.now()
 let saveClock = 0
+let previousSoundPhase = state.phase
+const heardEvents = new WeakSet<object>()
 
 // paused = deterministic evidence mode (#14): the loop keeps RENDERING so
 // captures show the live scene, but the engine only steps via the advance hook
@@ -66,6 +113,7 @@ function frame(now: number): void {
   const elapsed = Math.min(.05, (now - previous) / 1000)
   previous = now
   if (!paused) step(state, elapsed, controls.vector)
+  updateSound()
   renderer.draw(state, controls.joystick, viewport)
   updateShiftUi()
   saveClock += elapsed
@@ -76,7 +124,20 @@ function frame(now: number): void {
   requestAnimationFrame(frame)
 }
 
+function updateSound(): void {
+  if (state.phase !== previousSoundPhase) {
+    if (state.phase === 'results') sound.play(goalMet(state) ? 'success' : 'fail')
+    previousSoundPhase = state.phase
+  }
+  for (const event of state.events) {
+    if (heardEvents.has(event)) continue
+    heardEvents.add(event)
+    sound.play(event.kind)
+  }
+}
+
 function updateShiftUi(): void {
+  const day = currentDay(state)
   const front = state.customers.find(customer => !customer.served && !customer.missed)
   let order = null
   if (front) {
@@ -84,27 +145,56 @@ function updateShiftUi(): void {
       label: front.order.label,
       quantity: front.order.quantity,
       price: front.order.price,
-      patience: front.patience / skin.shift.customerPatience,
+      patience: front.patience / customerPatience(state),
       icon: front.order.icon,
     }
   }
   shiftUi.update({
     phase: state.phase,
-    day: skin.shift.dayLabel,
+    day: day.label,
+    challenge: day.challenge,
+    resultBanner: goalMet(state) ? day.unlockBanner : '',
     secondsRemaining: state.shift.remaining,
     revenue: state.shift.revenue,
-    goal: skin.shift.cashGoal,
+    goal: day.cashGoal,
     served: state.shift.served,
     missed: state.shift.missed,
     streak: state.shift.streak,
     bestStreak: state.shift.bestStreak,
     stars: state.shift.stars,
     success: goalMet(state),
+    cash: state.save.coins,
+    canAdvance: goalMet(state),
+    finalDay: state.save.currentDay === state.skin.days.length - 1,
+    upgrades: skin.upgrades.map(upgrade => upgradeUi(upgrade, day.customerPatience)),
     wrongItem: state.events.some(event => event.kind === 'reject'),
     trayItems: inventoryUi(state.player.trayItems),
     counterItems: inventoryUi(state.counter.items),
     order,
   })
+}
+
+function upgradeUi(upgrade: SkinUpgrade, basePatience: number): UpgradeUiItem {
+  const offer = upgradeOffer(state, upgrade)
+  const display = (bonus: number): string => {
+    const value = upgrade.kind === 'walkSpeed' ? 185 + bonus
+      : upgrade.kind === 'trayCapacity' ? 2 + bonus
+        : upgrade.kind === 'customerPatience' ? basePatience + bonus
+          : bonus
+    return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
+  }
+  return {
+    id: upgrade.id,
+    name: upgrade.name,
+    level: offer.level,
+    maxLevel: upgrade.levels.length,
+    price: offer.price,
+    before: display(offer.before),
+    after: display(offer.after),
+    stat: upgrade.unit,
+    affordable: offer.affordable,
+    capped: offer.capped,
+  }
 }
 
 function inventoryUi(inventory: Record<string, number>): { label: string; icon: string; count: number }[] {
@@ -118,6 +208,7 @@ addEventListener('pagehide', () => storeSave(state.save))
 
 const dialog = document.querySelector<HTMLDialogElement>('#save-dialog')
 const saveButton = document.querySelector<HTMLButtonElement>('#save-button')
+const soundButton = document.querySelector<HTMLButtonElement>('#sound-button')
 const qr = document.querySelector<HTMLImageElement>('#save-qr')
 const link = document.querySelector<HTMLAnchorElement>('#rescue-link')
 if (dialog && saveButton && qr && link) {
@@ -128,6 +219,19 @@ if (dialog && saveButton && qr && link) {
     link.href = url
     dialog.showModal()
   })
+}
+
+if (soundButton) {
+  const updateButton = () => {
+    soundButton.ariaPressed = String(sound.enabled())
+    soundButton.title = sound.enabled() ? 'Mute sound' : 'Turn sound on'
+  }
+  soundButton.addEventListener('click', () => {
+    const enabled = sound.toggle()
+    updateButton()
+    if (enabled) sound.play('pickup')
+  })
+  updateButton()
 }
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

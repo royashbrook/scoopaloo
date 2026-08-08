@@ -19,6 +19,8 @@ no accounts. one engine, many shop skins; ice cream is skin one.
 
 3/4 view with real depth cues, like the arcade-idle games it's honoring:
 
+- portrait phones are the primary play surface. the `390×844` gate keeps hud/ticket/control
+  chrome in the upper wall and right rail so the full-height floor remains a clear movement lane.
 - objects draw with a front face and a top face; the world y-sorts so near things overlap far.
 - soft elliptical drop shadows under everything that stands or floats.
 - floor is a warm tile with subtle pattern variation, never flat-flood.
@@ -67,7 +69,7 @@ missing a goal means retry, never punishment or lost purchases.
 | 5 | pay | coin fountain arc, coins settle with bounce, magnet-fly to player |
 | 6 | served | heart pop + 3 sparkles, customer happy-hop, waddle out |
 | 7 | idle | characters blink every few seconds; machine hums (visual shimmy) |
-| 8 | buttons / build spots | squish on press; build spot pulses gently when affordable |
+| 8 | buttons / shop cards | squish on press; affordable choices use the sunshine action color |
 
 easing: everything springs or ease-out-backs. nothing moves linearly. respect
 `prefers-reduced-motion` by damping (not removing) the springs.
@@ -77,6 +79,14 @@ easing: everything springs or ease-out-backs. nothing moves linearly. respect
 - one thumb: touch-drag anywhere = virtual joystick (the floating ring in the reference games).
 - keyboard (desktop dev/testing): wasd/arrows.
 - no other gestures. taps start shifts and operate results/shop menus.
+
+## sound
+
+- short procedural cues confirm start, production, pickup/drop, payment, wrong items, results,
+  upgrades, and day changes. cues support the numeric/visual feedback; they never replace it.
+- web audio unlocks on the first tap for mobile autoplay rules. sound defaults on; one fixed
+  button outside the portrait play lane mutes it, and that choice persists across reloads.
+- no streamed audio or sound asset requests. sound failure is silent and never blocks play.
 
 ## tech
 

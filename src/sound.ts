@@ -77,6 +77,8 @@ const browserContext: ContextFactory = () => {
 export class GameSound {
   private isEnabled = true
   private context?: SoundContext
+  private resuming = false
+  private waiting?: SoundCue
 
   constructor(
     private readonly storage = browserStorage(),
@@ -97,8 +99,16 @@ export class GameSound {
     if (!this.isEnabled) return
     try {
       this.context ??= this.contextFactory()
-      if (this.context?.state === 'suspended') {
-        void this.context.resume().catch(() => {})
+      if (this.context && this.context.state !== 'running' && this.context.state !== 'closed' && !this.resuming) {
+        this.resuming = true
+        void this.context.resume()
+          .then(() => {
+            const waiting = this.waiting
+            this.waiting = undefined
+            if (waiting) this.play(waiting)
+          })
+          .catch(() => { this.waiting = undefined })
+          .finally(() => { this.resuming = false })
       }
     } catch {
       this.context = undefined
@@ -113,12 +123,18 @@ export class GameSound {
       // Storage can be unavailable in private browsing.
     }
     if (this.isEnabled) this.unlock()
+    else this.waiting = undefined
     return this.isEnabled
   }
 
   play(cue: SoundCue): void {
     const context = this.context
-    if (!this.isEnabled || !context || context.state !== 'running') return
+    if (!this.isEnabled || !context) return
+    if (context.state !== 'running' && context.state !== 'closed') {
+      this.waiting = cue
+      return
+    }
+    if (context.state !== 'running') return
 
     for (const [frequency, delay, duration, wave = 'sine'] of cues[cue]) {
       const start = context.currentTime + delay

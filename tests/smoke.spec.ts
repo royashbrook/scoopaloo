@@ -17,7 +17,7 @@ test('boots and completes the coin loop', async ({ page }) => {
     game.advance(2)
     game.movePlayer(station('register'))
     game.advance(4)
-    return game.snapshot().lifetimeCoins
+    return game.snapshot().save.lifetimeCash
   })
   expect(result).toBeGreaterThan(0)
 })

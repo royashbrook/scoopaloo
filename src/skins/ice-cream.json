@@ -1,18 +1,6 @@
 {
   "id": "ice-cream",
   "spriteSheet": "/assets/scoopaloo-atlas.png?v=2",
-  "shift": {
-    "dayLabel": "DAY 1",
-    "duration": 90,
-    "cashGoal": 60,
-    "customerPatience": 24,
-    "basePrice": 6,
-    "starThresholds": [
-      60,
-      75,
-      90
-    ]
-  },
   "days": [
     {
       "id": "opening-day",
@@ -98,16 +86,6 @@
       }
     }
   },
-  "orderDeck": [
-    { "item": "vanilla-cone", "quantity": 1 },
-    { "item": "vanilla-cone", "quantity": 1 },
-    { "item": "sundae", "quantity": 1 },
-    { "item": "vanilla-cone", "quantity": 2 },
-    { "item": "sundae", "quantity": 2 },
-    { "item": "vanilla-cone", "quantity": 1 },
-    { "item": "sundae", "quantity": 1 },
-    { "item": "vanilla-cone", "quantity": 2 }
-  ],
   "producers": {
     "soft-serve": {
       "interaction": [190, 260],
@@ -366,82 +344,45 @@
       "id": "shoes",
       "name": "RUN SPEED",
       "kind": "walkSpeed",
-      "unit": "SPEED",
+      "unit": "RUN SPEED",
       "levels": [
         { "price": 35, "effect": 25 },
         { "price": 85, "effect": 50 },
         { "price": 150, "effect": 75 }
-      ],
-      "price": 35,
-      "spot": [
-        205,
-        505
-      ],
-      "effect": {
-        "kind": "walkSpeed",
-        "value": 25
-      },
-      "unlocks": "speedy-sneakers"
+      ]
     },
     {
       "id": "tray",
       "name": "TRAY CAPACITY",
       "kind": "trayCapacity",
-      "unit": "ITEM",
+      "unit": "TRAY SLOTS",
       "levels": [
         { "price": 50, "effect": 1 },
         { "price": 110, "effect": 2 },
         { "price": 190, "effect": 3 }
-      ],
-      "price": 50,
-      "spot": [
-        460,
-        550
-      ],
-      "effect": {
-        "kind": "trayCapacity",
-        "value": 1
-      },
-      "unlocks": "double-decker-tray"
+      ]
     },
     {
       "id": "machine",
       "name": "CHURN TIME",
       "kind": "churnTime",
-      "unit": "SEC FASTER",
+      "unit": "SECONDS FASTER",
       "levels": [
         { "price": 80, "effect": 0.45 },
         { "price": 145, "effect": 0.75 },
         { "price": 230, "effect": 1 }
-      ],
-      "price": 80,
-      "spot": [
-        740,
-        505
-      ],
-      "effect": {
-        "kind": "churnTime",
-        "value": 0.45
-      },
-      "unlocks": "turbo-churner"
+      ]
     },
     {
       "id": "patience",
       "name": "CUSTOMER PATIENCE",
       "kind": "customerPatience",
-      "unit": "SEC",
+      "unit": "PATIENCE (SEC)",
       "levels": [
         { "price": 120, "effect": 1.5 },
         { "price": 190, "effect": 3 },
         { "price": 280, "effect": 5 }
-      ],
-      "price": 120,
-      "spot": [580, 505],
-      "effect": {
-        "kind": "customerPatience",
-        "value": 1.5
-      },
-      "unlocks": "customer-coaching"
+      ]
     }
   ]
 }

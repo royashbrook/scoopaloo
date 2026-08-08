@@ -83,7 +83,7 @@ function migrateSave(skin: GameSkin, parsed: Partial<SaveV1>): SaveV1 {
     bestRevenue: Math.max(bestRevenue, ...dayBestRevenue),
     bestStars: Math.max(bestStars, ...dayStars),
     currentDay: clamp(Math.floor(finite(parsed.currentDay)), 0, skin.days.length - 1),
-    lifetimeCash: Number.isFinite(parsed.lifetimeCash) ? finite(parsed.lifetimeCash) : coins,
+    lifetimeCash: Number.isFinite(parsed.lifetimeCash) ? Math.max(coins, finite(parsed.lifetimeCash)) : coins,
     dayStars,
     dayBestRevenue,
   }

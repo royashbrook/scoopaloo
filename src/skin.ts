@@ -2,7 +2,6 @@ import type { Point } from './engine'
 
 export type StationKey = 'machine' | 'counter' | 'register'
 export type UpgradeKind = 'walkSpeed' | 'trayCapacity' | 'churnTime' | 'customerPatience'
-export type UpgradeEffect = { kind: UpgradeKind; value: number }
 export type SkinOrder = { item: string; quantity: number }
 export type SkinItem = {
   label: string
@@ -24,15 +23,6 @@ export type SkinDay = {
   spawnInterval: number
   orderDeck: SkinOrder[]
 }
-/** Compatibility shape for #22 consumers while the #25 UI moves to days. */
-export type ShiftRules = {
-  dayLabel: string
-  duration: number
-  cashGoal: number
-  customerPatience: number
-  basePrice: number
-  starThresholds: number[]
-}
 export type ProducerStation = {
   interaction: number[]
   depth: number
@@ -48,20 +38,13 @@ export type SkinUpgrade = {
   kind: UpgradeKind
   unit: string
   levels: UpgradeLevel[]
-  /** Compatibility fields for the old in-world renderer, which #25 removes. */
-  price: number
-  spot: number[]
-  effect: UpgradeEffect
-  unlocks: string
 }
 export type UpgradeLevel = { price: number; effect: number }
 export type GameSkin = {
   id: string
   spriteSheet: string
-  shift: ShiftRules
   days: SkinDay[]
   items: Record<string, SkinItem>
-  orderDeck: SkinOrder[]
   producers: Record<string, ProducerStation>
   progression: { startingStation: string; startingStations: string[] }
   upgrades: SkinUpgrade[]
@@ -104,20 +87,4 @@ export function itemFor(skin: GameSkin, id: string): SkinItem {
   const item = skin.items[id]
   if (!item) throw new Error(`unknown item: ${id}`)
   return item
-}
-
-export function upgradeSpot(upgrade: SkinUpgrade): Point {
-  const [x, y] = upgrade.spot
-  return { x, y }
-}
-
-/** Upgrades purchase in declared order; the next one is the only visible spot. */
-export function nextUpgrade(skin: GameSkin, owned: Record<string, number>): SkinUpgrade | undefined {
-  return skin.upgrades.find(upgrade => !(owned[upgrade.id] > 0))
-}
-
-/** Compatibility helper for callers that have not moved to engine.upgradeEffect yet. */
-export function effectTotal(skin: GameSkin, owned: Record<string, number>, kind: UpgradeEffect['kind']): number {
-  return skin.upgrades.reduce((total, upgrade) =>
-    upgrade.kind === kind ? total + (upgrade.levels[Math.max(0, Math.min(3, Math.floor(owned[upgrade.id] ?? 0))) - 1]?.effect ?? 0) : total, 0)
 }

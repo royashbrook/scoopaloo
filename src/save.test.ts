@@ -5,6 +5,7 @@ import type { GameSkin } from './skin'
 import skinData from './skins/ice-cream.json'
 
 const skin = skinData as GameSkin
+const legacyUnlock = 'speedy-sneakers'
 
 describe('save v1', () => {
   it('round trips local storage', () => {
@@ -20,7 +21,7 @@ describe('save v1', () => {
   })
 
   it('round trips an sc1 deflate-raw code', async () => {
-    const save = { ...defaultSave(skin), coins: 21, unlockedStations: [...skin.progression.startingStations, skin.upgrades[0].unlocks] }
+    const save = { ...defaultSave(skin), coins: 21, lifetimeCash: 21, unlockedStations: [...skin.progression.startingStations, legacyUnlock] }
     const code = await encodeSave(save)
     expect(code.startsWith('sc1.')).toBe(true)
     expect(await decodeSave(skin, code)).toEqual(save)
@@ -56,7 +57,7 @@ describe('save v1', () => {
     values.set(SAVE_KEY, JSON.stringify({
       version: 1,
       coins: 37,
-      unlockedStations: [skin.progression.startingStation, skin.upgrades[0].unlocks],
+      unlockedStations: [skin.progression.startingStation, legacyUnlock],
       upgrades: { shoes: 1, tray: 0, machine: 0 },
       skin: skin.id,
       text: false,
@@ -66,7 +67,7 @@ describe('save v1', () => {
       coins: 37,
       unlockedStations: [
         skin.progression.startingStation,
-        skin.upgrades[0].unlocks,
+        legacyUnlock,
         skin.progression.startingStations[1],
       ],
       upgrades: { shoes: 1, tray: 0, machine: 0, patience: 0 },

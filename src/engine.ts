@@ -3,7 +3,7 @@ import { itemFor, producerPoint, stationPoint } from './skin'
 
 export type Point = { x: number; y: number }
 export type Input = Point
-export type EventKind = 'pickup' | 'drop' | 'pour' | 'pay' | 'reject' | 'build'
+export type EventKind = 'pickup' | 'drop' | 'pour' | 'pay' | 'reject'
 export type Inventory = Record<string, number>
 
 export type SaveV1 = {

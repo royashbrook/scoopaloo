@@ -1,7 +1,7 @@
 import { byDepth, depthScale } from './depth'
 import { inventoryTotal, type GameEvent, type GameState, type Point } from './engine'
-import type { GameSkin, SkinUpgrade } from './skin'
-import { nextUpgrade, producerPoint, stationPoint, upgradeSpot } from './skin'
+import type { GameSkin } from './skin'
+import { producerPoint, stationPoint } from './skin'
 import type { Viewport } from './viewport'
 import { worldToClient } from './viewport'
 
@@ -43,7 +43,7 @@ export class Renderer {
 
     // every drawable is one grounded unit (#14): sprite, shadow, stock, rings all
     // scale together around the unit's ground-contact anchor. byDepth is the ONLY
-    // ordering rule; ties keep this list's order (stations, spots, creatures).
+    // ordering rule; ties keep this list's order (stations, then creatures).
     const things: (Drawable & { anchor: Point })[] = [
       ...Object.entries(this.skin.producers).map(([source, producer]) => ({
         anchor: { x: producerPoint(this.skin, source).x, y: producer.depth },
@@ -53,7 +53,6 @@ export class Renderer {
         anchor: { x: stationPoint(this.skin, 'counter').x, y: this.skin.stations.counter.depth },
         draw: () => this.drawCounter(state),
       },
-      ...this.upgradeSpots(state),
       ...state.customers.map(customer => ({ anchor: { x: customer.x, y: customer.y }, draw: () => this.drawCustomer(customer.look, customer.x, customer.y, customer.served, customer.missed, state.time) })),
       { anchor: { x: state.player.x, y: state.player.y }, draw: () => this.drawPlayer(state) },
     ]
@@ -170,58 +169,6 @@ export class Renderer {
     }
   }
 
-  private upgradeSpots(state: GameState): Drawable[] {
-    const next = nextUpgrade(this.skin, state.save.upgrades)
-    return this.skin.upgrades
-      .filter(upgrade => state.save.upgrades[upgrade.id] > 0 || upgrade === next)
-      .map(upgrade => ({
-        anchor: upgradeSpot(upgrade),
-        draw: () => this.drawUpgradeSpot(state, upgrade, state.save.upgrades[upgrade.id] > 0),
-      }))
-  }
-
-  // Upgrade spots follow the skin's declared order. Only the NEXT unowned spot is
-  // visible (a hidden future is a wordless "not yet"); owned spots keep a small
-  // sparkle marker so progress reads at a glance. Price coins are GHOSTS: faded,
-  // static, and ringed, so they cannot be mistaken for collectible floor coins (#5).
-  private drawUpgradeSpot(state: GameState, upgrade: SkinUpgrade, owned: boolean): void {
-    const ctx = this.context
-    const spot = upgradeSpot(upgrade)
-    this.shadow(spot.x, spot.y + 18, 75, 18)
-    this.sprite(3, 3, spot.x - 75, spot.y - 85, 150, 125)
-    if (owned) {
-      const [column, row] = this.skin.sprites.sparkle
-      this.sprite(column, row, spot.x - 16, spot.y - 55, 32, 32)
-      return
-    }
-    const affordable = state.save.coins >= upgrade.price
-    const pulse = affordable && !this.reducedMotion ? 1 + Math.sin(state.time * 6) * .08 : 1
-    ctx.save()
-    ctx.strokeStyle = affordable ? this.skin.palette.mint : this.skin.palette.cocoa
-    ctx.globalAlpha = affordable ? .9 : .4
-    ctx.lineWidth = 5
-    ctx.setLineDash([12, 10])
-    ctx.beginPath(); ctx.ellipse(spot.x, spot.y - 4, 82 * pulse, 34 * pulse, 0, 0, Math.PI * 2); ctx.stroke()
-    // ghost coins: exactly ONE per coin of price, because in a zero-text economy the
-    // coins ARE the price tag and a rounded count is a lie. concentric rings pack up
-    // to 22 (the dearest declared upgrade); a pricier future skin should rethink the
-    // marker before this draws misleadingly.
-    ctx.globalAlpha = .35
-    const [column, row] = this.skin.sprites.coin
-    const rings = [{ n: 12, r: 53 }, { n: 7, r: 33 }, { n: 3, r: 14 }]
-    let remaining = Math.min(upgrade.price, 22)
-    for (const ring of rings) {
-      const count = Math.min(remaining, ring.n)
-      for (let i = 0; i < count; i++) {
-        const angle = i / count * Math.PI * 2
-        this.sprite(column, row, spot.x + Math.cos(angle) * ring.r - 10, spot.y - 8 + Math.sin(angle) * ring.r * .42 - 10, 20, 20)
-      }
-      remaining -= count
-      if (remaining === 0) break
-    }
-    ctx.restore()
-  }
-
   private drawPlayer(state: GameState): void {
     const player = state.player
     const stride = player.moving && !this.reducedMotion ? Math.sin(state.time * 13) : 0
@@ -291,7 +238,7 @@ export class Renderer {
       const [column, row] = this.skin.sprites.coin
       for (let i = 0; i < 4; i++) this.sprite(column, row, x - 14 + Math.cos(i * 2) * t * 65, y - 40 - Math.sin(t * Math.PI) * (40 + i * 5), 28, 28)
     } else {
-      ctx.strokeStyle = kind === 'build' ? this.skin.palette.sunshine : this.skin.palette.strawberry
+      ctx.strokeStyle = this.skin.palette.strawberry
       ctx.lineWidth = 8 * (1 - t)
       ctx.beginPath(); ctx.arc(x, y - 20, 18 + t * 75, 0, Math.PI * 2); ctx.stroke()
     }

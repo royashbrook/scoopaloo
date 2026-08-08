@@ -32,9 +32,12 @@ class FakeContext {
     stops: number[]
   }[] = []
   gains: FakeParam[] = []
+  delayResume = false
+  finishResume?: () => void
 
   async resume() {
     this.resumeCalls++
+    if (this.delayResume) await new Promise<void>(resolve => { this.finishResume = resolve })
     this.state = 'running'
   }
 
@@ -116,6 +119,36 @@ describe('mobile sound', () => {
       gain.events.some(event => event.value === .025)
       && gain.events.at(-1)?.value === .0001,
     )).toBe(true)
+  })
+
+  it('plays a cue requested while the first gesture is still resuming audio', async () => {
+    const context = new FakeContext()
+    context.delayResume = true
+    const sound = new GameSound(storage(), () => context as SoundContext)
+
+    sound.unlock()
+    sound.play('start')
+    expect(context.oscillators).toHaveLength(0)
+    context.finishResume?.()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(context.oscillators.length).toBeGreaterThan(0)
+  })
+
+  it('resumes an interrupted mobile context and keeps only the latest waiting cue', async () => {
+    const context = new FakeContext()
+    context.state = 'interrupted'
+    context.delayResume = true
+    const sound = new GameSound(storage(), () => context as SoundContext)
+
+    sound.unlock()
+    sound.play('pour')
+    sound.play('pay')
+    context.finishResume?.()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(context.resumeCalls).toBe(1)
+    expect(context.oscillators).toHaveLength(2)
   })
 
   it('persists mute and only creates audio when toggled back on', async () => {

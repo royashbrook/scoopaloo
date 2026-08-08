@@ -57,7 +57,7 @@ test('depth scale, overlap boundary, and native-anchor interaction', async ({ pa
     // customers may serve (and consume) the delivery within these two seconds,
     // so the proof of the drop is the emptied tray, not the counter's stock
     const after = game.snapshot()
-    return { carried, trayAfter: after.player.tray, throughput: after.counter.stock + after.flyingCoins.length + after.lifetimeCoins }
+    return { carried, trayAfter: after.player.tray, throughput: after.counter.stock + after.flyingCoins.length + after.save.lifetimeCash }
   })
   expect(worked.carried).toBeGreaterThan(0)
   expect(worked.trayAfter).toBe(0)

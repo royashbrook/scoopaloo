@@ -131,7 +131,7 @@ test('rejects wrong stock, recovers, and completes the deterministic mixed deck'
       requested: expectedItem,
       phase: finished.phase,
       revenue: finished.shift.revenue,
-      goal: finished.skin.shift.cashGoal,
+      goal: finished.skin.days[finished.save.currentDay].cashGoal,
       served: finished.shift.served,
       stars: finished.shift.stars,
     }

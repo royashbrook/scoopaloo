@@ -37,7 +37,8 @@ test('shows a readable order, times out, and freezes a missed goal', async ({ pa
   await page.evaluate(() => window.__scoopaloo.advance(90))
   await expect(page.getByRole('heading', { name: 'GOAL MISSED' })).toBeVisible()
   await expect(page.locator('.results-card').getByText('$0', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'NEXT' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'RETRY' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'UPGRADES' })).toBeEnabled()
   await expectInsideViewport(page, '.results-card')
   await page.screenshot({ path: 'test-results/shift-phone-missed.png' })
 
@@ -57,7 +58,7 @@ test('earns a real goal and keeps results readable at every target size', async 
       const [x, y] = game.snapshot().skin.stations[key].interaction
       return { x, y }
     }
-    for (let round = 0; round < 12 && game.snapshot().shift.revenue < game.snapshot().skin.shift.cashGoal; round++) {
+    for (let round = 0; round < 12 && game.snapshot().shift.revenue < game.snapshot().skin.days[game.snapshot().save.currentDay].cashGoal; round++) {
       const state = game.snapshot()
       const front = state.customers.find(customer => !customer.served && !customer.missed)
       if (!front) { game.advance(.1); continue }
@@ -74,9 +75,10 @@ test('earns a real goal and keeps results readable at every target size', async 
   })
 
   await expect(page.getByRole('heading', { name: 'SHIFT COMPLETE' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'NEXT' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'REPLAY' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'UPGRADES' })).toBeEnabled()
   const state = await page.evaluate(() => window.__scoopaloo.snapshot())
-  expect(state.shift.revenue).toBeGreaterThanOrEqual(state.skin.shift.cashGoal)
+  expect(state.shift.revenue).toBeGreaterThanOrEqual(state.skin.days[state.save.currentDay].cashGoal)
   expect(state.shift.stars).toBeGreaterThanOrEqual(1)
 
   for (const size of [

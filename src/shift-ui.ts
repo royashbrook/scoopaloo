@@ -3,6 +3,9 @@ import type { ShiftPhase } from './engine'
 export type ShiftUiState = {
   phase: ShiftPhase
   day: string
+  challenge?: string
+  readyBanner?: string
+  resultBanner?: string
   secondsRemaining: number
   revenue: number
   goal: number
@@ -12,6 +15,10 @@ export type ShiftUiState = {
   bestStreak: number
   stars: number
   success: boolean
+  cash?: number
+  canAdvance?: boolean
+  finalDay?: boolean
+  upgrades?: UpgradeUiItem[]
   wrongItem?: boolean
   trayItems?: InventoryUiItem[]
   counterItems?: InventoryUiItem[]
@@ -25,8 +32,27 @@ export type ShiftUiState = {
 }
 
 type InventoryUiItem = { label: string; icon: string; count: number }
+export type UpgradeUiItem = {
+  id: string
+  name: string
+  level: number
+  maxLevel: number
+  price: number | null
+  before: string
+  after: string
+  stat: string
+  affordable: boolean
+  capped: boolean
+}
 
-type ShiftActions = { start: () => void; retry: () => void; next: () => void }
+type ShiftActions = {
+  start: () => void
+  retry: () => void
+  shop: () => void
+  back: () => void
+  next: () => void
+  buy: (id: string) => void
+}
 
 export class ShiftUi {
   private readonly fields: Record<string, HTMLElement>
@@ -63,12 +89,13 @@ export class ShiftUi {
         <img src="/assets/brand/scoopaloo-logo.svg" alt="Scoopaloo" />
         <p class="card-kicker" data-field="ready-day">DAY 1</p>
         <h1 id="ready-title"><span data-field="ready-goal">$60</span> GOAL</h1>
-        <p>SERVE FAST. COLLECT EVERY COIN.</p>
+        <p data-field="ready-challenge">SERVE FAST. COLLECT EVERY COIN.</p>
+        <p class="unlock-banner" data-field="ready-unlock"></p>
         <button type="button" data-action="start">START SHIFT</button>
       </section>
 
       <section class="shift-card results-card" aria-labelledby="results-title">
-        <p class="card-kicker">DAY 1 RESULTS</p>
+        <p class="card-kicker" data-field="results-day">DAY 1 RESULTS</p>
         <h1 id="results-title" data-field="result-title">SHIFT COMPLETE</h1>
         <div class="result-score"><strong data-field="result-revenue">$0</strong><span data-field="result-goal"> / $60 GOAL</span></div>
         <dl>
@@ -77,30 +104,77 @@ export class ShiftUi {
           <div><dt>BEST STREAK</dt><dd data-field="result-streak">0</dd></div>
         </dl>
         <p class="result-stars" data-field="stars">STARS 0 / 3</p>
+        <p class="unlock-banner" data-field="result-unlock" role="status"></p>
         <div class="card-actions">
-          <button type="button" class="secondary" data-action="retry">RETRY</button>
-          <button type="button" data-action="next">NEXT</button>
+          <button type="button" class="secondary" data-action="retry" data-field="result-retry">RETRY</button>
+          <button type="button" class="secondary" data-action="shop">UPGRADES</button>
         </div>
-      </section>`
+      </section>
+
+      <dialog class="shop-card" aria-labelledby="shop-title">
+        <header class="shop-heading">
+          <div>
+            <p class="card-kicker" data-field="shop-day">GEAR FOR DAY 1</p>
+            <h1 id="shop-title" tabindex="-1">UPGRADE SHOP</h1>
+          </div>
+          <div class="shop-wallet"><span>CASH</span><strong data-field="cash">$0</strong></div>
+        </header>
+        <div class="upgrade-grid" data-field="upgrades" aria-label="Available upgrades"></div>
+        <p class="purchase-status" data-field="purchase-status" role="status" aria-live="polite"></p>
+        <div class="card-actions shop-actions">
+          <button type="button" class="secondary" data-action="back">RESULTS</button>
+          <button type="button" class="secondary" data-action="retry" data-field="shop-retry">RETRY DAY</button>
+          <button type="button" data-action="next" data-field="shop-next">NEXT DAY</button>
+        </div>
+      </dialog>`
 
     this.fields = Object.fromEntries(
       [...root.querySelectorAll<HTMLElement>('[data-field]')]
         .map(element => [element.dataset.field ?? '', element]),
     )
-    root.querySelector<HTMLButtonElement>('[data-action="start"]')?.addEventListener('click', actions.start)
-    root.querySelector<HTMLButtonElement>('[data-action="retry"]')?.addEventListener('click', actions.retry)
-    root.querySelector<HTMLButtonElement>('[data-action="next"]')?.addEventListener('click', actions.next)
+    const on = (name: string, action: () => void) => root.querySelectorAll<HTMLButtonElement>(`[data-action="${name}"]`)
+      .forEach(button => button.addEventListener('click', action))
+    on('start', actions.start)
+    on('retry', actions.retry)
+    on('shop', actions.shop)
+    on('back', actions.back)
+    on('next', actions.next)
+    root.querySelector<HTMLDialogElement>('.shop-card')?.addEventListener('cancel', event => {
+      event.preventDefault()
+      actions.back()
+    })
+    root.addEventListener('click', event => {
+      if (!(event.target instanceof Element)) return
+      const button = event.target.closest<HTMLButtonElement>('[data-upgrade]')
+      if (button?.dataset.upgrade) {
+        const name = button.closest<HTMLElement>('[data-upgrade-card]')?.querySelector('h2')?.textContent
+        actions.buy(button.dataset.upgrade)
+        this.set('purchase-status', `${name ?? 'Upgrade'} purchased`)
+      }
+    })
   }
 
   update(state: ShiftUiState): void {
     if (state.phase !== this.previousPhase) {
       this.root.dataset.phase = state.phase
+      const shop = this.root.querySelector<HTMLDialogElement>('.shop-card')
+      if (state.phase === 'shop' && shop && !shop.open) {
+        shop.showModal()
+        shop.querySelector<HTMLElement>('#shop-title')?.focus()
+      } else if (state.phase !== 'shop' && shop?.open) {
+        shop.close()
+      }
       this.previousPhase = state.phase
     }
 
     const dayNumber = state.day.replace(/\D/g, '') || state.day
     this.set('hud-day', dayNumber)
     this.set('ready-day', state.day)
+    this.set('results-day', `${state.day} RESULTS`)
+    this.set('shop-day', `GEAR FOR ${state.day}`)
+    this.set('ready-challenge', state.challenge ?? 'SERVE FAST. COLLECT EVERY COIN.')
+    this.setOptional('ready-unlock', state.readyBanner)
+    this.setOptional('result-unlock', state.resultBanner)
     this.set('time', clock(state.secondsRemaining))
     this.set('revenue', `$${state.revenue}`)
     this.set('goal', ` / $${state.goal}`)
@@ -115,9 +189,16 @@ export class ShiftUi {
     this.set('result-missed', state.missed)
     this.set('result-streak', state.bestStreak)
     this.set('stars', `STARS ${state.stars} / 3`)
+    this.set('cash', `$${state.cash ?? 0}`)
+    this.set('result-retry', state.success ? 'REPLAY' : 'RETRY')
+    this.set('shop-retry', `RETRY DAY ${dayNumber}`)
+    this.renderUpgrades(state.upgrades ?? [])
 
-    const next = this.root.querySelector<HTMLButtonElement>('[data-action="next"]')
-    if (next) next.disabled = !state.success
+    const canAdvance = state.canAdvance ?? state.success
+    this.root.querySelectorAll<HTMLButtonElement>('[data-action="next"]').forEach(button => { button.disabled = !canAdvance })
+    this.set('shop-next', state.finalDay ? `REPLAY ${state.day}` : 'NEXT DAY')
+    this.fields['shop-next'].hidden = !canAdvance
+    this.fields['shop-retry'].hidden = canAdvance
 
     const ticket = this.fields.ticket
     const showTicket = state.phase === 'playing' && Boolean(state.order)
@@ -137,7 +218,60 @@ export class ShiftUi {
 
   private set(field: string, value: string | number): void {
     const text = String(value)
-    if (this.fields[field]?.textContent !== text) this.fields[field].textContent = text
+    const target = this.fields[field]
+    if (target && target.textContent !== text) target.textContent = text
+  }
+
+  private setOptional(field: string, value = ''): void {
+    const target = this.fields[field]
+    if (!target) return
+    this.set(field, value)
+    target.hidden = !value
+  }
+
+  private renderUpgrades(upgrades: UpgradeUiItem[]): void {
+    const target = this.fields.upgrades
+    const signature = upgrades.map(upgrade => [
+      upgrade.id, upgrade.level, upgrade.price, upgrade.before, upgrade.after, upgrade.affordable,
+    ].join(':')).join('|')
+    if (target.dataset.signature === signature) return
+    target.dataset.signature = signature
+    target.replaceChildren(...upgrades.map(upgrade => {
+      const card = document.createElement('article')
+      card.className = 'upgrade-card'
+      card.dataset.upgradeCard = upgrade.id
+      card.dataset.level = String(upgrade.level)
+      card.dataset.price = upgrade.price === null ? '' : String(upgrade.price)
+      card.dataset.affordable = String(upgrade.affordable)
+      card.setAttribute('aria-label', `${upgrade.name}, level ${upgrade.level} of ${upgrade.maxLevel}`)
+
+      const name = document.createElement('h2')
+      name.textContent = upgrade.name
+      const level = document.createElement('p')
+      level.className = 'upgrade-level'
+      level.textContent = `LEVEL ${upgrade.level} / ${upgrade.maxLevel}`
+      const change = document.createElement('div')
+      change.className = 'upgrade-change'
+      const before = document.createElement('strong')
+      before.textContent = upgrade.before
+      const arrow = document.createElement('span')
+      arrow.textContent = '→'
+      const after = document.createElement('strong')
+      after.textContent = upgrade.after
+      const stat = document.createElement('small')
+      stat.textContent = upgrade.stat
+      change.append(before, arrow, after, stat)
+      const buy = document.createElement('button')
+      buy.type = 'button'
+      buy.dataset.upgrade = upgrade.id
+      buy.setAttribute('aria-label', upgrade.capped
+        ? `${upgrade.name} is at maximum level`
+        : `${upgrade.affordable ? 'Buy' : 'Need cash for'} ${upgrade.name} level ${upgrade.level + 1} for $${upgrade.price}`)
+      buy.textContent = upgrade.capped ? 'MAX LEVEL' : `${upgrade.affordable ? 'BUY' : 'NEED'}  $${upgrade.price}`
+      buy.disabled = upgrade.capped || !upgrade.affordable
+      card.append(name, level, change, buy)
+      return card
+    }))
   }
 
   private renderInventory(name: string, items: InventoryUiItem[]): void {

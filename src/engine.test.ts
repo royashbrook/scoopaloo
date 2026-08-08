@@ -30,6 +30,7 @@ import { itemFor, producerPoint, stationPoint } from './skin'
 import skinData from './skins/ice-cream.json'
 
 const skin = skinData as GameSkin
+const firstDay = skin.days[0]
 
 describe('ice cream stand loop', () => {
   it('takes interaction geometry from the selected skin', () => {
@@ -155,7 +156,7 @@ describe('typed mixed orders (#24)', () => {
   }
 
   const orderAt = (index: number) => {
-    const request = skin.orderDeck[index]
+    const request = firstDay.orderDeck[index]
     const item = itemFor(skin, request.item)
     return { ...request, label: item.label, price: item.price * request.quantity, icon: item.icon, color: item.color }
   }
@@ -164,11 +165,11 @@ describe('typed mixed orders (#24)', () => {
     expect(Object.keys(skin.items)).toHaveLength(2)
     expect(new Set(Object.values(skin.items).map(item => item.recipe.source)).size).toBe(2)
     expect(Object.values(skin.items).every(item => item.icon.startsWith('/assets/items/'))).toBe(true)
-    expect(skin.orderDeck.slice(0, 2)).toEqual([
+    expect(firstDay.orderDeck.slice(0, 2)).toEqual([
       { item: 'vanilla-cone', quantity: 1 },
       { item: 'vanilla-cone', quantity: 1 },
     ])
-    expect(skin.orderDeck.slice(2)).toHaveLength(6)
+    expect(firstDay.orderDeck.slice(2)).toHaveLength(6)
   })
 
   it('picks up and drops typed stock from two distinct producers', () => {
@@ -237,15 +238,15 @@ describe('typed mixed orders (#24)', () => {
   it('deals a deterministic sequence and wraps without depending on live customers', () => {
     const game = started()
     const orders = [game.customers[0].order]
-    for (let index = 1; index < skin.orderDeck.length + 2; index++) {
+    for (let index = 1; index < firstDay.orderDeck.length + 2; index++) {
       game.customers = []
       game.spawnTimer = 0
       step(game, .05)
       orders.push(game.customers[0].order)
     }
     expect(orders.map(({ item, quantity }) => ({ item, quantity }))).toEqual([
-      ...skin.orderDeck,
-      ...skin.orderDeck.slice(0, 2),
+      ...firstDay.orderDeck,
+      ...firstDay.orderDeck.slice(0, 2),
     ])
   })
 })
@@ -257,7 +258,7 @@ describe('timed Day 1 shift (#22)', () => {
     return game
   }
 
-  const addWaitingCustomer = (game: GameState, id: number, patience = skin.shift.customerPatience) => {
+  const addWaitingCustomer = (game: GameState, id: number, patience = firstDay.customerPatience) => {
     game.customers.push({
       ...game.customers[0],
       id,
@@ -311,7 +312,7 @@ describe('timed Day 1 shift (#22)', () => {
     expect(tipFor(0, 14)).toBe(0)
 
     const game = started()
-    game.customers[0].patience = skin.shift.customerPatience / 2 + .05
+    game.customers[0].patience = firstDay.customerPatience / 2 + .05
     const basePrice = game.customers[0].order.price
     serveFront(game)
     const payout = basePrice + 2
@@ -343,31 +344,31 @@ describe('timed Day 1 shift (#22)', () => {
 
   it('records failed and successful star results from skin thresholds', () => {
     const failed = started()
-    failed.shift.revenue = skin.shift.cashGoal - 1
-    runFor(failed, skin.shift.duration)
+    failed.shift.revenue = firstDay.cashGoal - 1
+    runFor(failed, firstDay.duration)
     expect(failed.phase).toBe('results')
     expect(goalMet(failed)).toBe(false)
     expect(failed.shift.stars).toBe(0)
 
     const passed = started()
-    passed.shift.revenue = skin.shift.starThresholds[1]
-    runFor(passed, skin.shift.duration)
+    passed.shift.revenue = firstDay.starThresholds[1]
+    runFor(passed, firstDay.duration)
     expect(goalMet(passed)).toBe(true)
     expect(passed.shift.stars).toBe(2)
-    expect(passed.save).toMatchObject({ bestRevenue: skin.shift.starThresholds[1], bestStars: 2 })
+    expect(passed.save).toMatchObject({ bestRevenue: firstDay.starThresholds[1], bestStars: 2 })
   })
 
   it('retries with a fresh playing shift while preserving best results', () => {
     const game = started()
-    game.shift.revenue = skin.shift.starThresholds[2]
+    game.shift.revenue = firstDay.starThresholds[2]
     game.shift.served = 9
     game.machine.stock = 3
-    runFor(game, skin.shift.duration)
+    runFor(game, firstDay.duration)
     retryShift(game)
     expect(game.phase).toBe('playing')
     expect(game.time).toBe(0)
     expect(game.shift).toEqual({
-      remaining: skin.shift.duration,
+      remaining: firstDay.duration,
       revenue: 0,
       served: 0,
       missed: 0,
@@ -376,7 +377,7 @@ describe('timed Day 1 shift (#22)', () => {
       stars: 0,
     })
     expect(game.machine.stock).toBe(0)
-    expect(game.save).toMatchObject({ bestRevenue: skin.shift.starThresholds[2], bestStars: 3 })
+    expect(game.save).toMatchObject({ bestRevenue: firstDay.starThresholds[2], bestStars: 3 })
   })
 
   it('does not mutate after results', () => {
@@ -391,7 +392,7 @@ describe('timed Day 1 shift (#22)', () => {
 
   it('keeps a purchased-upgrade route beatable across all days and better than camping one source', () => {
     const idle = started()
-    runFor(idle, skin.shift.duration)
+    runFor(idle, firstDay.duration)
     expect(idle.shift.revenue).toBe(0)
     expect(goalMet(idle)).toBe(false)
 
@@ -442,11 +443,11 @@ describe('timed Day 1 shift (#22)', () => {
     }
     const played = play(0, followOrder, 4)
     const camped = play(0, () => skin.progression.startingStation)
-    const campaign = [
-      played,
-      play(1, followOrder, 0, { shoes: 1 }),
-      play(2, followOrder, 0, { shoes: 1, tray: 1, machine: 1 }),
-    ]
+    const dayTwoBase = play(1, followOrder)
+    const dayTwoUpgraded = play(1, followOrder, 0, { shoes: 1, tray: 1, machine: 1, patience: 1 })
+    const dayThreeBase = play(2, followOrder)
+    const dayThreeStrong = play(2, followOrder, 0, { shoes: 2, tray: 2, machine: 2, patience: 2 })
+    const campaign = [played, dayTwoUpgraded, dayThreeStrong]
 
     expect(goalMet(played)).toBe(true)
     expect(played.shift.served).toBeGreaterThan(0)
@@ -454,7 +455,12 @@ describe('timed Day 1 shift (#22)', () => {
     expect(camped.shift.revenue).toBeLessThan(played.shift.revenue)
     expect(camped.shift.served).toBeLessThan(played.shift.served)
     expect(camped.shift.stars).toBeLessThan(played.shift.stars)
-    expect(campaign.map(game => game.shift.revenue)).toEqual([79, 111, 218])
+    expect(dayTwoUpgraded.shift.revenue).toBeGreaterThan(dayTwoBase.shift.revenue)
+    expect(dayTwoUpgraded.shift.served).toBeGreaterThan(dayTwoBase.shift.served)
+    expect(dayTwoBase.shift.stars).toBeLessThan(3)
+    expect(dayThreeBase.shift.stars).toBeLessThan(3)
+    expect(dayThreeStrong.shift.stars).toBe(3)
+    expect(campaign.map(game => game.shift.revenue)).toEqual([79, 173, 361])
     expect(campaign.every(goalMet)).toBe(true)
   })
 })

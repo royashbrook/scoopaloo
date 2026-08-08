@@ -1,83 +1,128 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
-// Issue 12's purchase path remains valid inside the new shift loop. A fresh
-// shift starts between operations when the current timer cannot fit one whole
-// deterministic action.
-test('completes the purchase path with all three effects', async ({ page }) => {
-  await page.goto('/')
-  await expect(page.locator('canvas')).toBeVisible()
+test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion: 'reduce' })
 
-  const result = await page.evaluate(async () => {
+async function finishCurrentDay(page: Page): Promise<{ speed: number; revenue: number }> {
+  return page.evaluate(() => {
     const game = window.__scoopaloo
-    const skin = game.snapshot().skin
-    const [machineSpot, counterSpot] = [skin.stations.machine.interaction, skin.stations.counter.interaction]
-
-    const prepare = (seconds: number) => {
-      const state = game.snapshot()
-      if (state.phase === 'ready') game.startShift()
-      else if (state.phase === 'results' || state.shift.remaining < seconds + .05) game.retryShift()
-    }
-    const workAt = (spot: number[], seconds: number) => {
-      prepare(seconds)
-      game.movePlayer({ x: spot[0], y: spot[1] })
-      game.advance(seconds)
-    }
-
-    // measured walk speed: one second of pure rightward input from a fixed point
-    const measureSpeed = () => {
-      prepare(1)
-      game.movePlayer({ x: 200, y: 470 })
-      const before = game.snapshot().player.x
-      game.advance(1, { x: 1, y: 0 })
-      return game.snapshot().player.x - before
-    }
-    const speedBefore = measureSpeed()
-
-    // farm the loop until an upgrade is affordable, then stand on its spot
-    const buy = (spot: number[], price: number) => {
-      for (let round = 0; round < 60 && game.snapshot().save.coins < price; round++) {
-        workAt(machineSpot, 4)
-        workAt(counterSpot, 6)
+    const point = (values: number[]) => ({ x: values[0], y: values[1] })
+    const moveTo = (target: { x: number; y: number }) => {
+      while (game.snapshot().phase === 'playing') {
+        const player = game.snapshot().player
+        const dx = target.x - player.x
+        const dy = target.y - player.y
+        const distance = Math.hypot(dx, dy)
+        if (distance < 20) break
+        game.advance(.05, { x: dx / distance, y: dy / distance })
       }
-      workAt(spot, 1)
+    }
+    const serveFront = () => {
+      const state = game.snapshot()
+      const front = state.customers.find(customer => !customer.served && !customer.missed)
+      if (!front) { game.advance(.1); return }
+      const source = state.skin.items[front.order.item].recipe.source
+      moveTo(point(state.skin.producers[source].interaction))
+      while (game.snapshot().phase === 'playing') {
+        const current = game.snapshot()
+        const active = current.customers.find(customer => customer.id === front.id && !customer.served && !customer.missed)
+        if (!active || (current.player.trayItems[front.order.item] ?? 0) >= front.order.quantity) break
+        game.advance(.2)
+      }
+      moveTo(point(state.skin.stations.counter.interaction))
+      game.advance(1.4)
     }
 
-    const [shoes, tray, machine] = skin.upgrades
-    buy(shoes.spot, shoes.price)
-    const speedAfter = measureSpeed()
-
-    buy(tray.spot, tray.price)
-    // capacity: park at the machine and let the tray fill
-    workAt(machineSpot, 10)
-    const trayLoad = game.snapshot().player.tray
-
-    // interval: the timer only re-arms on a refill tick, and at full stock it just
-    // counts down forever, so a "less than" check on a full machine passes even
-    // with the upgrade broken. force a refill (drain one item, tick once) and read
-    // the freshly re-armed value, before and after the machine purchase.
-    const rearmedInterval = () => {
-      workAt(counterSpot, 3) // empty the tray so the machine has somewhere to go
-      workAt(machineSpot, .1) // pick one item: stock drops below full
-      prepare(.05)
-      game.movePlayer({ x: 480, y: 600 })
-      game.advance(.05) // exactly one tick: the refill fires and re-arms the timer
-      return game.snapshot().machine.timer
-    }
-    const intervalBefore = rearmedInterval()
-
-    buy(machine.spot, machine.price)
-    const timer = rearmedInterval()
-
-    const save = game.snapshot().save
-    return { speedBefore, speedAfter, trayLoad, intervalBefore, timer, upgrades: save.upgrades, stations: save.unlockedStations }
+    game.movePlayer({ x: 200, y: 470 })
+    const before = game.snapshot().player.x
+    game.advance(1, { x: 1, y: 0 })
+    const speed = game.snapshot().player.x - before
+    while (game.snapshot().phase === 'playing') serveFront()
+    return { speed, revenue: game.snapshot().shift.revenue }
   })
+}
 
-  expect(result.upgrades).toEqual({ shoes: 1, tray: 1, machine: 1 })
-  expect(result.speedAfter).toBeGreaterThan(result.speedBefore + 15) // +25 speed, tolerance for clamp
-  expect(result.trayLoad).toBe(3) // capacity 2 + 1
-  // both readings are freshly re-armed values, so the delta IS the upgrade
-  expect(result.intervalBefore).toBeGreaterThan(1.6)
-  expect(result.timer).toBeGreaterThan(1.0)
-  expect(result.timer).toBeLessThanOrEqual(1.26)
-  expect(result.stations).toContain('turbo-churner')
+async function expectShopFits(page: Page): Promise<void> {
+  const layout = await page.locator('.shop-card').evaluate(dialog => {
+    const visibleButtons = [...dialog.querySelectorAll<HTMLButtonElement>('button')]
+      .filter(button => button.getClientRects().length > 0)
+    const cards = [...dialog.querySelectorAll<HTMLElement>('[data-upgrade-card]')]
+    const inside = (element: Element) => {
+      const box = element.getBoundingClientRect()
+      return box.left >= 0 && box.top >= 0 && box.right <= innerWidth && box.bottom <= innerHeight
+    }
+    return {
+      dialogInside: inside(dialog),
+      cardsInside: cards.every(inside),
+      noHorizontalScroll: dialog.scrollWidth <= dialog.clientWidth + 1,
+      buttons: visibleButtons.map(button => ({
+        fits: button.scrollWidth <= button.clientWidth + 1,
+        height: button.getBoundingClientRect().height,
+      })),
+      cardType: cards.map(card => parseFloat(getComputedStyle(card.querySelector('h2')!).fontSize)),
+    }
+  })
+  expect(layout.dialogInside).toBe(true)
+  expect(layout.cardsInside).toBe(true)
+  expect(layout.noHorizontalScroll).toBe(true)
+  expect(layout.buttons.every(button => button.fits && button.height >= 44)).toBe(true)
+  expect(layout.cardType.every(size => size >= 13)).toBe(true)
+}
+
+test('finishes Day 1, buys a visible upgrade, and restores Day 2 with its real effect', async ({ page }) => {
+  await page.goto('/')
+  await page.evaluate(() => window.__scoopaloo.pause(true))
+  await page.getByRole('button', { name: 'START SHIFT' }).click()
+  const dayOne = await finishCurrentDay(page)
+
+  await expect(page.getByRole('heading', { name: 'SHIFT COMPLETE' })).toBeVisible()
+  expect(dayOne.revenue).toBeGreaterThanOrEqual(60)
+  await page.getByRole('button', { name: 'UPGRADES' }).click()
+
+  const shop = page.getByRole('dialog', { name: 'UPGRADE SHOP' })
+  await expect(shop).toBeVisible()
+  await expect(page.locator('[data-upgrade-card]')).toHaveCount(4)
+  await expect(page.locator('[data-upgrade-card][data-affordable="true"]')).toHaveCount(2)
+  await expect(page.locator('#shop-title')).toBeFocused()
+
+  for (const size of [
+    { name: 'phone', width: 390, height: 844 },
+    { name: 'tablet', width: 768, height: 1024 },
+    { name: 'desktop', width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize({ width: size.width, height: size.height })
+    await page.waitForTimeout(50)
+    await expectShopFits(page)
+    await page.screenshot({ path: `test-results/campaign-${size.name}-shop.png` })
+  }
+
+  const speedCard = page.locator('[data-upgrade-card="shoes"]')
+  await expect(speedCard).toHaveAttribute('data-level', '0')
+  const before = await page.evaluate(() => window.__scoopaloo.snapshot().save)
+  const price = Number(await speedCard.getAttribute('data-price'))
+  await speedCard.getByRole('button').click()
+  await expect(speedCard).toHaveAttribute('data-level', '1')
+  const afterPurchase = await page.evaluate(() => window.__scoopaloo.snapshot().save)
+  expect(afterPurchase.coins).toBe(before.coins - price)
+  expect(afterPurchase.upgrades.shoes).toBe(1)
+
+  await page.getByRole('button', { name: 'NEXT DAY' }).click()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.getByRole('heading', { name: '$100 GOAL' })).toBeVisible()
+  await expect(page.getByText('DOUBLE-SCOOP DASH', { exact: true })).toBeVisible()
+  expect((await page.evaluate(() => window.__scoopaloo.snapshot().save.currentDay))).toBe(1)
+  await page.screenshot({ path: 'test-results/campaign-phone-day-2.png' })
+
+  await page.reload()
+  await page.evaluate(() => window.__scoopaloo.pause(true))
+  await expect(page.getByRole('heading', { name: '$100 GOAL' })).toBeVisible()
+  expect((await page.evaluate(() => window.__scoopaloo.snapshot().save.upgrades.shoes))).toBe(1)
+  await page.getByRole('button', { name: 'START SHIFT' }).click()
+  const dayTwoSpeed = await page.evaluate(() => {
+    const game = window.__scoopaloo
+    game.movePlayer({ x: 200, y: 470 })
+    const before = game.snapshot().player.x
+    game.advance(1, { x: 1, y: 0 })
+    return game.snapshot().player.x - before
+  })
+  expect(dayTwoSpeed).toBeGreaterThanOrEqual(dayOne.speed + 24)
 })
