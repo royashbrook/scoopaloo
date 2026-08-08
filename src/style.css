@@ -21,16 +21,13 @@ body {
   -webkit-user-select: none;
 }
 
-main { display: grid; place-items: center; }
-
+/* the canvas IS the screen (#13): the shared viewport exposes more world on the
+   extra axis, so there is nothing to letterbox and nothing to shadow */
 canvas {
-  width: min(100vw, calc(100vh * 1.5));
-  height: min(100vh, calc(100vw / 1.5));
-  max-width: 100%;
-  max-height: 100%;
+  width: 100vw;
+  height: 100dvh;
   display: block;
   image-rendering: auto;
-  filter: drop-shadow(0 1.3rem 2rem rgb(74 59 69 / .16));
 }
 
 button, a {
@@ -55,6 +52,26 @@ button, a {
 
 .round-button:active { transform: translateY(.2rem); box-shadow: 0 .1rem 0 #4a3b45; }
 
+/* wordless "new version" toast (#19): a bouncing refresh pill, tap = reload */
+.update-toast {
+  top: auto;
+  right: auto;
+  bottom: max(1.2rem, env(safe-area-inset-bottom));
+  left: 50%;
+  translate: -50% 0;
+  font-size: 1.4rem;
+  background: #ffd45e;
+  animation: toast-bob 1.6s ease-in-out infinite;
+}
+.update-toast:active { transform: translateY(.2rem); }
+@keyframes toast-bob {
+  0%, 100% { margin-bottom: 0; }
+  50% { margin-bottom: .5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-toast { animation: none; }
+}
+
 dialog {
   width: min(22rem, calc(100vw - 2rem));
   border: .25rem solid #4a3b45;
@@ -72,7 +89,3 @@ dialog form { position: absolute; right: .7rem; top: .5rem; }
 .save-mark { font-size: 2rem; color: #ff8fab; }
 #save-qr { display: block; width: min(17rem, 100%); margin: .4rem auto 1rem; border-radius: 1rem; }
 #rescue-link { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; margin: auto; border: .2rem solid #4a3b45; border-radius: 50%; font-size: 1.6rem; }
-
-@media (prefers-reduced-motion: reduce) {
-  canvas { filter: none; }
-}

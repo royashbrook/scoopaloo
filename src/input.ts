@@ -1,4 +1,5 @@
 import type { Input, Point } from './engine'
+import { clientToWorld, type Viewport } from './viewport'
 
 export class Controls {
   readonly vector: Input = { x: 0, y: 0 }
@@ -6,7 +7,7 @@ export class Controls {
   private keys = new Set<string>()
   private pointer: number | null = null
 
-  constructor(private canvas: HTMLCanvasElement) {
+  constructor(private canvas: HTMLCanvasElement, private view: () => Viewport) {
     addEventListener('keydown', event => { this.keys.add(event.key.toLowerCase()); this.readKeys(); event.preventDefault() })
     addEventListener('keyup', event => { this.keys.delete(event.key.toLowerCase()); this.readKeys() })
     canvas.addEventListener('pointerdown', event => this.down(event))
@@ -52,10 +53,9 @@ export class Controls {
   }
 
   private toWorld(event: PointerEvent): Point {
+    // same viewport object the renderer draws through, so a live resize cannot
+    // leave input and rendering with different ideas of where the world is (#13)
     const rect = this.canvas.getBoundingClientRect()
-    return {
-      x: (event.clientX - rect.left) / rect.width * this.canvas.width,
-      y: (event.clientY - rect.top) / rect.height * this.canvas.height,
-    }
+    return clientToWorld(this.view(), event.clientX - rect.left, event.clientY - rect.top)
   }
 }

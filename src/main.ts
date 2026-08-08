@@ -6,6 +6,7 @@ import { Renderer } from './render'
 import { loadSave, rescueUrl, storeSave } from './save'
 import type { GameSkin } from './skin'
 import skinData from './skins/ice-cream.json'
+import { backingSize, computeViewport, type Viewport } from './viewport'
 
 declare global {
   interface Window {
@@ -13,16 +14,33 @@ declare global {
       snapshot: () => GameState
       movePlayer: (point: Point) => void
       advance: (seconds: number, input?: Point) => void
+      viewport: () => Viewport
+      joystickOrigin: () => Point | null
     }
   }
 }
 
-const canvas = document.querySelector<HTMLCanvasElement>('#game')
-if (!canvas) throw new Error('game canvas missing')
+const found = document.querySelector<HTMLCanvasElement>('#game')
+if (!found) throw new Error('game canvas missing')
+const canvas: HTMLCanvasElement = found
 
 const skin = skinData as GameSkin
 const state = createGame(skin, loadSave(skin))
-const controls = new Controls(canvas)
+
+// The one current viewport (#13): rendering and input both read this object and
+// nothing else, so a resize cannot leave the two disagreeing about the world.
+let viewport = computeViewport(innerWidth, innerHeight, devicePixelRatio)
+function fitViewport(): void {
+  viewport = computeViewport(innerWidth, innerHeight, devicePixelRatio)
+  const backing = backingSize(viewport)
+  if (canvas.width !== backing.width) canvas.width = backing.width
+  if (canvas.height !== backing.height) canvas.height = backing.height
+}
+fitViewport()
+addEventListener('resize', fitViewport)
+new ResizeObserver(fitViewport).observe(document.body)
+
+const controls = new Controls(canvas, () => viewport)
 const renderer = new Renderer(canvas, skin)
 let previous = performance.now()
 let saveClock = 0
@@ -31,7 +49,7 @@ function frame(now: number): void {
   const elapsed = Math.min(.05, (now - previous) / 1000)
   previous = now
   step(state, elapsed, controls.vector)
-  renderer.draw(state, controls.joystick)
+  renderer.draw(state, controls.joystick, viewport)
   saveClock += elapsed
   if (saveClock >= 1) {
     saveClock = 0
@@ -61,8 +79,33 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   addEventListener('load', () => navigator.serviceWorker.register('/sw.js'))
 }
 
+// The update toast (#19): navigations are network-first (#18), so a reload IS
+// the update. This just tells a mid-session player one is waiting: probe the
+// served shell, compare against the shell we booted from, and show a wordless
+// refresh pill when they differ. Tap = reload. Probes ride visibility changes
+// (the natural "came back to the game" moment) plus a slow interval.
+const updateToast = document.querySelector<HTMLButtonElement>('#update-toast')
+if (import.meta.env.PROD && updateToast) {
+  let baseline: string | null = null
+  const probe = async (): Promise<void> => {
+    try {
+      const response = await fetch('/?update-probe', { cache: 'no-store' })
+      if (!response.ok) return
+      const text = await response.text()
+      if (baseline === null) baseline = text
+      else if (text !== baseline) updateToast.hidden = false
+    } catch { /* offline: nothing to say */ }
+  }
+  updateToast.addEventListener('click', () => location.reload())
+  probe()
+  setInterval(probe, 5 * 60 * 1000)
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) void probe() })
+}
+
 window.__scoopaloo = {
   snapshot: () => structuredClone(state),
   movePlayer: point => { state.player.x = point.x; state.player.y = point.y },
   advance: (seconds, input) => runFor(state, seconds, input),
+  viewport: () => ({ ...viewport }),
+  joystickOrigin: () => (controls.joystick.active ? { ...controls.joystick.origin } : null),
 }

@@ -1,7 +1,7 @@
 import type { GameState, Point } from './engine'
-import { WORLD } from './engine'
 import type { GameSkin, SkinUpgrade } from './skin'
 import { nextUpgrade, stationPoint, upgradeSpot } from './skin'
+import type { Viewport } from './viewport'
 
 type Joystick = { active: boolean; origin: Point; current: Point }
 type Drawable = { y: number; draw: () => void }
@@ -18,10 +18,15 @@ export class Renderer {
     this.atlas.src = skin.spriteSheet
   }
 
-  draw(state: GameState, joystick: Joystick): void {
+  draw(state: GameState, joystick: Joystick, view: Viewport): void {
     const ctx = this.context
-    ctx.clearRect(0, 0, WORLD.width, WORLD.height)
-    this.drawRoom(state.time)
+    // clear in backing pixels, then draw the whole frame in world units through
+    // the shared viewport: one uniform scale, extra axis exposes more world (#13)
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
+    const k = view.dpr * view.scale
+    ctx.setTransform(k, 0, 0, k, -view.originX * k, -view.originY * k)
+    this.drawRoom(state.time, view)
 
     const things: Drawable[] = [
       { y: this.skin.stations.machine.depth, draw: () => this.drawMachine(state) },
@@ -33,23 +38,29 @@ export class Renderer {
     things.sort((a, b) => a.y - b.y).forEach(item => item.draw())
     state.flyingCoins.forEach(coin => this.drawCoin(coin.x, coin.y, coin.age))
     state.events.forEach(event => this.drawEvent(event.kind, event.x, event.y, event.age))
-    this.drawHud(state)
+    this.drawHud(state, view)
     if (joystick.active) this.drawJoystick(joystick)
   }
 
-  private drawRoom(time: number): void {
+  private drawRoom(time: number, view: Viewport): void {
     const ctx = this.context
+    // paint the FULL visible world rect: portrait shows more wall above and more
+    // floor below, wide screens show the room continuing left and right. no bars.
+    const left = view.originX
+    const top = view.originY
+    const right = view.originX + view.viewWidth
+    const bottom = view.originY + view.viewHeight
     ctx.fillStyle = this.skin.palette.cream
-    ctx.fillRect(0, 0, WORLD.width, WORLD.height)
+    ctx.fillRect(left, top, view.viewWidth, view.viewHeight)
     ctx.fillStyle = '#ffe7ca'
-    ctx.fillRect(0, 0, WORLD.width, 165)
+    ctx.fillRect(left, top, view.viewWidth, 165 - top)
     ctx.strokeStyle = 'rgba(255,143,171,.16)'
     ctx.lineWidth = 2
-    for (let x = -640; x < 1200; x += 64) {
-      ctx.beginPath(); ctx.moveTo(x, 165); ctx.lineTo(x + 520, 640); ctx.stroke()
+    for (let x = Math.floor(left / 64) * 64 - 640; x < right + 640; x += 64) {
+      ctx.beginPath(); ctx.moveTo(x, 165); ctx.lineTo(x + (bottom - 165) * 1.1, bottom); ctx.stroke()
     }
-    for (let y = 165; y < 640; y += 54) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(960, y); ctx.stroke()
+    for (let y = 165; y < bottom; y += 54) {
+      ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke()
     }
     ctx.fillStyle = this.skin.palette.strawberry
     rounded(ctx, 295, 35, 370, 92, 42)
@@ -60,7 +71,7 @@ export class Renderer {
       ctx.beginPath(); ctx.arc(x, 82 + Math.sin(time * 2 + i) * 2, 15, 0, Math.PI * 2); ctx.fill()
     }
     ctx.fillStyle = 'rgba(74,59,69,.08)'
-    ctx.fillRect(0, 158, 960, 10)
+    ctx.fillRect(left, 158, view.viewWidth, 10)
   }
 
   private drawMachine(state: GameState): void {
@@ -204,16 +215,20 @@ export class Renderer {
     ctx.restore()
   }
 
-  private drawHud(state: GameState): void {
+  // HUD anchors to the visible top-left corner (plus the same safe inset the css
+  // gives the save button), so it stays on screen whatever shape the view is.
+  private drawHud(state: GameState, view: Viewport): void {
     const ctx = this.context
+    const x = view.originX + 24
+    const y = view.originY + 20
     ctx.fillStyle = 'rgba(255,243,230,.9)'
-    rounded(ctx, 24, 20, 54 + Math.min(10, state.save.coins) * 21, 58, 29); ctx.fill()
+    rounded(ctx, x, y, 54 + Math.min(10, state.save.coins) * 21, 58, 29); ctx.fill()
     ctx.strokeStyle = this.skin.palette.cocoa; ctx.lineWidth = 4; ctx.stroke()
     const [coinColumn, coinRow] = this.skin.sprites.coin
-    this.sprite(coinColumn, coinRow, 34, 29, 39, 39)
+    this.sprite(coinColumn, coinRow, x + 10, y + 9, 39, 39)
     for (let i = 0; i < Math.min(10, state.save.coins); i++) {
       ctx.fillStyle = this.skin.palette.sunshine
-      ctx.beginPath(); ctx.arc(88 + i * 20, 49, 8, 0, Math.PI * 2); ctx.fill()
+      ctx.beginPath(); ctx.arc(x + 64 + i * 20, y + 29, 8, 0, Math.PI * 2); ctx.fill()
     }
   }
 
