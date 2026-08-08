@@ -19,6 +19,7 @@ test('shows a readable order, times out, and freezes a missed goal', async ({ pa
   await expect(start).toBeVisible()
   expect((await start.boundingBox())!.height).toBeGreaterThanOrEqual(44)
   await expectInsideViewport(page, '.ready-card')
+  await page.screenshot({ path: 'test-results/shift-phone-ready.png' })
 
   await start.click()
   await page.evaluate(() => window.__scoopaloo.pause(true))
@@ -35,7 +36,7 @@ test('shows a readable order, times out, and freezes a missed goal', async ({ pa
 
   await page.evaluate(() => window.__scoopaloo.advance(90))
   await expect(page.getByRole('heading', { name: 'GOAL MISSED' })).toBeVisible()
-  await expect(page.getByText('$0', { exact: true })).toBeVisible()
+  await expect(page.locator('.results-card').getByText('$0', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'NEXT' })).toBeDisabled()
   await expectInsideViewport(page, '.results-card')
   await page.screenshot({ path: 'test-results/shift-phone-missed.png' })
