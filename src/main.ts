@@ -54,6 +54,15 @@ const canvas: HTMLCanvasElement = found
 
 const skin = skinData as GameSkin
 const state = createGame(skin, loadSave(skin))
+const FIRST_SHIFT_COACH = 'DRAG ANYWHERE TO MOVE · WALK INTO DASHED INGREDIENT RINGS TO PICK UP'
+const coachOrigin = { x: state.player.x, y: state.player.y }
+let coachStep: 'move' | 'ring' | null = state.rules.kind === 'campaign'
+  && state.rules.level === 1
+  && state.save.currentDay === 0
+  && state.save.scoreChaseLevel === 0
+  && state.save.lifetimeCash === 0
+  && state.save.dayBestRevenue[0] === 0
+  ? 'move' : null
 let previousScoreChaseBest = state.save.scoreChaseBest
 const sound = new GameSound()
 canvas.addEventListener('pointerdown', () => sound.unlock(), { passive: true })
@@ -109,6 +118,7 @@ const shiftUi = new ShiftUi(shiftRoot, {
     }
   },
 })
+canvas.setAttribute('aria-label', 'Scoopaloo ice cream stand game. Drag anywhere to move, or use W A S D or arrow keys. Walk into dashed ingredient rings to pick up ingredients automatically. Hold at prep until complete.')
 canvas.setAttribute('aria-describedby', 'helper-status')
 let previous = performance.now()
 let saveClock = 0
@@ -126,7 +136,12 @@ let paused = false
 function frame(now: number): void {
   const elapsed = Math.min(.05, (now - previous) / 1000)
   previous = now
+  const coachingFrame = !paused && state.phase === 'playing'
   if (!paused) step(state, elapsed, controls.vector)
+  if (coachingFrame && coachStep === 'move'
+    && Math.hypot(state.player.x - coachOrigin.x, state.player.y - coachOrigin.y) >= 24) coachStep = 'ring'
+  if (coachingFrame && coachStep === 'ring'
+    && state.events.some(event => event.kind === 'pickup' && event.source)) coachStep = null
   updateSound()
   renderer.draw(state, controls.joystick, viewport)
   updateShiftUi()
@@ -211,12 +226,14 @@ function updateShiftUi(): void {
       }))
       const missing = steps.filter(step => step.have < step.need).map(step => step.label)
       recipe = {
-        instruction: carrying ? 'DELIVER TO COUNTER'
-          : ready ? 'READY AT PREP'
-            : working ? prep.job?.assisted && progress === 0
-              ? `${skin.helper?.name ?? 'HELPER'} READY · HOLD AT PREP`
-              : `MAKING ${front.order.label}`
-              : missing.length ? `GET ${missing.join(' + ')}` : 'HOLD AT PREP',
+        instruction: coachStep === 'move' ? 'DRAG ANYWHERE TO MOVE'
+          : coachStep === 'ring' ? 'WALK\u202fINTO\u202fINGREDIENT\u202fRING'
+            : carrying ? 'DELIVER TO COUNTER'
+              : ready ? 'READY AT PREP'
+                : working ? prep.job?.assisted && progress === 0
+                  ? `${skin.helper?.name ?? 'HELPER'} READY · HOLD AT PREP`
+                  : `MAKING ${front.order.label}`
+                  : missing.length ? `GET ${missing.join(' + ')}` : 'HOLD AT PREP',
         progress,
         steps,
       }
@@ -226,9 +243,11 @@ function updateShiftUi(): void {
     phase: state.phase,
     day: rules.kind === 'score-chase' ? `${rules.label} ${rules.level}` : rules.label,
     challenge: rules.challenge,
-    readyBanner: rules.kind === 'score-chase'
-      ? rules.level === 1 ? state.skin.days.at(-1)?.unlockBanner : `RUSH ${rules.level} UNLOCKED`
-      : state.save.currentDay > 0 ? state.skin.days[state.save.currentDay - 1]?.unlockBanner : '',
+    readyBanner: coachStep && rules.kind === 'campaign' && rules.level === 1
+      ? FIRST_SHIFT_COACH
+      : rules.kind === 'score-chase'
+        ? rules.level === 1 ? state.skin.days.at(-1)?.unlockBanner : `RUSH ${rules.level} UNLOCKED`
+        : state.save.currentDay > 0 ? state.skin.days[state.save.currentDay - 1]?.unlockBanner : '',
     resultBanner: goalMet(state) ? rules.unlockBanner : '',
     rush: rules.kind === 'score-chase' ? {
       level: rules.level,
