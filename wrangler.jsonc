@@ -1,0 +1,21 @@
+{
+  // Scoopaloo on its own origin, served as Cloudflare Workers static assets,
+  // the same pattern as craftrush: its own hostname so the game deploys itself
+  // when the game changes, and its traffic stays out of the content site's
+  // analytics (an app's usage and a blog's usage are not the same measurement).
+  //
+  // Vite builds to ./dist with no base path, so the output is happy served at a
+  // domain ROOT with no subpath handling to keep in sync.
+  "name": "scoopaloo",
+  // not a secret, and inlining it lets CI deploy without an account picker
+  "account_id": "b13c1cf2483bdad430b91ae25126e984",
+  "compatibility_date": "2026-08-08",
+  "assets": {
+    "directory": "./dist"
+  },
+  // custom_domain provisions the DNS record and the cert, so the hostname is
+  // declared here rather than clicked into a dashboard and forgotten.
+  "routes": [
+    { "pattern": "scoopaloo.royashbrook.com", "custom_domain": true }
+  ]
+}

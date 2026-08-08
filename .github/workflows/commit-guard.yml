@@ -1,0 +1,45 @@
+name: commit messages reference an issue
+
+# The commit-msg hook only runs on a machine that has it installed, and
+# core.hooksPath is local config that clones do not carry. So the same rule is
+# checked here, where it applies to everyone and to commits made through the
+# web UI.
+on:
+  push:
+    branches-ignore: []
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: every new commit names an issue
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            range="origin/${{ github.base_ref }}..HEAD"
+          elif [ -n "${{ github.event.before }}" ] && git cat-file -e "${{ github.event.before }}^{commit}" 2>/dev/null; then
+            range="${{ github.event.before }}..${{ github.sha }}"
+          else
+            # a new branch, or history we cannot see: check the tip only
+            range="-1"
+          fi
+
+          bad=0
+          for sha in $(git log --no-merges --pretty=format:%H $range); do
+            msg=$(git log -1 --pretty=format:%B "$sha")
+            case "$msg" in
+              "Revert "*|fixup!*|squash!*) continue ;;
+            esac
+            if ! printf '%s' "$msg" | grep -Eq '#[0-9]+'; then
+              echo "::error::$(git log -1 --pretty=format:'%h %s' "$sha") — no issue reference"
+              bad=1
+            fi
+          done
+          if [ "$bad" = "1" ]; then
+            echo "Every commit must reference an issue, e.g. 'Closes #12'. See .githooks/commit-msg"
+            exit 1
+          fi
+          echo "all commits reference an issue"

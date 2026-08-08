@@ -1,0 +1,52 @@
+name: deploy scoopaloo.royashbrook.com
+
+# The game deploys ITSELF, the same pattern as craftrush: pushing to main builds
+# and ships it to its own Cloudflare origin. Its own hostname keeps a game change
+# from redeploying the content site, and keeps a broken game build from holding
+# the site up.
+on:
+  push:
+    branches: [main]
+    # CI config and docs don't change the built game, so they shouldn't burn a deploy.
+    paths-ignore:
+      - ".github/**"
+      - "**/*.md"
+  # manual re-deploy, so a build can be reissued without a dummy commit
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scoopaloo-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      - run: npm test
+      - run: npm run build
+      - name: check the build produced a site
+        run: |
+          test -f dist/index.html
+          test -f dist/sw.js
+      - name: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "CLOUDFLARE_API_TOKEN is not set. add the repo secret to enable deploys."
+            exit 1
+          fi
+          npx wrangler deploy
