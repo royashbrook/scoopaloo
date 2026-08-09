@@ -101,6 +101,7 @@ canvas {
 .hud-money small { font-size: 13px; }
 .hud-rule { color: #4a3b45; font-size: 13px !important; font-weight: 900; }
 .shift-ui[data-mode="rush"] .hud-stat { padding-inline: .2rem; }
+.shift-ui[data-mode="rush"] .hud-stat > span:not(.sr-only) { letter-spacing: 0; }
 .shift-ui[data-mode="rush"] .hud-stat:nth-child(-n + 3) strong { font-size: 17px; }
 
 .combo-score {
@@ -452,7 +453,7 @@ canvas {
   background: rgb(255 212 94 / .12);
 }
 .rush-rules[hidden], .rush-best[hidden] { display: none; }
-.rush-rules > span { min-width: 0; padding: .48rem .15rem; text-align: center; }
+.rush-rules > span { min-width: 0; padding: .48rem 0; text-align: center; }
 .rush-rules > span + span { border-left: 1px solid rgb(74 59 69 / .18); }
 .rush-rules b {
   display: block;
@@ -489,6 +490,7 @@ canvas {
   line-height: 1.2;
   letter-spacing: .035em;
 }
+.ready-card .unlock-banner { letter-spacing: 0; }
 .card-actions { display: flex; justify-content: center; gap: .65rem; }
 .results-card .card-actions button { min-width: 0; flex: 1; padding-inline: .35rem; font-size: 14px; white-space: nowrap; }
 
@@ -518,7 +520,7 @@ canvas {
 }
 .shop-card > .rush-rules { margin: 0 0 .9rem; }
 .shop-card .card-kicker { margin: 0 0 .35rem; color: #13856f; }
-.shop-card h1 { font-size: clamp(27px, 6vw, 38px); }
+.shop-card h1 { margin: 0; font-size: clamp(27px, 6vw, 38px); }
 .shop-wallet {
   flex: 0 0 auto;
   min-width: 6.5rem;
@@ -652,6 +654,7 @@ canvas {
 }
 
 @media (max-width: 599px) {
+  .ready-card { padding-block: .75rem; }
   .shop-heading { margin-bottom: .65rem; }
   .shift-hud { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .shift-hud .hud-stat:nth-child(1),
@@ -702,7 +705,7 @@ button, a {
 }
 .sound-button[aria-pressed="false"] { color: rgb(74 59 69 / .55); background: #fff3e6; }
 
-/* wordless "new version" toast (#19): a bouncing refresh pill, tap = reload */
+/* wordless "new version" toast (#19): a stationary pulsing target, tap = reload */
 .update-toast {
   top: auto;
   right: auto;
@@ -711,12 +714,12 @@ button, a {
   translate: -50% 0;
   font-size: 1.4rem;
   background: #ffd45e;
-  animation: toast-bob 1.6s ease-in-out infinite;
+  animation: toast-pulse 1.6s ease-in-out infinite;
 }
 .update-toast:active { transform: translateY(.2rem); }
-@keyframes toast-bob {
-  0%, 100% { margin-bottom: 0; }
-  50% { margin-bottom: .5rem; }
+@keyframes toast-pulse {
+  0%, 100% { background-color: #ffd45e; }
+  50% { background-color: #fff0a8; }
 }
 @media (prefers-reduced-motion: reduce) {
   .update-toast, .order-ticket.is-wrong, .order-ticket.is-urgent { animation: none; }
