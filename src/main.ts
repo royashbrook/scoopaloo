@@ -54,7 +54,7 @@ const canvas: HTMLCanvasElement = found
 
 const skin = skinData as GameSkin
 const state = createGame(skin, loadSave(skin))
-const FIRST_SHIFT_COACH = 'DRAG ANYWHERE TO MOVE · WALK INTO DASHED INGREDIENT RINGS TO PICK UP'
+const FIRST_SHIFT_COACH = 'DRAG TO MOVE · WALK INTO DASHED RINGS TO PICK UP'
 const coachOrigin = { x: state.player.x, y: state.player.y }
 let coachStep: 'move' | 'ring' | null = state.rules.kind === 'campaign'
   && state.rules.level === 1
