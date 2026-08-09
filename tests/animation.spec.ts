@@ -118,11 +118,11 @@ async function pointerOriginAt(page: Page, [x, y]: number[]) {
   return origin
 }
 
-async function createPickup(page: Page) {
-  return page.evaluate(() => {
+async function createPickup(page: Page, requestedSourceId?: string) {
+  return page.evaluate(sourceIdFromTest => {
     const game = window.__scoopaloo
     const state = game.snapshot()
-    const [sourceId] = Object.keys(state.sources)
+    const sourceId = sourceIdFromTest ?? Object.keys(state.sources)[0]
     const source = state.skin.producers[sourceId]
     const item = source.item
     const before = state.player.trayItems[item] ?? 0
@@ -140,7 +140,7 @@ async function createPickup(page: Page) {
       createdAt: event.createdAt,
       from: event.from,
     }
-  })
+  }, requestedSourceId)
 }
 
 async function createDrop(page: Page) {
@@ -305,4 +305,90 @@ test('uses real inventory ticks for transfer captures and keeps responsive geome
     expect(canvas).toMatchObject({ x: 0, y: 0, width: size.width, height: size.height })
     await page.screenshot({ path: `test-results/animation-${size.name}-combined.png` })
   }
+})
+
+test('focuses interaction rings and keeps the player readable behind foreground stations at iPhone Air size', async ({ page }) => {
+  await page.setViewportSize({ width: 420, height: 912 })
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await startPaused(page)
+  const cone = await page.evaluate(() => {
+    const state = window.__scoopaloo.snapshot()
+    const producer = state.skin.producers['cone-shell']
+    return {
+      interaction: producer.interaction,
+      visualY: Math.min(producer.interaction[1] + 35, 1_120 - 40),
+    }
+  })
+  const ringBox = {
+    left: cone.interaction[0] - 75,
+    top: cone.visualY + 10,
+    right: cone.interaction[0] + 75,
+    bottom: cone.visualY + 40,
+  }
+  await paintAt(page, 1)
+  const original = await geometry(page)
+  expect(original.viewport).toMatchObject({
+    cssWidth: 420,
+    cssHeight: 912,
+    scale: .65625,
+    originX: 160,
+    originY: -224.76190476190482,
+    dpr: 1,
+  })
+
+  await page.evaluate(point => window.__scoopaloo.movePlayer({ x: point[0] + 130, y: point[1] }), cone.interaction)
+  await paintAt(page, 1)
+  const far = await worldHash(page, ringBox)
+  await page.screenshot({ path: 'test-results/animation-air-ring-far.png' })
+
+  await page.evaluate(point => window.__scoopaloo.movePlayer({ x: point[0] + 90, y: point[1] }), cone.interaction)
+  await paintAt(page, 1)
+  const focus = await worldHash(page, ringBox)
+  expect(focus).not.toBe(far)
+  const focusedGeometry = await geometry(page)
+  expect(focusedGeometry.ui).toEqual(original.ui)
+  expect(focusedGeometry.anchors).toEqual(original.anchors)
+  expect(focusedGeometry.viewport).toEqual(original.viewport)
+  await page.screenshot({ path: 'test-results/animation-air-ring-focus.png' })
+
+  const pickup = await createPickup(page, 'cone-shell')
+  await paintAt(page, pickup.createdAt + MOTION_TIMES.DROP_APEX)
+  const contact = await worldHash(page, ringBox)
+  expect(contact).not.toBe(focus)
+  await page.screenshot({ path: 'test-results/animation-air-ring-contact.png' })
+  await paintAt(page, pickup.createdAt + MOTION_TIMES.DROP_LAND)
+  await page.screenshot({ path: 'test-results/animation-air-ring-settled.png' })
+  const afterContact = await geometry(page)
+  expect(afterContact.anchors).toEqual(original.anchors)
+  expect(afterContact.viewport).toEqual(original.viewport)
+
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await startPaused(page)
+  await page.evaluate(point => window.__scoopaloo.movePlayer({ x: point[0] + 130, y: point[1] }), cone.interaction)
+  await paintAt(page, 1)
+  const reducedFar = await worldHash(page, ringBox)
+  await paintAt(page, 2)
+  expect(await worldHash(page, ringBox)).toBe(reducedFar)
+  await page.evaluate(point => window.__scoopaloo.movePlayer({ x: point[0] + 90, y: point[1] }), cone.interaction)
+  await paintAt(page, 1)
+  expect(await worldHash(page, ringBox)).not.toBe(reducedFar)
+  const reducedPickup = await createPickup(page, 'cone-shell')
+  await paintAt(page, reducedPickup.createdAt + MOTION_TIMES.DROP_APEX)
+  const reducedContact = await worldHash(page, ringBox)
+  expect(reducedContact).not.toBe(contact)
+  await page.screenshot({ path: 'test-results/animation-air-ring-reduced.png' })
+
+  await startPaused(page)
+  await page.evaluate(() => {
+    const game = window.__scoopaloo
+    const prep = game.snapshot().skin.prepStations['build-station']
+    game.movePlayer({ x: prep.interaction[0], y: prep.depth - 15 })
+    game.setTime(2)
+  })
+  await repaint(page)
+  const occluded = await geometry(page)
+  expect(occluded.ui).toEqual(original.ui)
+  expect(occluded.anchors).toEqual(original.anchors)
+  expect(occluded.viewport).toEqual(original.viewport)
+  await page.screenshot({ path: 'test-results/animation-air-station-fade.png' })
 })

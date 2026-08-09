@@ -4,8 +4,10 @@ import {
   MOTION_TIMES,
   blinkPose,
   carryPose,
+  interactionRingPose,
   machinePose,
   roomPropAnchor,
+  stationOcclusionAlpha,
   transferPose,
   walkPose,
 } from './render'
@@ -17,8 +19,8 @@ describe('static parlor shell (#15)', () => {
       wall: '#FFE7CA',
       floor: '#FFF3E6',
       backdrop: {
-        image: '/assets/room/ice-cream-wall.svg?v=1',
-        draw: [-416, 0, 1792, 320],
+        image: '/assets/room/ice-cream-wall.svg?v=2',
+        draw: [-416, 0, 1792, 1200],
       },
       floorProp: {
         image: '/assets/room/mint-plant.svg?v=1',
@@ -98,5 +100,48 @@ describe('deterministic service motion (#16)', () => {
     expect(secondApex.pulse).toBeCloseTo(1)
     expect(reduced.y).toBeCloseTo(first.y * .28)
     expect(reduced.y).not.toBe(0)
+  })
+})
+
+describe('interaction clarity motion (#44)', () => {
+  it('focuses interaction rings, confirms contact, and freezes reduced dash travel', () => {
+    const far = interactionRingPose(1, 130)
+    const focus = interactionRingPose(1, 68)
+    const contact = interactionRingPose(1, 68, .12)
+    const reduced = interactionRingPose(1, 68, .12, true)
+
+    expect(far).toEqual({ radiusX: 67, radiusY: 29, lineWidth: 4, dashOffset: -18 })
+    expect(focus).toEqual({ radiusX: 63, radiusY: 27, lineWidth: 6, dashOffset: -18 })
+    expect(contact).toMatchObject({ lineWidth: 8, dashOffset: -18 })
+    expect(contact.radiusX).toBeCloseTo(68.04)
+    expect(contact.radiusY).toBeCloseTo(24.3)
+    expect(reduced.dashOffset).toBe(0)
+    expect(reduced.lineWidth).toBe(8)
+    expect(Math.abs(reduced.radiusX - 67)).toBeLessThan(Math.abs(contact.radiusX - 67))
+    expect(interactionRingPose(2, 68, .24)).toEqual({
+      radiusX: 63, radiusY: 27, lineWidth: 6, dashOffset: -36,
+    })
+  })
+
+  it('fades only station art that visibly covers a player behind it', () => {
+    const cone = skinData.producers['cone-shell']
+    const prep = skinData.prepStations['build-station']
+    const counter = skinData.stations.counter
+
+    expect(stationOcclusionAlpha(
+      { x: cone.interaction[0], y: 910 }, cone.draw, { x: cone.interaction[0], y: cone.depth },
+    )).toBeLessThan(.6)
+    expect(stationOcclusionAlpha(
+      { x: prep.interaction[0], y: 725 }, prep.draw, { x: prep.interaction[0], y: prep.depth },
+    )).toBeLessThan(.6)
+    expect(stationOcclusionAlpha(
+      { x: counter.interaction[0], y: 540 }, counter.draw, { x: counter.interaction[0], y: counter.depth },
+    )).toBeLessThan(1)
+    expect(stationOcclusionAlpha(
+      { x: 480, y: 910 }, cone.draw, { x: cone.interaction[0], y: cone.depth },
+    )).toBe(1)
+    expect(stationOcclusionAlpha(
+      { x: cone.interaction[0], y: 940 }, cone.draw, { x: cone.interaction[0], y: cone.depth },
+    )).toBe(1)
   })
 })

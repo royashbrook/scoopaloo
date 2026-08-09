@@ -372,7 +372,7 @@ test('Pip is a phone-first purchase, visible prep timer, and real assisted servi
     expect(layout.describedBy).toBe('helper-status')
     expect(layout.status).toBe('PIP will be ready in 30 seconds.')
     expect(layout.portrait).toBe(true)
-    if (viewport.width === 390) expect(20 * depthScale(700) * layout.viewScale).toBeGreaterThanOrEqual(12)
+    if (viewport.width === 390) expect(21 * depthScale(700) * layout.viewScale).toBeGreaterThanOrEqual(12)
     await page.screenshot({ path: `test-results/helper-${viewport.name}-countdown.png` })
   }
 
@@ -504,7 +504,7 @@ test('Pip is a phone-first purchase, visible prep timer, and real assisted servi
     return { height: ticket.height, fits: guidance.scrollWidth <= guidance.clientWidth, font: parseFloat(getComputedStyle(guidance).fontSize) }
   })
   expect(assistedTicket.height).toBeLessThanOrEqual(244)
-  expect(assistedTicket).toMatchObject({ fits: true, font: 13 })
+  expect(assistedTicket).toMatchObject({ fits: true, font: 15 })
   const assisted = await page.evaluate(() => {
     const state = window.__scoopaloo.snapshot()
     const job = state.prepStations[Object.keys(state.prepStations)[0]].job

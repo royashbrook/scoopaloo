@@ -273,7 +273,7 @@ export class ShiftUi {
     this.setOptional('hud-patience', rush ? ` · ${metric(rush.patienceSeconds)}s` : '')
     this.root.querySelector('.shift-hud')?.setAttribute('aria-label', rush
       ? `Rush ${rush.level} status. Goal $${state.goal}. Best $${rush.best}. Arrivals every ${metric(rush.arrivalSeconds)} seconds. Patience ${metric(rush.patienceSeconds)} seconds.`
-      : 'Shift status')
+      : `Shift status. ${state.day}. ${clock(state.secondsRemaining)} remaining. Earned $${state.revenue} of $${state.goal}. Served ${state.served}. Missed ${state.missed}. Combo ${state.streak}.`)
     this.set('ready-day', state.day)
     this.set('results-day', `${state.day} RESULTS`)
     this.set('shop-day', `GEAR FOR ${state.day}`)
@@ -363,8 +363,15 @@ export class ShiftUi {
       progressBar.setAttribute('aria-valuenow', String(percent))
       progressBar.setAttribute('aria-valuetext', `${percent}% prepared`)
     }
-    this.renderInventory('tray', state.trayItems ?? [])
-    this.renderInventory('counter', state.counterItems ?? [])
+    const trayItems = state.trayItems ?? []
+    const counterItems = state.counterItems ?? []
+    this.renderInventory('tray', trayItems)
+    this.renderInventory('counter', counterItems)
+    const inventory = this.root.querySelector<HTMLElement>('.inventory-readout')
+    const inventoryEmpty = trayItems.length === 0 && counterItems.length === 0
+    inventory?.classList.toggle('is-empty', inventoryEmpty)
+    if (inventoryEmpty) inventory?.setAttribute('aria-label', 'Tray and counter empty')
+    else inventory?.removeAttribute('aria-label')
     this.renderUpcoming(state.upcomingOrders ?? [])
     if (!state.order?.urgent) this.set('urgent-status', '')
     if (!state.order) return

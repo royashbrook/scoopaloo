@@ -194,7 +194,7 @@ test('serves the second open order by pointer while keeping the front ticket', a
   expect(phone.rail.width).toBeCloseTo(60, 0)
   expect(phone.inside && phone.clear && phone.railBeforeTicket).toBe(true)
   for (const row of phone.rows) {
-    expect(row, row.state).toMatchObject({ height: 54, font: 12, stateFits: true, rowFits: true, labelsClear: true })
+    expect(row, row.state).toMatchObject({ height: 54, font: 13, stateFits: true, rowFits: true, labelsClear: true })
   }
   await page.screenshot({ path: 'test-results/open-counter-phone-actionable.png' })
 
@@ -265,7 +265,7 @@ test('serves the second open order by pointer while keeping the front ticket', a
     expect(resized.railBeforeTicket).toBe(size.railFirst)
     expect(resized.ticketBeforeRail).toBe(!size.railFirst)
     for (const row of resized.rows) {
-      expect(row.font, `${size.name} ${row.state}`).toBeGreaterThanOrEqual(12)
+      expect(row.font, `${size.name} ${row.state}`).toBeGreaterThanOrEqual(13)
       expect(row, `${size.name} ${row.state}`).toMatchObject({ stateFits: true, rowFits: true, labelsClear: true })
     }
     await page.screenshot({ path: `test-results/open-counter-${size.name}.png` })

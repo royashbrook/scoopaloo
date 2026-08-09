@@ -3,6 +3,7 @@ import { depthScale } from '../src/depth'
 
 const SIZES = [
   { name: 'phone', width: 390, height: 844 },
+  { name: 'air', width: 420, height: 912 },
   { name: 'tablet', width: 768, height: 1024 },
   { name: 'desktop', width: 1440, height: 900 },
 ] as const
@@ -11,7 +12,7 @@ const ROOM = {
   horizon: 320,
   wall: '#FFE7CA',
   floor: '#FFF3E6',
-  backdrop: { image: '/assets/room/ice-cream-wall.svg?v=1', draw: [-416, 0, 1792, 320] },
+  backdrop: { image: '/assets/room/ice-cream-wall.svg?v=2', draw: [-416, 0, 1792, 1200] },
   floorProp: { image: '/assets/room/mint-plant.svg?v=1', draw: [190, 400, 80, 112] },
 }
 
@@ -136,6 +137,9 @@ test('renders the cached parlor shell behind depth-sorted play at every target s
       type: response.headers.get('content-type'),
       forbidden: document.querySelectorAll('text, script, foreignObject, image').length,
       external,
+      viewBox,
+      shellParts: ['floor', 'side-returns', 'work-floor', 'floor-seams']
+        .filter(id => document.getElementById(id)).length,
       ratio: viewBox[2] / viewBox[3],
       decoded: image.naturalWidth > 0,
     }
@@ -146,6 +150,8 @@ test('renders the cached parlor shell behind depth-sorted play at every target s
     expect(svgReports[index].ratio).toBeCloseTo([room.backdrop, room.floorProp][index].draw[2]
       / [room.backdrop, room.floorProp][index].draw[3], 6)
   }
+  expect(svgReports[0].viewBox).toEqual(room.backdrop.draw)
+  expect(svgReports.map(report => report.shellParts)).toEqual([4, 0])
 
   await installTrace(page)
   const draws = await trace(page)
@@ -167,6 +173,33 @@ test('renders the cached parlor shell behind depth-sorted play at every target s
   for (const size of SIZES) {
     await page.setViewportSize({ width: size.width, height: size.height })
     await paintAt(page, 20)
+    const floorCoverage = await page.evaluate(() => {
+      const view = window.__scoopaloo.viewport()
+      const room = window.__scoopaloo.snapshot().skin.room
+      const [x, y, width, height] = room.backdrop.draw
+      return x <= view.originX
+        && x + width >= view.originX + view.viewWidth
+        && y <= room.horizon
+        && y + height >= view.originY + view.viewHeight
+    })
+    expect(floorCoverage, size.name).toBe(true)
+    if (size.name === 'air') {
+      const contrast = await page.evaluate(() => {
+        const canvas = document.querySelector('canvas')!
+        const context = canvas.getContext('2d')!
+        const view = window.__scoopaloo.viewport()
+        const sample = (x: number, y: number) => context.getImageData(
+          Math.round((x - view.originX) * view.scale * view.dpr),
+          Math.round((y - view.originY) * view.scale * view.dpr),
+          1,
+          1,
+        ).data
+        const workFloor = sample(480, 400)
+        const openFloor = sample(300, 400)
+        return [...workFloor].reduce((total, value, index) => total + Math.abs(value - openFloor[index]), 0)
+      })
+      expect(contrast).toBeGreaterThanOrEqual(24)
+    }
     const first = await wallHash(page)
     await paintAt(page, 27.25)
     expect(await wallHash(page), size.name).toBe(first)

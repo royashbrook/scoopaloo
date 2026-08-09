@@ -1,14 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1792" height="320" viewBox="-416 0 1792 320" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" width="1792" height="1200" viewBox="-416 0 1792 1200" fill="none">
   <defs>
     <pattern id="wall-panels" x="-416" y="0" width="160" height="198" patternUnits="userSpaceOnUse" viewBox="0 0 160 198">
       <rect x="20" y="62" width="120" height="82" rx="18" fill="#FFF3E6" fill-opacity=".32" stroke="#4A3B45" stroke-opacity=".07" stroke-width="3"/>
     </pattern>
   </defs>
+
+  <g id="floor">
+    <path fill="#FFF3E6" d="M-416 320h1792v880H-416z"/>
+    <g id="side-returns" fill="#FFD9B8" fill-opacity=".42">
+      <path d="M-416 320h536l-160 880h-376zM840 320h536v880h-376z"/>
+    </g>
+    <path id="work-floor" fill="#FFE7CA" stroke="#4A3B45" stroke-opacity=".1" stroke-width="4" d="M360 332h240l190 868H170l190-868Z"/>
+    <g id="floor-seams" stroke="#4A3B45" stroke-opacity=".075" stroke-width="3">
+      <path d="M341 420h278M319 520h322M290 650h380M253 820h454M207 1030h546"/>
+      <path d="m420 332-80 868M480 332v868m60-868 80 868"/>
+    </g>
+    <path stroke="#4A3B45" stroke-opacity=".14" stroke-width="4" d="m120 320-160 880M840 320l160 880"/>
+  </g>
+
   <path fill="url(#wall-panels)" d="M-416 0h1792v198H-416z"/>
   <path fill="#FFF3E6" d="M-416 198h1792v122H-416z"/>
   <path stroke="#63CDB4" stroke-width="10" d="M-416 204h1792"/>
   <path stroke="#4A3B45" stroke-opacity=".18" stroke-width="3" d="M-416 214h1792M-416 302h1792"/>
   <path stroke="#FFD9B8" stroke-width="4" d="M-336 226v62m160-62v62m160-62v62m160-62v62m160-62v62m160-62v62m160-62v62m160-62v62m160-62v62m160-62v62m160-62v62"/>
+  <path fill="#FFD9B8" fill-opacity=".5" d="M88 0h32v320H88zM840 0h32v320h-32z"/>
+  <path stroke="#4A3B45" stroke-opacity=".12" stroke-width="3" d="M120 0v320M840 0v320"/>
+  <path stroke="#4A3B45" stroke-opacity=".18" stroke-width="12" d="M-416 320h1792"/>
 
   <g stroke="#4A3B45" stroke-linecap="round" stroke-linejoin="round">
     <path fill="#FFD9B8" stroke-width="5" d="M180 283h158v15H180z"/>

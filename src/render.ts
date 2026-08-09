@@ -57,9 +57,64 @@ export type WalkPose = {
 export type CarryPose = { x: number; y: number; rotation: number; amplitude: number }
 export type TransferPose = Point & { scaleX: number; scaleY: number; rotation: number; progress: number }
 export type MachinePose = { x: number; y: number; rotation: number; scaleY: number; pulse: number }
+export type InteractionRingPose = { radiusX: number; radiusY: number; lineWidth: number; dashOffset: number }
 
 const motionScale = (reducedMotion: boolean): number => reducedMotion ? REDUCED_MOTION_SCALE : 1
 const limit = (value: number, min = 0, max = 1): number => Math.max(min, Math.min(max, value))
+
+export function interactionRingPose(
+  time: number,
+  distance: number,
+  contactAge?: number,
+  reducedMotion = false,
+): InteractionRingPose {
+  const t = limit((120 - distance) / (120 - 68))
+  const focus = t * t * (3 - 2 * t)
+  const scale = motionScale(reducedMotion)
+  const age = contactAge === undefined ? MOTION_TIMES.DROP_LAND : contactAge
+  const contact = age >= 0 && age < MOTION_TIMES.DROP_LAND
+    ? Math.sin(Math.PI * age / MOTION_TIMES.DROP_LAND)
+    : 0
+  const radiusX = 67 - 4 * focus * scale
+  const radiusY = 29 - 2 * focus * scale
+  return {
+    radiusX: radiusX * (1 + .08 * contact * scale),
+    radiusY: radiusY * (1 - .1 * contact * scale),
+    lineWidth: 4 + 2 * focus + 2 * contact,
+    dashOffset: reducedMotion ? 0 : -time * 18,
+  }
+}
+
+type Rect = { left: number; top: number; right: number; bottom: number }
+
+function projectedRect(draw: readonly number[], anchor: Point, scale: number): Rect {
+  const [x, y, width, height] = draw
+  return {
+    left: anchor.x + (x - anchor.x) * scale,
+    top: anchor.y + (y - anchor.y) * scale,
+    right: anchor.x + (x + width - anchor.x) * scale,
+    bottom: anchor.y + (y + height - anchor.y) * scale,
+  }
+}
+
+export function stationOcclusionAlpha(
+  player: Pick<GameState['player'], 'x' | 'y'>,
+  stationDraw: readonly number[],
+  stationAnchor: Point,
+): number {
+  if (stationAnchor.y <= player.y) return 1
+  const playerRect = projectedRect(
+    [player.x - 48, player.y - 122, 96, 132],
+    player,
+    depthScale(player.y),
+  )
+  const stationRect = projectedRect(stationDraw, stationAnchor, depthScale(stationAnchor.y))
+  const overlapWidth = Math.max(0, Math.min(playerRect.right, stationRect.right) - Math.max(playerRect.left, stationRect.left))
+  const overlapHeight = Math.max(0, Math.min(playerRect.bottom, stationRect.bottom) - Math.max(playerRect.top, stationRect.top))
+  const playerArea = (playerRect.right - playerRect.left) * (playerRect.bottom - playerRect.top)
+  const coverage = overlapWidth * overlapHeight / playerArea
+  return 1 - .52 * limit(coverage / .2)
+}
 
 export function walkPose(time: number, moving: boolean, facing: number, reducedMotion = false): WalkPose {
   if (!moving) return { stride: 0, x: 0, y: 0, lean: 0, shadowX: 43, shadowY: 13 }
@@ -236,40 +291,15 @@ export class Renderer {
     // floor below, wide screens show the room continuing left and right. no bars.
     const left = view.originX
     const top = view.originY
-    const right = view.originX + view.viewWidth
     const bottom = view.originY + view.viewHeight
     const { room } = this.skin
     ctx.fillStyle = room.wall
     ctx.fillRect(left, top, view.viewWidth, view.viewHeight)
+    ctx.fillStyle = room.floor
+    ctx.fillRect(left, room.horizon, view.viewWidth, bottom - room.horizon)
     if (this.roomBackdrop.complete && this.roomBackdrop.naturalWidth > 0) {
       ctx.drawImage(this.roomBackdrop, ...room.backdrop.draw as [number, number, number, number])
     }
-    ctx.fillStyle = room.floor
-    ctx.fillRect(left, room.horizon, view.viewWidth, bottom - room.horizon)
-    // perspective floor (#14): rays converge on one vanishing point at the center
-    // of the wall/floor seam, rows compress toward the seam, so walking down the
-    // screen reads as walking TOWARD the counter instead of across a flat sheet.
-    ctx.save()
-    ctx.globalAlpha = .16
-    ctx.strokeStyle = this.skin.palette.strawberry
-    ctx.lineWidth = 2
-    const vanish = { x: left + view.viewWidth / 2, y: room.horizon }
-    for (let footX = left - view.viewWidth; footX <= right + view.viewWidth; footX += 96) {
-      ctx.beginPath(); ctx.moveTo(vanish.x, vanish.y); ctx.lineTo(footX, bottom); ctx.stroke()
-    }
-    let rowY = room.horizon
-    let gap = 9
-    while (rowY < bottom) {
-      rowY += gap
-      gap *= 1.22
-      ctx.beginPath(); ctx.moveTo(left, rowY); ctx.lineTo(right, rowY); ctx.stroke()
-    }
-    ctx.restore()
-    ctx.save()
-    ctx.globalAlpha = .08
-    ctx.fillStyle = this.skin.palette.cocoa
-    ctx.fillRect(left, room.horizon - 6, view.viewWidth, 12)
-    ctx.restore()
   }
 
   private drawRoomFloorProp(): void {
@@ -302,7 +332,7 @@ export class Renderer {
     ctx.lineWidth = 3
     ctx.stroke()
     ctx.fillStyle = this.skin.palette.cocoa
-    ctx.font = '900 20px ui-rounded, system-ui, sans-serif'
+    ctx.font = '900 21px ui-rounded, system-ui, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     const wait = Math.ceil(Math.max(0, state.helper.remaining))
@@ -316,10 +346,11 @@ export class Renderer {
     const [x, y, width, height] = producer.draw
     const [column, row] = producer.sprite
     const point = producerPoint(this.skin, sourceId)
+    const artAlpha = stationOcclusionAlpha(state.player, producer.draw, { x: point.x, y: producer.depth })
     if (!source) {
       const ctx = this.context
       ctx.save()
-      ctx.globalAlpha = .35
+      ctx.globalAlpha = .35 * artAlpha
       this.shadow(point.x, point.y + 6, width * .42, 22)
       this.sprite(column, row, x, y, width, height)
       ctx.restore()
@@ -328,14 +359,20 @@ export class Renderer {
     }
 
     const pose = machinePose(state.time, Object.keys(this.skin.producers).indexOf(sourceId), this.reducedMotion)
-    this.shadow(point.x, point.y + 6, width * .42 * (1 + pose.pulse * .03), 22 * (1 - pose.pulse * .08))
     const ctx = this.context
+    ctx.save()
+    ctx.globalAlpha = artAlpha
+    this.shadow(point.x, point.y + 6, width * .42 * (1 + pose.pulse * .03), 22 * (1 - pose.pulse * .08))
+    ctx.restore()
     ctx.save()
     ctx.translate(point.x + pose.x, point.y + pose.y)
     ctx.rotate(pose.rotation)
     ctx.scale(1, pose.scaleY)
     ctx.translate(-point.x, -point.y)
+    ctx.save()
+    ctx.globalAlpha = artAlpha
     this.sprite(column, row, x, y, width, height)
+    ctx.restore()
     if (sourceId === this.skin.progression.startingStation) {
       ctx.strokeStyle = this.skin.palette.strawberry
       ctx.lineWidth = 6
@@ -353,7 +390,13 @@ export class Renderer {
     this.drawProducerPlaque(point, source.item, false)
     // Keep the nearest row's full ring on short tablet canvases while leaving
     // its interaction point unchanged.
-    this.pickupRing(point.x, Math.min(point.y + 35, WORLD.height - 40), state.time)
+    this.pickupRing(
+      point.x,
+      Math.min(point.y + 35, WORLD.height - 40),
+      state,
+      point,
+      this.interactionAge(state, event => event.kind === 'pickup' && event.source === sourceId),
+    )
   }
 
   private drawProducerPlaque(point: Point, item: string, locked: boolean): void {
@@ -384,12 +427,16 @@ export class Renderer {
     const [x, y, width, height] = station.draw
     const [column, row] = station.sprite
     const counter = stationPoint(this.skin, 'counter')
+    const artAlpha = stationOcclusionAlpha(state.player, station.draw, { x: counter.x, y: station.depth })
+    const ctx = this.context
+    ctx.save()
+    ctx.globalAlpha = artAlpha
     this.shadow(counter.x, counter.y + 8, 65, 18)
     this.sprite(column, row, x, y, width, height)
+    ctx.restore()
     const airborneDrop = this.airborneTransfer(state, 'drop')
     const stock = withoutOne(inventoryItems(state.counter.items), airborneDrop?.item)
     if (stock.length > 0) {
-      const ctx = this.context
       ctx.fillStyle = this.skin.palette.cream
       ctx.strokeStyle = this.skin.palette.cocoa
       ctx.lineWidth = 4
@@ -411,14 +458,18 @@ export class Renderer {
     const [x, y, width, height] = station.draw
     const [column, row] = station.sprite
     const point = prepPoint(this.skin, stationId)
+    const artAlpha = stationOcclusionAlpha(state.player, station.draw, { x: point.x, y: station.depth })
+    const ctx = this.context
+    ctx.save()
+    ctx.globalAlpha = artAlpha
     this.shadow(point.x, point.y + 8, width * .42, 20)
     this.sprite(column, row, x, y, width, height)
+    ctx.restore()
     const { origin, step, size } = station.outputDisplay
     inventoryItems(prep.outputs).slice(0, station.capacity).forEach((item, index) =>
       this.drawItem(item, origin[0] + step[0] * index, origin[1] + step[1] * index, size[0], size[1]))
     if (prep.job) {
       const progress = 1 - prep.job.remaining / prepSeconds(state, prep.job.item)
-      const ctx = this.context
       ctx.strokeStyle = this.skin.palette.mint
       ctx.lineWidth = 9
       ctx.beginPath()
@@ -426,7 +477,15 @@ export class Renderer {
       ctx.stroke()
       this.drawItem(prep.job.item, point.x - 18, point.y - 115, 36, 45)
     }
-    this.pickupRing(point.x, point.y + 34, state.time)
+    this.pickupRing(
+      point.x,
+      point.y + 34,
+      state,
+      point,
+      this.interactionAge(state, event =>
+        (event.kind === 'pickup' || event.kind === 'prep-start')
+        && event.station === stationId && event.source !== 'helper'),
+    )
   }
 
   private drawPlayer(state: GameState): void {
@@ -691,14 +750,29 @@ export class Renderer {
     ctx.restore()
   }
 
-  private pickupRing(x: number, y: number, time: number): void {
+  private interactionAge(state: GameState, matches: (event: GameEvent) => boolean): number | undefined {
+    for (let index = state.events.length - 1; index >= 0; index--) {
+      const event = state.events[index]
+      const age = state.time - event.createdAt
+      if (age >= 0 && age < MOTION_TIMES.DROP_LAND && matches(event)) return age
+    }
+    return undefined
+  }
+
+  private pickupRing(x: number, y: number, state: GameState, interaction: Point, contactAge?: number): void {
     const ctx = this.context
+    const pose = interactionRingPose(
+      state.time,
+      Math.hypot(state.player.x - interaction.x, state.player.y - interaction.y),
+      contactAge,
+      this.reducedMotion,
+    )
     ctx.save()
     ctx.strokeStyle = this.skin.palette.mint
-    ctx.lineWidth = 4
+    ctx.lineWidth = pose.lineWidth
     ctx.setLineDash([10, 12])
-    ctx.lineDashOffset = -time * 18
-    ctx.beginPath(); ctx.ellipse(x, y, 67, 29, 0, 0, Math.PI * 2); ctx.stroke()
+    ctx.lineDashOffset = pose.dashOffset
+    ctx.beginPath(); ctx.ellipse(x, y, pose.radiusX, pose.radiusY, 0, 0, Math.PI * 2); ctx.stroke()
     ctx.restore()
   }
 
