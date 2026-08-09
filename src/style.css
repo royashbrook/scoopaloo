@@ -737,7 +737,9 @@ dialog {
 
 dialog::backdrop { background: rgb(74 59 69 / .45); backdrop-filter: blur(.25rem); }
 dialog form { position: absolute; right: .7rem; top: .5rem; }
-.close { background: transparent; font-size: 2rem; cursor: pointer; }
+.close { min-width: 44px; min-height: 44px; background: transparent; font-size: 2rem; cursor: pointer; }
 .save-mark { font-size: 2rem; color: #ff8fab; }
-#save-qr { display: block; width: min(17rem, 100%); margin: .4rem auto 1rem; border-radius: 1rem; }
-#rescue-link { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; margin: auto; border: .2rem solid #4a3b45; border-radius: 50%; font-size: 1.6rem; }
+#save-title { margin: .1rem 2rem .35rem; font-size: 1.25rem; }
+.save-copy { margin: 0 auto .6rem; max-width: 17rem; font-size: 13px; font-weight: 900; line-height: 1.25; }
+#save-qr { display: block; width: min(15rem, 100%); margin: .4rem auto .7rem; border-radius: 1rem; }
+#rescue-link { display: grid; place-items: center; min-height: 44px; margin: auto; padding: .55rem .8rem; border: .2rem solid #4a3b45; border-radius: 1rem; color: #4a3b45; font-size: 13px; font-weight: 900; text-decoration: none; }
