@@ -452,7 +452,7 @@ canvas {
   background: rgb(255 212 94 / .12);
 }
 .rush-rules[hidden], .rush-best[hidden] { display: none; }
-.rush-rules > span { min-width: 0; padding: .48rem .15rem; text-align: center; }
+.rush-rules > span { min-width: 0; padding: .48rem 0; text-align: center; }
 .rush-rules > span + span { border-left: 1px solid rgb(74 59 69 / .18); }
 .rush-rules b {
   display: block;
@@ -518,7 +518,7 @@ canvas {
 }
 .shop-card > .rush-rules { margin: 0 0 .9rem; }
 .shop-card .card-kicker { margin: 0 0 .35rem; color: #13856f; }
-.shop-card h1 { font-size: clamp(27px, 6vw, 38px); }
+.shop-card h1 { margin: 0; font-size: clamp(27px, 6vw, 38px); }
 .shop-wallet {
   flex: 0 0 auto;
   min-width: 6.5rem;
@@ -652,6 +652,7 @@ canvas {
 }
 
 @media (max-width: 599px) {
+  .ready-card { padding-block: .75rem; }
   .shop-heading { margin-bottom: .65rem; }
   .shift-hud { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .shift-hud .hud-stat:nth-child(1),
