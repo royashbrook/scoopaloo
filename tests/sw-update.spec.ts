@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { createServer, type Server } from 'node:http'
 import { readFileSync } from 'node:fs'
+import type { AddressInfo } from 'node:net'
 import { extname, join } from 'node:path'
 
 // Issue 18's acceptance: prime a client on one origin, change what the server
@@ -16,6 +17,7 @@ const MIME: Record<string, string> = {
 
 let marker = 'BUILD-A'
 let server: Server
+let origin: string
 
 test.beforeAll(async () => {
   server = createServer((request, response) => {
@@ -34,7 +36,8 @@ test.beforeAll(async () => {
       response.end()
     }
   })
-  await new Promise<void>(resolve => server.listen(4180, resolve))
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 })
 
 test.afterAll(async () => {
@@ -42,7 +45,7 @@ test.afterAll(async () => {
 })
 
 test('an installed client picks up a new deployment on an online reload', async ({ page }) => {
-  await page.goto('http://127.0.0.1:4180/')
+  await page.goto(origin)
   await page.evaluate(() => navigator.serviceWorker.ready)
   // reload once so the page is controlled by the worker: from here on, every
   // response the client sees flows through sw.js fetch handling
@@ -65,7 +68,7 @@ test('an installed client picks up a new deployment on an online reload', async 
 
 test('a mid-session player gets the update toast and one tap updates (#19)', async ({ page }) => {
   marker = 'BUILD-A'
-  await page.goto('http://127.0.0.1:4180/')
+  await page.goto(origin)
   await page.evaluate(() => navigator.serviceWorker.ready)
   await page.waitForTimeout(150) // let the boot probe capture its baseline
   await expect(page.locator('#update-toast')).toBeHidden()

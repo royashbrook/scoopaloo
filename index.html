@@ -17,11 +17,13 @@
       <button id="save-button" class="round-button" aria-label="Open save card">◆</button>
       <button id="sound-button" class="round-button sound-button" aria-label="Sound" aria-pressed="true">♪</button>
       <button id="update-toast" class="round-button update-toast" hidden aria-label="Update ready, tap to refresh">↻</button>
-      <dialog id="save-dialog">
+      <dialog id="save-dialog" aria-labelledby="save-title">
         <form method="dialog"><button class="close" aria-label="Close">×</button></form>
         <div class="save-mark">◆</div>
+        <h2 id="save-title">MOVE YOUR SAVE</h2>
+        <p class="save-copy">SCAN THE CODE OR OPEN THE RESCUE LINK ON YOUR OTHER DEVICE.</p>
         <img id="save-qr" alt="QR code for this save" />
-        <a id="rescue-link" target="_blank" rel="noopener">↗</a>
+        <a id="rescue-link" target="_blank" rel="noopener">OPEN RESCUE LINK ↗</a>
       </dialog>
     </main>
     <script type="module" src="/src/main.ts"></script>

@@ -23,6 +23,28 @@ describe('save v1', () => {
     })
   })
 
+  it('falls back cleanly when browser storage is unavailable', () => {
+    const fallback = defaultSave(skin)
+    expect(loadSave(skin, { getItem: () => { throw new DOMException('denied', 'SecurityError') } })).toEqual(fallback)
+    expect(storeSave(fallback, { setItem: () => { throw new DOMException('full', 'QuotaExceededError') } })).toBe(false)
+  })
+
+  it('migrates partial local saves without requiring rescue-code fields', () => {
+    const restored = loadSave(skin, { getItem: () => JSON.stringify({
+      version: 1,
+      currentDay: 2,
+      dayStars: [1, 2, 3],
+      dayBestRevenue: [54, 66, 143],
+    }) })
+    expect(restored).toMatchObject({
+      coins: 0,
+      currentDay: 2,
+      dayStars: [1, 2, 3],
+      dayBestRevenue: [54, 66, 143],
+      unlockedStations: skin.progression.startingStations,
+    })
+  })
+
   it('round trips an sc1 deflate-raw code', async () => {
     const save = {
       ...defaultSave(skin),

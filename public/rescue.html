@@ -6,38 +6,103 @@
   <meta name="theme-color" content="#FF8FAB">
   <title>Scoopaloo rescue</title>
   <style>
-    *{box-sizing:border-box}html,body{min-height:100%;margin:0}body{display:grid;place-items:center;background:#FFD9B8;color:#4A3B45;font-family:ui-rounded,"Arial Rounded MT Bold",system-ui,sans-serif}main{width:min(28rem,calc(100vw - 2rem));padding:2rem;border:.3rem solid #4A3B45;border-radius:3rem;background:#FFF3E6;box-shadow:0 1rem 0 #FF8FAB;text-align:center}.cone{font-size:6rem;line-height:1}.arrow{font-size:3rem;color:#63CDB4}button,a{display:grid;place-items:center;width:6rem;height:6rem;margin:1rem auto;border:.25rem solid #4A3B45;border-radius:50%;background:#FFD45E;color:#4A3B45;font:700 3rem system-ui;text-decoration:none;box-shadow:0 .45rem 0 #4A3B45;cursor:pointer}button:active{transform:translateY(.3rem);box-shadow:0 .15rem 0 #4A3B45}.bad{filter:grayscale(1);opacity:.5}[hidden]{display:none!important}
+    *{box-sizing:border-box}html,body{min-height:100%;margin:0}body{display:grid;place-items:center;background:#FFD9B8;color:#4A3B45;font-family:ui-rounded,"Arial Rounded MT Bold",system-ui,sans-serif}main{width:min(28rem,calc(100vw - 2rem));padding:1.5rem;border:.3rem solid #4A3B45;border-radius:2rem;background:#FFF3E6;box-shadow:0 .7rem 0 #FF8FAB;text-align:center}.cone{font-size:5rem;line-height:1}.arrow{font-size:2.5rem;color:#13856f}h1{margin:.35rem 0;font-size:1.8rem}#status{min-height:2.5rem;margin:.5rem 0;font-weight:900}.comparison{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin:1rem 0}.comparison p{margin:0;padding:.7rem;border:.2rem solid #4A3B45;border-radius:1rem;background:#fff}.comparison span{display:block;font-size:.8rem;font-weight:900;letter-spacing:.06em}.comparison strong{display:block;margin-top:.25rem;color:#0c6a58;font-size:1.5rem}button,a{display:grid;place-items:center;width:100%;min-height:3.25rem;margin:.8rem auto 0;padding:.65rem;border:.2rem solid #4A3B45;border-radius:1rem;background:#FFD45E;color:#4A3B45;font:900 1rem system-ui;text-decoration:none;box-shadow:0 .3rem 0 #4A3B45;cursor:pointer}button:active{transform:translateY(.2rem);box-shadow:0 .1rem 0 #4A3B45}button:disabled{filter:grayscale(1);opacity:.55;cursor:not-allowed}[hidden]{display:none!important}
   </style>
 </head>
 <body>
   <main>
-    <div class="cone">🍦</div>
-    <div class="arrow">↓</div>
-    <button id="restore" aria-label="Restore this save">✓</button>
-    <a id="play" href="/" hidden aria-label="Play Scoopaloo">▶</a>
+    <div class="cone" aria-hidden="true">🍦</div>
+    <div class="arrow" aria-hidden="true">↓</div>
+    <h1>RESTORE SCOOPALOO</h1>
+    <p id="status" role="status" aria-live="polite">READY TO RESTORE</p>
+    <section class="comparison" id="comparison" aria-label="Save comparison" hidden>
+      <p><span>CURRENT COINS</span><strong id="current-coins"></strong></p>
+      <p><span>RESCUE COINS</span><strong id="rescue-coins"></strong></p>
+    </section>
+    <button id="restore">RESTORE SAVE</button>
+    <a id="play" href="/" hidden>PLAY SCOOPALOO</a>
   </main>
-  <script>
-    const key='scoopaloo_save_v1',prefix='sc1.'
-    const button=document.querySelector('#restore'),play=document.querySelector('#play')
-    async function decode(code){
-      if(!code.startsWith(prefix))throw Error('bad code')
-      const value=code.slice(prefix.length).replaceAll('-','+').replaceAll('_','/')
-      const raw=atob(value.padEnd(Math.ceil(value.length/4)*4,'='))
-      const bytes=Uint8Array.from(raw,c=>c.charCodeAt(0))
-      const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
-      const save=JSON.parse(await new Response(stream).text())
-      if(save.version!==1||!Number.isFinite(save.coins)||!Array.isArray(save.unlockedStations))throw Error('bad save')
-      save.text=false
-      return save
+  <script type="module">
+    /*__SCOOPALOO_SAVE_CODE__*/
+
+    const button = document.querySelector('#restore')
+    const play = document.querySelector('#play')
+    const status = document.querySelector('#status')
+    const comparison = document.querySelector('#comparison')
+    const currentCoins = document.querySelector('#current-coins')
+    const rescueCoins = document.querySelector('#rescue-coins')
+    let armed = null
+    let busy = false
+
+    function progress(save) {
+      const coins = Number.isFinite(save.coins) ? Math.max(0, save.coins) : 0
+      return Number.isFinite(save.lifetimeCash) ? Math.max(coins, save.lifetimeCash) : coins
     }
-    if(!location.hash.startsWith('#'+prefix)){button.disabled=true;button.classList.add('bad')}
-    button.addEventListener('click',async()=>{
-      try{
-        const save=await decode(location.hash.slice(1))
-        localStorage.setItem(key,JSON.stringify(save))
-        button.hidden=true
-        play.hidden=false
-      }catch{button.disabled=true;button.classList.add('bad')}
+
+    function coinText(save) {
+      return `$${Math.floor(Number.isFinite(save.coins) ? Math.max(0, save.coins) : 0)}`
+    }
+
+    function currentSave(raw) {
+      if (!raw) return null
+      try { return parseSaveRecord(raw) } catch { return null }
+    }
+
+    function showWarning(current, incoming) {
+      currentCoins.textContent = coinText(current)
+      rescueCoins.textContent = coinText(incoming)
+      comparison.hidden = false
+      status.textContent = 'CURRENT SAVE HAS MORE PROGRESS'
+      button.textContent = 'REPLACE CURRENT SAVE'
+    }
+
+    function finish(incoming) {
+      incoming.text = true
+      localStorage.setItem(SAVE_KEY, JSON.stringify(incoming))
+      button.hidden = true
+      comparison.hidden = true
+      status.textContent = 'SAVE RESTORED'
+      play.hidden = false
+    }
+
+    if (!location.hash.startsWith(`#${SAVE_PREFIX}`)) {
+      button.disabled = true
+      status.textContent = 'THIS RESCUE LINK IS INVALID'
+    }
+
+    button.addEventListener('click', async () => {
+      if (busy) return
+      const confirmation = armed
+      const requestedHash = location.hash
+      busy = true
+      button.disabled = true
+      let failed = false
+      try {
+        const incoming = await decodeSaveCode(requestedHash.slice(1))
+        const hash = location.hash
+        if (hash !== requestedHash) {
+          armed = null
+          status.textContent = 'RESCUE LINK CHANGED · TAP RESTORE AGAIN'
+          return
+        }
+        const raw = localStorage.getItem(SAVE_KEY)
+        const current = currentSave(raw)
+        if (current && progress(current) > progress(incoming)) {
+          if (!confirmation || confirmation.hash !== hash || confirmation.raw !== raw) {
+            armed = { hash, raw }
+            showWarning(current, incoming)
+            return
+          }
+        }
+        finish(incoming)
+      } catch {
+        armed = null
+        failed = true
+        status.textContent = 'SAVE COULD NOT BE RESTORED'
+      } finally {
+        busy = false
+        if (!button.hidden) button.disabled = failed
+      }
     })
   </script>
 </body>
