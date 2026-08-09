@@ -1,14 +1,15 @@
 # scoopaloo
 
-a tiny kawaii ice cream stand game for kids. run the stand: make cones, carry the tray,
-serve the line, collect the coins, grow the shop.
+a portrait-first ice cream rush game. prep cones and sundaes, triage the line,
+collect tips, upgrade the stand, and climb Score Chase.
 
 - free. no ads, no purchases, no accounts.
-- works offline once loaded (it's a pwa, add it to the home screen).
-- nothing to read: the whole game is playable before you can.
-- your save can hop devices with a QR code from the settings drawer.
+- designed for phone play, with readable order, timer, payout, and recipe guidance.
+- drag anywhere to move, or use WASD/arrow keys; walk into dashed rings to interact.
+- works offline once loaded and installs as a portrait-first PWA.
+- sound is optional, and your save can move devices with the in-game QR rescue link.
 
-built as one engine with swappable shop skins; the candy shop comes next.
+built as one data-driven engine with an ice cream shop skin.
 
 the full design is in [docs/SPEC.md](docs/SPEC.md).
 
@@ -18,8 +19,10 @@ the full design is in [docs/SPEC.md](docs/SPEC.md).
 npm ci
 npm run dev     # local dev server
 npm test        # engine tests
-npm run check   # typecheck + tests + build, the merge gate
+npm run check   # typecheck + unit tests + production build
 npm run test:e2e # gameplay, offline, and frame-budget browser checks
 ```
+
+pull requests must pass both commands before merge.
 
 MIT.

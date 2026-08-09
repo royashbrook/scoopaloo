@@ -1,9 +1,6 @@
 name: deploy scoopaloo.royashbrook.com
 
-# The game deploys ITSELF, the same pattern as craftrush: pushing to main builds
-# and ships it to its own Cloudflare origin. Its own hostname keeps a game change
-# from redeploying the content site, and keeps a broken game build from holding
-# the site up.
+# Pushing to main builds and ships the game to its own Cloudflare origin.
 on:
   push:
     branches: [main]
@@ -49,4 +46,4 @@ jobs:
             echo "CLOUDFLARE_API_TOKEN is not set. add the repo secret to enable deploys."
             exit 1
           fi
-          npx wrangler deploy
+          npx --no-install wrangler deploy
