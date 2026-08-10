@@ -157,7 +157,10 @@ async function expectShopFits(page: Page, card: Locator, safeTop: number, safeBo
   expect(report.dialogInside, JSON.stringify(report)).toBe(true)
   expect(report.constructionInside, JSON.stringify(report)).toBe(true)
   expect(report.actionHeight).toBeGreaterThanOrEqual(44)
-  expect(report.noHorizontalScroll && report.noVerticalScroll && report.buttonFits).toBe(true)
+  expect(
+    report.noHorizontalScroll && report.noVerticalScroll && report.buttonFits,
+    JSON.stringify(report),
+  ).toBe(true)
 }
 
 async function withHeldJoystick(page: Page, route: (move: (target: Point) => Promise<void>) => Promise<void>): Promise<void> {
