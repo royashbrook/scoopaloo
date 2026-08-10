@@ -44,6 +44,7 @@ export type ShiftUiState = {
   counterItems?: InventoryUiItem[]
   upcomingOrders?: UpcomingOrderUiItem[]
   neededMarker?: { label: string; icon: string; direction: 'left' | 'right' } | null
+  paused?: boolean
   order?: {
     label: string
     quantity: number
@@ -89,6 +90,7 @@ type ShiftActions = {
   back: () => void
   next: () => void
   buy: (id: string) => void
+  pause?: (on: boolean) => void
 }
 
 export class ShiftUi {
@@ -97,6 +99,7 @@ export class ShiftUi {
   private previousComboEvent = -1
   private previousUrgentEvent = -1
   private comboTimer?: number
+  private pauseReturnFocus?: HTMLElement
 
   constructor(private readonly root: HTMLElement, actions: ShiftActions) {
     root.className = 'shift-ui'
@@ -114,6 +117,8 @@ export class ShiftUi {
           <span class="sr-only" data-field="combo-status" role="status" aria-live="polite" aria-atomic="true">Combo 0.</span>
         </div>
       </section>
+
+      <button id="pause-button" class="pause-button" type="button" data-action="pause" aria-label="Pause shift" aria-controls="pause-dialog">Ⅱ</button>
 
       <div class="order-panel" data-field="order-panel" hidden>
         <aside class="next-orders is-empty" aria-label="Upcoming orders" aria-hidden="true">
@@ -156,6 +161,12 @@ export class ShiftUi {
         <span data-field="needed-direction" aria-hidden="true">›</span>
         <img data-field="needed-icon" src="/assets/items/soft-scoop.svg" alt="" />
       </aside>
+
+      <dialog id="pause-dialog" class="pause-dialog" aria-labelledby="pause-title">
+        <h2 id="pause-title">SHIFT PAUSED</h2>
+        <p>Timer and customer patience are stopped.</p>
+        <button id="resume-button" type="button" data-action="resume">RESUME</button>
+      </dialog>
 
       <section class="shift-card ready-card" aria-labelledby="ready-title">
         <img src="/assets/brand/scoopaloo-logo.svg" alt="Scoopaloo" />
@@ -230,6 +241,12 @@ export class ShiftUi {
     on('shop', actions.shop)
     on('back', actions.back)
     on('next', actions.next)
+    on('pause', () => actions.pause?.(true))
+    on('resume', () => actions.pause?.(false))
+    root.querySelector<HTMLDialogElement>('#pause-dialog')?.addEventListener('cancel', event => {
+      event.preventDefault()
+      actions.pause?.(false)
+    })
     root.querySelector<HTMLDialogElement>('.shop-card')?.addEventListener('cancel', event => {
       event.preventDefault()
       actions.back()
@@ -265,6 +282,18 @@ export class ShiftUi {
         shop.close()
       }
       this.previousPhase = state.phase
+    }
+
+    const pauseDialog = this.root.querySelector<HTMLDialogElement>('#pause-dialog')
+    const paused = state.phase === 'playing' && Boolean(state.paused)
+    if (paused && pauseDialog && !pauseDialog.open) {
+      this.pauseReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
+      pauseDialog.showModal()
+      this.root.querySelector<HTMLButtonElement>('#resume-button')?.focus()
+    } else if (!paused && pauseDialog?.open) {
+      pauseDialog.close()
+      this.pauseReturnFocus?.focus()
+      this.pauseReturnFocus = undefined
     }
 
     const dayNumber = state.day.replace(/\D/g, '') || state.day
@@ -540,6 +569,7 @@ export class ShiftUi {
   private renderInventory(name: string, items: InventoryUiItem[]): void {
     const target = this.root.querySelector<HTMLElement>(`[data-inventory="${name}"]`)
     if (!target) return
+    target.dataset.more = items.length > 2 ? `+${items.length - 2}` : ''
     const signature = items.map(item => `${item.icon}:${item.count}`).join('|') || 'empty'
     if (target.dataset.signature === signature) return
     target.dataset.signature = signature

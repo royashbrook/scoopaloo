@@ -162,15 +162,19 @@ async function expectPlayingFits(page: Page): Promise<void> {
       height: innerHeight,
     }
   })
-  const expectedPanel = layout.width < 600 ? layout.width - 24 : 298
+  const phone = layout.width < 600
+  const expectedPanel = phone ? layout.width - 24 : 298
   expect(layout.panel.width).toBe(expectedPanel)
-  expect(layout.ticket.width).toBe(expectedPanel - 68)
-  expect(layout.rail.width).toBe(60)
-  expect(layout.gap).toBe(8)
-  expect(layout.ticket.height).toBeLessThanOrEqual(244)
-  expect(layout.guidance.height).toBeGreaterThanOrEqual(32)
+  expect(layout.ticket.width).toBe(expectedPanel - (phone ? 58 : 68))
+  expect(layout.rail.width).toBe(phone ? 52 : 60)
+  expect(layout.gap).toBe(phone ? 6 : 8)
+  if (phone) expect(layout.ticket.height).toBe(132)
+  else {
+    expect(layout.ticket.height).toBeLessThanOrEqual(244)
+    expect(layout.guidance.height).toBeGreaterThanOrEqual(32)
+  }
   expect(layout.guidanceFits).toBe(true)
-  expect(layout.guidanceFont).toBeGreaterThanOrEqual(13)
+  expect(layout.guidanceFont).toBeGreaterThanOrEqual(phone ? 15 : 13)
   for (const item of [layout.panel, layout.ticket, layout.rail, layout.guidance]) {
     expect(item.left).toBeGreaterThanOrEqual(0)
     expect(item.top).toBeGreaterThanOrEqual(0)

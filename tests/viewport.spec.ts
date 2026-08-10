@@ -27,7 +27,7 @@ async function assertSize(page: Page, name: string): Promise<void> {
       ...Object.values(skin.stations).map(station => ({ kind: 'service', at: station.interaction })),
     ].filter((point, index, all) => all.findIndex(candidate => candidate.at.join(',') === point.at.join(',')) === index)
     const dpr = Math.min(devicePixelRatio, 2)
-    const boxes = ['.shift-hud', '.order-panel', '#save-button', '#sound-button'].map(selector =>
+    const boxes = ['.shift-hud', '.order-panel', '#pause-button', '#save-button', '#sound-button'].map(selector =>
       document.querySelector(selector)!.getBoundingClientRect()).filter(box => box.width > 0 && box.height > 0)
     const safeTop = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-top')) || 0
     const safeBottom = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom')) || 0
@@ -104,7 +104,7 @@ async function assertSize(page: Page, name: string): Promise<void> {
       sourceVisualsClear: sourceVisuals.every(visual => boxes.every(box => !overlaps(visual, box))),
       safeUi: boxes.every(box => box.top >= safeTop && box.bottom <= innerHeight - safeBottom),
       actionFont: Number.parseFloat(getComputedStyle(document.querySelector('.ticket-guidance')!).fontSize),
-      primaryFont: Number.parseFloat(getComputedStyle(document.querySelector('.ticket-body')!).fontSize),
+      primaryFont: Number.parseFloat(getComputedStyle(document.querySelector('[data-field="order-label"]')!).fontSize),
       secondaryFont: Math.min(...['.patience-values', '.recipe-list li', '.next-state', '.next-seconds']
         .flatMap(selector => [...document.querySelectorAll(selector)])
         .filter(element => getComputedStyle(element).display !== 'none')
@@ -140,7 +140,7 @@ async function assertSize(page: Page, name: string): Promise<void> {
     expect(checks.actionFont, name).toBeGreaterThanOrEqual(15)
     expect(checks.primaryFont, name).toBeGreaterThanOrEqual(14)
     expect(checks.secondaryFont, name).toBeGreaterThanOrEqual(13)
-    expect(checks.emptyInventory, name).toEqual({ compact: true, height: 32, summaryFont: 13 })
+    expect(checks.emptyInventory, name).toEqual({ compact: true, height: 30, summaryFont: 13 })
     expect(checks.yLegs.serviceToPrep).toBeGreaterThanOrEqual(name === 'air' ? 120 : 110)
     expect(checks.yLegs.prepToSource).toBeGreaterThanOrEqual(name === 'air' ? 120 : 110)
     expect(checks.yLegs.sourceRows).toHaveLength(2)
@@ -210,7 +210,6 @@ test('phone inventory expands clearly as soon as the tray is loaded', async ({ p
     height: element.getBoundingClientRect().height,
     rowsClear: [...element.children].every(row => row.scrollWidth <= row.clientWidth),
   }))
-  expect(inventory.height).toBeGreaterThanOrEqual(44)
-  expect(inventory.height).toBeLessThanOrEqual(48)
+  expect(inventory.height).toBe(30)
   expect(inventory.rowsClear).toBe(true)
 })

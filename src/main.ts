@@ -75,7 +75,11 @@ function cssPixels(name: string): number {
   return Number.isFinite(value) ? Math.max(0, value) : 0
 }
 
-let viewportBottomReserve = cssPixels('--safe-bottom')
+const PHONE_PLAY_RESERVE = 140
+let safeBottomReserve = cssPixels('--safe-bottom')
+const bottomReserve = (): number => safeBottomReserve
+  + (innerWidth <= 599 && state.phase === 'playing' ? PHONE_PLAY_RESERVE : 0)
+let viewportBottomReserve = bottomReserve()
 let viewport = computeViewport(
   innerWidth,
   innerHeight,
@@ -84,7 +88,8 @@ let viewport = computeViewport(
   state.player.x,
 )
 function fitViewport(): void {
-  viewportBottomReserve = cssPixels('--safe-bottom')
+  safeBottomReserve = cssPixels('--safe-bottom')
+  viewportBottomReserve = bottomReserve()
   viewport = computeViewport(
     innerWidth,
     innerHeight,
@@ -111,13 +116,23 @@ const storeButton = document.querySelector<HTMLButtonElement>('#store-button')
 const saveButton = document.querySelector<HTMLButtonElement>('#save-button')
 const soundButton = document.querySelector<HTMLButtonElement>('#sound-button')
 
+// Player pause owns the visible dialog. Debug pause stays separate so evidence
+// captures can stop simulation without changing the player-facing UI.
+let debugPaused = false
+let playerPaused = false
+function setPlayerPaused(on: boolean): void {
+  playerPaused = on && state.phase === 'playing'
+}
+
 const beginShift = (): void => {
+  setPlayerPaused(false)
   sound.unlock()
   previousScoreChaseBest = state.save.scoreChaseBest
   startShift(state)
   sound.play('start')
 }
 const replayShift = (): void => {
+  setPlayerPaused(false)
   sound.unlock()
   if (retryShift(state)) {
     previousScoreChaseBest = state.save.scoreChaseBest
@@ -148,6 +163,7 @@ const shiftUi = new ShiftUi(shiftRoot, {
       storeSave(state.save)
     }
   },
+  pause: setPlayerPaused,
 })
 canvas.setAttribute('aria-label', 'Scoopaloo ice cream stand game. Drag anywhere to move, or use W A S D or arrow keys. Walk into dashed ingredient rings to pick up ingredients automatically. Hold at prep until complete.')
 canvas.setAttribute('aria-describedby', 'helper-status')
@@ -160,19 +176,18 @@ let hurriedCustomer: Customer | undefined
 let hurrySerial = 0
 const HURRY_SECONDS = 10
 
-// paused = deterministic evidence mode (#14): the loop keeps RENDERING so
-// captures show the live scene, but the engine only steps via the advance hook
-let paused = false
-
 function frame(now: number): void {
   const elapsed = Math.min(.05, (now - previous) / 1000)
   previous = now
-  const coachingFrame = !paused && state.phase === 'playing'
-  if (!paused) step(state, elapsed, controls.vector)
+  const simulationPaused = debugPaused || playerPaused
+  const coachingFrame = !simulationPaused && state.phase === 'playing'
+  if (!simulationPaused) step(state, elapsed, controls.vector)
+  if (state.phase !== 'playing') playerPaused = false
   if (coachingFrame && coachStep === 'move'
     && Math.hypot(state.player.x - coachOrigin.x, state.player.y - coachOrigin.y) >= 24) coachStep = 'ring'
   if (coachingFrame && coachStep === 'ring'
     && state.events.some(event => event.kind === 'pickup' && event.source)) coachStep = null
+  viewportBottomReserve = bottomReserve()
   viewport = computeViewport(
     innerWidth,
     innerHeight,
@@ -360,6 +375,7 @@ function updateShiftUi(): void {
         : null,
     })),
     order,
+    paused: playerPaused,
   })
   if (bottomNav) bottomNav.hidden = state.phase === 'playing' || state.phase === 'shop'
 }
@@ -398,6 +414,9 @@ function inventoryUi(inventory: Record<string, number>): { label: string; icon: 
 
 requestAnimationFrame(frame)
 addEventListener('pagehide', () => storeSave(state.save))
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && state.phase === 'playing') setPlayerPaused(true)
+})
 
 const dialog = document.querySelector<HTMLDialogElement>('#save-dialog')
 const qr = document.querySelector<HTMLImageElement>('#save-qr')
@@ -468,16 +487,18 @@ if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
     advance: (seconds, input) => runFor(state, seconds, input),
     viewport: () => ({ ...viewport }),
     joystickOrigin: () => (controls.joystick.active ? { ...controls.joystick.origin } : null),
-    pause: on => { paused = on },
+    pause: on => { debugPaused = on },
     // fixed-time control (#14): the display clock drives dash offsets and idle
     // wiggles, so deterministic captures pin it to a chosen instant
     setTime: seconds => { state.time = seconds },
     atlasReady: () => renderer.assetsReady(),
     startShift: () => {
+      setPlayerPaused(false)
       previousScoreChaseBest = state.save.scoreChaseBest
       startShift(state)
     },
     retryShift: () => {
+      setPlayerPaused(false)
       if (retryShift(state)) previousScoreChaseBest = state.save.scoreChaseBest
     },
   }
