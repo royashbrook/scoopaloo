@@ -700,6 +700,10 @@ canvas {
   .shop-actions { margin-top: .5rem; }
 }
 
+@media (max-width: 699px) {
+  .upgrade-card[data-kind="construction"] { grid-column: 1 / -1; }
+}
+
 @media (min-width: 700px) {
   .upgrade-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .helper-upgrade { grid-template-columns: 56px minmax(0, 1fr) 150px; }
@@ -728,7 +732,72 @@ canvas {
 
 @media (max-width: 599px) {
   .ready-card { padding-block: .75rem; }
+  .shop-card {
+    position: fixed;
+    top: calc(var(--safe-top) + .5rem);
+    bottom: auto;
+    height: min(700px, calc(100dvh - var(--safe-top) - var(--safe-bottom) - 1rem));
+    max-height: min(700px, calc(100dvh - var(--safe-top) - var(--safe-bottom) - 1rem));
+    margin-block: 0;
+  }
   .shop-heading { margin-bottom: .65rem; }
+  .upgrade-grid { gap: .4rem; }
+  .upgrade-card:not(.helper-upgrade, [data-kind="construction"]) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "name change"
+      "level change"
+      "buy buy";
+    gap: 2px 4px;
+    padding: .4rem;
+    text-align: left;
+  }
+  .upgrade-card:not(.helper-upgrade, [data-kind="construction"]) h2 {
+    grid-area: name;
+    min-height: 0;
+    font-size: 15px;
+  }
+  .upgrade-card:not(.helper-upgrade, [data-kind="construction"]) .upgrade-level {
+    grid-area: level;
+    margin: 0;
+  }
+  .upgrade-card:not(.helper-upgrade, [data-kind="construction"]) .upgrade-change {
+    grid-area: change;
+    align-self: center;
+    margin: 0;
+    text-align: center;
+  }
+  .upgrade-card:not(.helper-upgrade, [data-kind="construction"]) .upgrade-change strong { font-size: 16px; }
+  .upgrade-card:not(.helper-upgrade, [data-kind="construction"]) button { grid-area: buy; }
+  .upgrade-card[data-kind="construction"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 112px;
+    grid-template-areas:
+      "name buy"
+      "level buy"
+      "change buy";
+    align-items: center;
+    gap: 2px 10px;
+    min-height: 92px;
+    padding: 5px 10px;
+    text-align: left;
+  }
+  .upgrade-card[data-kind="construction"] h2 {
+    grid-area: name;
+    min-height: 0;
+    font-size: 20px;
+  }
+  .upgrade-card[data-kind="construction"] .upgrade-level {
+    grid-area: level;
+    margin: 0;
+  }
+  .upgrade-card[data-kind="construction"] .upgrade-change {
+    grid-area: change;
+    margin: 0;
+    text-align: center;
+  }
+  .upgrade-card[data-kind="construction"] button { grid-area: buy; }
   .shift-hud { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .shift-hud .hud-stat:nth-child(1),
   .shift-hud .hud-stat:nth-child(4),
@@ -808,6 +877,7 @@ canvas {
     max-height: 132px;
   }
   .next-orders li { width: 46px; height: 51px; }
+  .next-orders .next-state { right: 2px; left: 2px; }
   .next-orders img { width: 28px; height: 30px; }
   .ticket-body > strong { max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .inventory-readout:not(.is-empty) > div {

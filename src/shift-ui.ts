@@ -80,6 +80,7 @@ export type UpgradeUiItem = {
   stat: string
   affordable: boolean
   capped: boolean
+  construction?: { available: boolean }
   helper?: { name: string; image: string }
 }
 
@@ -461,6 +462,7 @@ export class ShiftUi {
     const target = this.fields.upgrades
     const signature = upgrades.map(upgrade => [
       upgrade.id, upgrade.level, upgrade.price, upgrade.before, upgrade.after, upgrade.affordable,
+      upgrade.construction?.available,
       upgrade.helper?.name, upgrade.helper?.image,
     ].join(':')).join('|')
     if (target.dataset.signature === signature) return
@@ -473,13 +475,16 @@ export class ShiftUi {
       card.dataset.level = String(upgrade.level)
       card.dataset.price = upgrade.price === null ? '' : String(upgrade.price)
       card.dataset.affordable = String(upgrade.affordable)
-      card.setAttribute('aria-label', `${upgrade.name}, level ${upgrade.level} of ${upgrade.maxLevel}`)
+      if (upgrade.construction) card.dataset.kind = 'construction'
+      card.setAttribute('aria-label', upgrade.construction
+        ? `${upgrade.name}, ${upgrade.capped ? 'built' : 'not built'}`
+        : `${upgrade.name}, level ${upgrade.level} of ${upgrade.maxLevel}`)
 
       const name = document.createElement('h2')
       name.textContent = upgrade.name
       const level = document.createElement('p')
       level.className = 'upgrade-level'
-      level.textContent = `LEVEL ${upgrade.level} / ${upgrade.maxLevel}`
+      level.textContent = upgrade.construction ? 'CHOCOLATE CORNER' : `LEVEL ${upgrade.level} / ${upgrade.maxLevel}`
       const change = document.createElement('div')
       change.className = 'upgrade-change'
       const before = document.createElement('strong')
@@ -494,11 +499,25 @@ export class ShiftUi {
       const buy = document.createElement('button')
       buy.type = 'button'
       buy.dataset.upgrade = upgrade.id
-      buy.setAttribute('aria-label', upgrade.capped
-        ? `${upgrade.name} is at maximum level`
-        : `${upgrade.affordable ? 'Buy' : 'Need cash for'} ${upgrade.name} level ${upgrade.level + 1} for $${upgrade.price}`)
-      buy.textContent = upgrade.capped ? 'MAX LEVEL' : `${upgrade.affordable ? 'BUY' : 'NEED'}  $${upgrade.price}`
-      buy.disabled = upgrade.capped || !upgrade.affordable
+      const constructionLocked = Boolean(upgrade.construction && !upgrade.construction.available)
+      buy.setAttribute('aria-label', upgrade.construction
+        ? upgrade.capped
+          ? `${upgrade.name} is built`
+          : constructionLocked
+            ? `Finish Day 3 to build ${upgrade.name}`
+            : `${upgrade.affordable ? 'Build' : 'Need cash to build'} ${upgrade.name} for $${upgrade.price}`
+        : upgrade.capped
+          ? `${upgrade.name} is at maximum level`
+          : `${upgrade.affordable ? 'Buy' : 'Need cash for'} ${upgrade.name} level ${upgrade.level + 1} for $${upgrade.price}`)
+      buy.textContent = upgrade.construction
+        ? upgrade.capped ? 'BUILT'
+          : constructionLocked ? 'FINISH DAY 3'
+            : `${upgrade.affordable ? 'BUILD' : 'NEED'} $${upgrade.price}`
+        : upgrade.capped ? 'MAX LEVEL' : `${upgrade.affordable ? 'BUY' : 'NEED'}  $${upgrade.price}`
+      buy.disabled = upgrade.capped || constructionLocked || !upgrade.affordable
+      if (upgrade.construction) {
+        card.dataset.purchaseMessage = `${upgrade.name} built. Two customers can now be served at once.`
+      }
       card.append(name, level, change, buy)
       return card
     }))

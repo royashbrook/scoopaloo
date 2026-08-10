@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { createGame } from './engine'
+import type { GameSkin } from './skin'
 import skinData from './skins/ice-cream.json'
 import {
   MOTION_TIMES,
@@ -9,6 +11,7 @@ import {
   roomPropAnchor,
   stationOcclusionAlpha,
   transferPose,
+  visibleCounters,
   walkPose,
 } from './render'
 
@@ -34,6 +37,20 @@ describe('static parlor shell (#15)', () => {
       },
     })
     expect(roomPropAnchor(skinData.room.floorProp.draw)).toEqual({ x: 230, y: 512 })
+  })
+})
+
+describe('second service counter (#53)', () => {
+  it('adds the built expansion to the grounded counter draw list', () => {
+    const state = createGame(skinData as GameSkin)
+    expect(visibleCounters(state).map(counter => counter.id)).toEqual(['primary'])
+
+    state.save.upgrades['second-counter'] = 1
+    state.secondaryCounter.serveTimer = .35
+    expect(visibleCounters(state)).toEqual([
+      { id: 'primary', station: skinData.stations.counter, serveTimer: 0 },
+      { id: 'secondary', station: skinData.counterExpansion.station, serveTimer: .35 },
+    ])
   })
 })
 

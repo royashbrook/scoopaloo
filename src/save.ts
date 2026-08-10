@@ -45,7 +45,10 @@ function migrateSave(skin: GameSkin, parsed: Partial<SaveV1>): SaveV1 {
   const upgrades = { ...fallback.upgrades }
   if (parsed.upgrades && typeof parsed.upgrades === 'object') {
     for (const [id, level] of Object.entries(parsed.upgrades)) {
-      upgrades[id] = clamp(Math.floor(finite(level)), 0, 3)
+      const known = skin.upgrades.find(upgrade => upgrade.id === id)
+      upgrades[id] = known
+        ? clamp(Math.floor(finite(level)), 0, known.levels.length)
+        : Math.floor(finite(level))
     }
   }
   const unlockedStations = Array.isArray(parsed.unlockedStations)

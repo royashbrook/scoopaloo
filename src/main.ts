@@ -1,8 +1,9 @@
 import QRCode from 'qrcode'
 import './style.css'
 import {
-  createGame,
+  campaignCompleted,
   comboBonus,
+  createGame,
   customerPatience,
   enterShop,
   goalMet,
@@ -36,6 +37,7 @@ declare global {
     __scoopaloo: {
       snapshot: () => GameState
       movePlayer: (point: Point) => void
+      stockCounter: (items: Record<string, number>) => void
       advance: (seconds: number, input?: Point) => void
       viewport: () => Viewport
       joystickOrigin: () => Point | null
@@ -400,6 +402,9 @@ function upgradeUi(upgrade: SkinUpgrade, basePatience: number): UpgradeUiItem {
     stat: upgrade.unit,
     affordable: offer.affordable,
     capped: offer.capped,
+    construction: skin.counterExpansion?.upgradeId === upgrade.id
+      ? { available: campaignCompleted(state) }
+      : undefined,
     helper: skin.helper?.upgradeId === upgrade.id
       ? { name: skin.helper.name, image: skin.helper.image }
       : undefined,
@@ -484,6 +489,10 @@ if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
   window.__scoopaloo = {
     snapshot: () => structuredClone(state),
     movePlayer: point => { state.player.x = point.x; state.player.y = point.y },
+    stockCounter: items => {
+      state.counter.items = { ...items }
+      state.counter.stock = Object.values(items).reduce((total, quantity) => total + quantity, 0)
+    },
     advance: (seconds, input) => runFor(state, seconds, input),
     viewport: () => ({ ...viewport }),
     joystickOrigin: () => (controls.joystick.active ? { ...controls.joystick.origin } : null),

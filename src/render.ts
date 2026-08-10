@@ -1,12 +1,17 @@
 import { byDepth, depthScale } from './depth'
-import { inventoryTotal, prepSeconds, WORLD, type Customer, type GameEvent, type GameState, type Point } from './engine'
+import { inventoryTotal, prepSeconds, secondCounterBuilt, WORLD, type Customer, type GameEvent, type GameState, type Point } from './engine'
 import type { GameSkin } from './skin'
-import { prepPoint, producerPoint, stationPoint } from './skin'
+import { prepPoint, producerPoint } from './skin'
 import type { Viewport } from './viewport'
 import { worldToClient } from './viewport'
 
 type Joystick = { active: boolean; origin: Point; current: Point }
 type Drawable = { anchor: Point; draw: () => void }
+type CounterVisual = {
+  id: 'primary' | 'secondary'
+  station: GameSkin['stations']['counter']
+  serveTimer: number
+}
 
 const TAU = Math.PI * 2
 const REDUCED_MOTION_SCALE = .28
@@ -114,6 +119,21 @@ export function stationOcclusionAlpha(
   const playerArea = (playerRect.right - playerRect.left) * (playerRect.bottom - playerRect.top)
   const coverage = overlapWidth * overlapHeight / playerArea
   return 1 - .52 * limit(coverage / .2)
+}
+
+export function visibleCounters(state: GameState): CounterVisual[] {
+  const counters: CounterVisual[] = [{
+    id: 'primary',
+    station: state.skin.stations.counter,
+    serveTimer: state.counter.serveTimer,
+  }]
+  const expansion = state.skin.counterExpansion
+  if (expansion && secondCounterBuilt(state)) counters.push({
+    id: 'secondary',
+    station: expansion.station,
+    serveTimer: state.secondaryCounter.serveTimer,
+  })
+  return counters
 }
 
 export function walkPose(time: number, moving: boolean, facing: number, reducedMotion = false): WalkPose {
@@ -239,6 +259,7 @@ export class Renderer {
     // every drawable is one grounded unit (#14): sprite, shadow, stock, rings all
     // scale together around the unit's ground-contact anchor. byDepth is the ONLY
     // ordering rule; ties keep this list's order (room prop, stations, creatures).
+    const counters = visibleCounters(state)
     const things: (Drawable & { anchor: Point })[] = [
       {
         anchor: roomPropAnchor(this.skin.room.floorProp.draw),
@@ -252,10 +273,10 @@ export class Renderer {
         anchor: { x: prepPoint(this.skin, station).x, y: prep.depth },
         draw: () => this.drawPrepStation(state, station),
       })),
-      {
-        anchor: { x: stationPoint(this.skin, 'counter').x, y: this.skin.stations.counter.depth },
-        draw: () => this.drawCounter(state),
-      },
+      ...counters.map(counter => ({
+        anchor: { x: counter.station.interaction[0], y: counter.station.depth },
+        draw: () => this.drawCounter(state, counter, counter.id === 'primary'),
+      })),
       ...(this.skin.helper ? [{ anchor: roomPropAnchor(this.skin.helper.draw), draw: () => this.drawHelper(state) }] : []),
       ...state.customers.map(customer => ({
         anchor: { x: customer.x, y: customer.y },
@@ -460,11 +481,11 @@ export class Renderer {
     ctx.restore()
   }
 
-  private drawCounter(state: GameState): void {
-    const station = this.skin.stations.counter
+  private drawCounter(state: GameState, visual: CounterVisual, showSharedStock: boolean): void {
+    const { station, serveTimer } = visual
     const [x, y, width, height] = station.draw
     const [column, row] = station.sprite
-    const counter = stationPoint(this.skin, 'counter')
+    const counter = { x: station.interaction[0], y: station.interaction[1] }
     const artAlpha = stationOcclusionAlpha(state.player, station.draw, { x: counter.x, y: station.depth })
     const ctx = this.context
     ctx.save()
@@ -474,7 +495,7 @@ export class Renderer {
     ctx.restore()
     const airborneDrop = this.airborneTransfer(state, 'drop')
     const stock = withoutOne(inventoryItems(state.counter.items), airborneDrop?.item)
-    if (stock.length > 0) {
+    if (showSharedStock && stock.length > 0) {
       ctx.fillStyle = this.skin.palette.cream
       ctx.strokeStyle = this.skin.palette.cocoa
       ctx.lineWidth = 4
@@ -482,12 +503,20 @@ export class Renderer {
       stock.slice(0, 4).forEach((item, index) =>
         this.drawItem(item, counter.x - 82 + index * 20, counter.y - 71, 29, 38))
     }
-    if (state.counter.serveTimer > 0) {
+    if (serveTimer > 0) {
       const ctx = this.context
       ctx.strokeStyle = this.skin.palette.mint
       ctx.lineWidth = 8
-      ctx.beginPath(); ctx.arc(counter.x, counter.y - 85, 24, -.5 * Math.PI, (-.5 + state.counter.serveTimer / .7 * 2) * Math.PI); ctx.stroke()
+      ctx.beginPath(); ctx.arc(counter.x, counter.y - 85, 24, -.5 * Math.PI, (-.5 + serveTimer / .7 * 2) * Math.PI); ctx.stroke()
     }
+    if (visual.id === 'secondary') this.pickupRing(
+      counter.x,
+      counter.y + 35,
+      state,
+      counter,
+      this.interactionAge(state, event => event.kind === 'drop'
+        && Math.hypot(event.x - counter.x, event.y - counter.y) < 1),
+    )
   }
 
   private drawPrepStation(state: GameState, stationId: string): void {

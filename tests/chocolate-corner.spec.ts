@@ -227,7 +227,7 @@ for (const size of PHONES) {
       goal: 60,
       patience: 32,
       frontPatience: 32,
-      upgrades: [0, 0, 0, 0, 0],
+      upgrades: [0, 0, 0, 0, 0, 0],
     })
 
     const marker = page.locator('.needed-marker')
@@ -303,7 +303,14 @@ for (const size of PHONES) {
     expect(firstRoute.remaining).toBeGreaterThan(50)
 
     const result = await finishBaseDayTwo(page)
-    expect(result.upgrades).toEqual({ shoes: 0, tray: 0, machine: 0, patience: 0, helper: 0 })
+    expect(result.upgrades).toEqual({
+      shoes: 0,
+      tray: 0,
+      machine: 0,
+      patience: 0,
+      helper: 0,
+      'second-counter': 0,
+    })
     expect(result.revenue).toBeGreaterThanOrEqual(result.goal)
     expect(result.stars).toBeGreaterThanOrEqual(1)
     await page.screenshot({ path: `test-results/chocolate-day2-complete-${size.name}.png` })

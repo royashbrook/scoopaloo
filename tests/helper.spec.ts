@@ -234,7 +234,7 @@ test('Pip is a phone-first purchase, visible prep timer, and real assisted servi
   await finishShift(page)
   await page.getByRole('button', { name: 'UPGRADES' }).click()
 
-  await expect(page.locator('[data-upgrade-card]')).toHaveCount(5)
+  await expect(page.locator('[data-upgrade-card]')).toHaveCount(6)
   const card = page.locator('[data-upgrade-card="helper"]')
   await expect(card).toHaveAttribute('aria-label', 'PIP, Prep Pal, not hired. Stages ingredients for the front order every 30 seconds.')
   await expect(card.getByRole('button')).toHaveAttribute('aria-label', 'Buy PIP level 1 for $180; stages ingredients every 30 seconds')
