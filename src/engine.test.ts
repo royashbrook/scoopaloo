@@ -211,6 +211,24 @@ describe('three-day shop campaign (#25)', () => {
     expect(purchaseUpgrade(game, tray.id)).toBe(false)
   })
 
+  it('opens the same store before a shift and returns to the phase it came from (#49)', () => {
+    const ready = createGame(skin)
+    expect(enterShop(ready)).toBe(true)
+    expect(ready).toMatchObject({ phase: 'shop', shopReturnPhase: 'ready' })
+    expect(leaveShop(ready)).toBe(true)
+    expect(ready.phase).toBe('ready')
+
+    startShift(ready)
+    expect(enterShop(ready)).toBe(false)
+
+    const results = createGame(skin)
+    finishAt(results, currentDay(results).cashGoal)
+    expect(enterShop(results)).toBe(true)
+    expect(results.shopReturnPhase).toBe('results')
+    expect(leaveShop(results)).toBe(true)
+    expect(results.phase).toBe('results')
+  })
+
   it('caps levels and applies every effect to the live rules', () => {
     const game = createGame(skin)
     finishAt(game, currentDay(game).cashGoal)

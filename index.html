@@ -14,8 +14,12 @@
     <main>
       <canvas id="game" width="960" height="640" tabindex="0" aria-label="Scoopaloo ice cream stand game"></canvas>
       <div id="shift-ui"></div>
-      <button id="save-button" class="round-button" aria-label="Open save card">◆</button>
-      <button id="sound-button" class="round-button sound-button" aria-label="Sound" aria-pressed="true">♪</button>
+      <nav id="bottom-nav" class="bottom-nav" aria-label="Game menu">
+        <button id="play-button" class="nav-button" type="button" aria-current="page"><span aria-hidden="true">▶</span><b>PLAY</b></button>
+        <button id="store-button" class="nav-button" type="button"><span aria-hidden="true">▦</span><b>STORE</b></button>
+        <button id="save-button" class="nav-button" type="button" aria-label="Open save card"><span aria-hidden="true">◆</span><b>SAVE</b></button>
+        <button id="sound-button" class="nav-button sound-button" type="button" aria-label="Sound" aria-pressed="true"><span aria-hidden="true">♪</span><b>SOUND</b></button>
+      </nav>
       <button id="update-toast" class="round-button update-toast" hidden aria-label="Update ready, tap to refresh">↻</button>
       <dialog id="save-dialog" aria-labelledby="save-title">
         <form method="dialog"><button class="close" aria-label="Close">×</button></form>

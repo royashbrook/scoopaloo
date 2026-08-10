@@ -88,6 +88,7 @@ export type GameState = {
   skin: GameSkin
   rules: ActiveShiftRules
   phase: ShiftPhase
+  shopReturnPhase: 'ready' | 'results'
   shift: ShiftState
   time: number
   player: Point & { facing: number; moving: boolean; tray: number; trayItems: Inventory; trayWobble: number }
@@ -225,6 +226,7 @@ export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): Ga
     skin,
     rules,
     phase: 'ready',
+    shopReturnPhase: 'ready',
     shift: freshShift(rules),
     time: 0,
     player: { x: 480, y: 880, facing: 1, moving: false, tray: 0, trayItems: emptyInventory(skin), trayWobble: 0 },
@@ -700,14 +702,15 @@ export function retryShift(state: GameState): boolean {
 }
 
 export function enterShop(state: GameState): boolean {
-  if (state.phase !== 'results') return false
+  if (state.phase !== 'ready' && state.phase !== 'results') return false
+  state.shopReturnPhase = state.phase
   state.phase = 'shop'
   return true
 }
 
 export function leaveShop(state: GameState): boolean {
   if (state.phase !== 'shop') return false
-  state.phase = 'results'
+  state.phase = state.shopReturnPhase
   return true
 }
 

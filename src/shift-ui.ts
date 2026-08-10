@@ -30,6 +30,7 @@ export type ShiftUiState = {
   canAdvance?: boolean
   finalDay?: boolean
   canStartScoreChase?: boolean
+  shopReturnPhase?: 'ready' | 'results'
   upgrades?: UpgradeUiItem[]
   helper?: { name: string; remaining: number; enabled: boolean }
   wrongItem?: boolean
@@ -206,7 +207,7 @@ export class ShiftUi {
         <div class="upgrade-grid" data-field="upgrades" aria-label="Available upgrades"></div>
         <p class="purchase-status" data-field="purchase-status" role="status" aria-live="polite"></p>
         <div class="card-actions shop-actions">
-          <button type="button" class="secondary" data-action="back">RESULTS</button>
+          <button type="button" class="secondary" data-action="back">BACK</button>
           <button type="button" class="secondary" data-action="retry" data-field="shop-retry">RETRY DAY</button>
           <button type="button" data-action="next" data-field="shop-next">NEXT DAY</button>
         </div>
@@ -330,7 +331,9 @@ export class ShiftUi {
     this.set('result-retry', rush
       ? `${state.success ? 'REPLAY' : 'RETRY'} RUSH ${rush.level}`
       : state.success ? 'REPLAY' : 'RETRY')
-    this.set('shop-retry', rush ? `RETRY RUSH ${rush.level}` : `RETRY DAY ${dayNumber}`)
+    this.set('shop-retry', state.shopReturnPhase === 'ready'
+      ? rush ? `START RUSH ${rush.level}` : `START DAY ${dayNumber}`
+      : rush ? `RETRY RUSH ${rush.level}` : `RETRY DAY ${dayNumber}`)
     this.renderUpgrades(state.upgrades ?? [])
     this.set('helper-status', state.helper
       ? !state.helper.enabled

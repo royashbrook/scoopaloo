@@ -26,7 +26,7 @@ async function assertSize(page: Page, name: string): Promise<void> {
     ].filter((point, index, all) => all.findIndex(candidate => candidate.at.join(',') === point.at.join(',')) === index)
     const dpr = Math.min(devicePixelRatio, 2)
     const boxes = ['.shift-hud', '.order-panel', '#save-button', '#sound-button'].map(selector =>
-      document.querySelector(selector)!.getBoundingClientRect())
+      document.querySelector(selector)!.getBoundingClientRect()).filter(box => box.width > 0 && box.height > 0)
     const safeTop = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-top')) || 0
     const safeBottom = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom')) || 0
     const inside = (box: { left: number; top: number; right: number; bottom: number }) =>

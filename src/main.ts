@@ -90,23 +90,34 @@ const controls = new Controls(canvas, () => viewport)
 const renderer = new Renderer(canvas, skin)
 const shiftRoot = document.querySelector<HTMLElement>('#shift-ui')
 if (!shiftRoot) throw new Error('shift UI missing')
-const shiftUi = new ShiftUi(shiftRoot, {
-  start: () => {
-    sound.unlock()
+const bottomNav = document.querySelector<HTMLElement>('#bottom-nav')
+const playButton = document.querySelector<HTMLButtonElement>('#play-button')
+const storeButton = document.querySelector<HTMLButtonElement>('#store-button')
+const saveButton = document.querySelector<HTMLButtonElement>('#save-button')
+const soundButton = document.querySelector<HTMLButtonElement>('#sound-button')
+
+const beginShift = (): void => {
+  sound.unlock()
+  previousScoreChaseBest = state.save.scoreChaseBest
+  startShift(state)
+  sound.play('start')
+}
+const replayShift = (): void => {
+  sound.unlock()
+  if (retryShift(state)) {
     previousScoreChaseBest = state.save.scoreChaseBest
-    startShift(state)
     sound.play('start')
-  },
-  retry: () => {
-    sound.unlock()
-    if (retryShift(state)) {
-      previousScoreChaseBest = state.save.scoreChaseBest
-      sound.play('start')
-      storeSave(state.save)
-    }
-  },
-  shop: () => { enterShop(state) },
-  back: () => { leaveShop(state) },
+    storeSave(state.save)
+  }
+}
+const openShop = (): void => { enterShop(state) }
+const closeShop = (): void => { leaveShop(state) }
+
+const shiftUi = new ShiftUi(shiftRoot, {
+  start: beginShift,
+  retry: replayShift,
+  shop: openShop,
+  back: closeShop,
   next: () => {
     sound.unlock()
     if (nextDay(state)) {
@@ -283,6 +294,7 @@ function updateShiftUi(): void {
     finalDay: rules.kind === 'campaign' && rules.level === state.skin.days.length,
     canStartScoreChase: rules.kind === 'campaign'
       && rules.level === state.skin.days.length && Boolean(state.skin.scoreChase),
+    shopReturnPhase: state.shopReturnPhase,
     upgrades: skin.upgrades.map(upgrade => upgradeUi(upgrade, rules.customerPatience)),
     helper: skin.helper ? {
       name: skin.helper.name,
@@ -309,6 +321,7 @@ function updateShiftUi(): void {
     })),
     order,
   })
+  if (bottomNav) bottomNav.hidden = state.phase === 'playing' || state.phase === 'shop'
 }
 
 function upgradeUi(upgrade: SkinUpgrade, basePatience: number): UpgradeUiItem {
@@ -347,10 +360,15 @@ requestAnimationFrame(frame)
 addEventListener('pagehide', () => storeSave(state.save))
 
 const dialog = document.querySelector<HTMLDialogElement>('#save-dialog')
-const saveButton = document.querySelector<HTMLButtonElement>('#save-button')
-const soundButton = document.querySelector<HTMLButtonElement>('#sound-button')
 const qr = document.querySelector<HTMLImageElement>('#save-qr')
 const link = document.querySelector<HTMLAnchorElement>('#rescue-link')
+
+playButton?.addEventListener('click', () => {
+  if (state.phase === 'ready') beginShift()
+  else if (state.phase === 'results') replayShift()
+})
+storeButton?.addEventListener('click', openShop)
+
 if (dialog && saveButton && qr && link) {
   saveButton.addEventListener('click', async () => {
     storeSave(state.save)
@@ -364,7 +382,9 @@ if (dialog && saveButton && qr && link) {
 if (soundButton) {
   const updateButton = () => {
     soundButton.ariaPressed = String(sound.enabled())
-    soundButton.title = sound.enabled() ? 'Mute sound' : 'Turn sound on'
+    const label = sound.enabled() ? 'Mute sound' : 'Turn sound on'
+    soundButton.title = label
+    soundButton.setAttribute('aria-label', label)
   }
   soundButton.addEventListener('click', () => {
     const enabled = sound.toggle()
