@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   annexUnlocked,
+  campaignCompleted,
   comboBonus,
   currentDay,
+  customerCounterLane,
   customerPatience,
   createGame,
   defaultSave,
@@ -18,6 +20,7 @@ import {
   purchaseUpgrade,
   retryShift,
   runFor,
+  secondCounterBuilt,
   startShift,
   step,
   tipFor,
@@ -166,7 +169,7 @@ describe('kinetic service state (#16)', () => {
 })
 
 describe('three-day shop campaign (#25)', () => {
-  it('keeps days and all fifteen cumulative upgrade levels in skin data', () => {
+  it('keeps days, fifteen repeatable levels, and the counter build in skin data', () => {
     expect(skin.days).toHaveLength(3)
     expect(skin.days.map(day => day.cashGoal)).toEqual([45, 60, 70])
     expect(skin.days.map(day => day.customerPatience)).toEqual([50, 32, 60])
@@ -189,8 +192,8 @@ describe('three-day shop campaign (#25)', () => {
       { item: 'chocolate-sundae', quantity: 2 },
       { item: 'sundae', quantity: 2 },
     ])
-    expect(skin.upgrades.map(upgrade => upgrade.levels.length)).toEqual([3, 3, 3, 3, 3])
-    expect(skin.upgrades.map(upgrade => upgrade.levels[0].price)).toEqual([25, 40, 80, 20, 180])
+    expect(skin.upgrades.map(upgrade => upgrade.levels.length)).toEqual([3, 3, 3, 3, 3, 1])
+    expect(skin.upgrades.map(upgrade => upgrade.levels[0].price)).toEqual([25, 40, 80, 20, 180, 250])
   })
 
   it('offers independent cards and purchases only inside the shop', () => {
@@ -788,7 +791,7 @@ describe('Pip source-to-prep helper (#34)', () => {
       draw: [678, 622, 64, 78], status: [640, 588, 128, 30],
       prepStation: 'build-station', upgradeId: 'helper',
     })
-    expect(skin.upgrades.at(-1)).toEqual({
+    expect(skin.upgrades.find(upgrade => upgrade.id === 'helper')).toEqual({
       id: 'helper', name: 'PIP HELPER', kind: 'helperRate', unit: 'STAGES / MIN',
       levels: [
         { price: 180, effect: 2 },
@@ -1203,6 +1206,177 @@ describe('open counter (#32)', () => {
     runFor(careless, .95)
     expect(careless.shift).toMatchObject({ served: 1, missed: 1, streak: 1, bestStreak: 2 })
     expect(careless.events).toContainEqual(expect.objectContaining({ kind: 'combo-break', streak: 2 }))
+  })
+})
+
+describe('second service counter (#53)', () => {
+  const completedSave = (built = false) => {
+    const save = defaultSave(skin)
+    save.currentDay = 2
+    save.dayStars[2] = 1
+    if (built) save.upgrades['second-counter'] = 1
+    return save
+  }
+
+  const setOrder = (customer: GameState['customers'][number], item: string, quantity = 1) => {
+    const product = itemFor(skin, item)
+    customer.order = {
+      item,
+      quantity,
+      label: product.label,
+      price: product.price * quantity,
+      icon: product.icon,
+      color: product.color,
+    }
+    customer.served = false
+    customer.missed = false
+    customer.patience = skin.days[2].customerPatience
+    customer.exit = 0
+  }
+
+  const servicePair = (built: boolean) => {
+    const game = createGame(skin, completedSave(built))
+    const primary = game.customers[0]
+    setOrder(primary, 'vanilla-cone')
+    const secondary = { ...primary, order: { ...primary.order }, id: 2, look: 2, x: 900 }
+    setOrder(secondary, 'sundae')
+    game.customers.push(secondary)
+    game.rules.activeOrderWindow = 2
+    Object.assign(game.counter.items, { 'vanilla-cone': 1, sundae: 1 })
+    game.counter.stock = 2
+    startShift(game)
+    return { game, primary, secondary }
+  }
+
+  it('defines one exact post-campaign build and clamps it at one level', () => {
+    expect(skin.counterExpansion).toEqual({
+      upgradeId: 'second-counter',
+      station: { interaction: [850, 545], depth: 555, draw: [795, 445, 110, 105], sprite: [3, 2] },
+    })
+    const upgrade = skin.upgrades.find(candidate => candidate.id === 'second-counter')!
+    expect(upgrade).toEqual({
+      id: 'second-counter', name: 'SECOND COUNTER', kind: 'counterLanes', unit: 'SERVICE LANES',
+      levels: [{ price: 250, effect: 1 }],
+    })
+
+    const locked = createGame(skin)
+    locked.save.coins = 999
+    expect(campaignCompleted(locked)).toBe(false)
+    expect(upgradeOffer(locked, upgrade)).toMatchObject({ level: 0, price: 250, affordable: false, capped: false })
+    enterShop(locked)
+    expect(purchaseUpgrade(locked, upgrade.id)).toBe(false)
+
+    const completed = createGame(skin, completedSave())
+    completed.save.coins = 249
+    expect(campaignCompleted(completed)).toBe(true)
+    expect(purchaseUpgrade(completed, upgrade.id)).toBe(false)
+    enterShop(completed)
+    expect(purchaseUpgrade(completed, upgrade.id)).toBe(false)
+    completed.save.coins++
+    expect(purchaseUpgrade(completed, upgrade.id)).toBe(true)
+    expect(completed.save).toMatchObject({ coins: 0, upgrades: { 'second-counter': 1 } })
+    expect(secondCounterBuilt(completed)).toBe(true)
+    expect(purchaseUpgrade(completed, upgrade.id)).toBe(false)
+    expect(upgradeOffer(completed, upgrade)).toEqual({
+      level: 1, price: null, before: 1, after: 1, affordable: false, capped: true,
+    })
+  })
+
+  it('keeps the new drop zone inert at level 0 and shares stock after it is built', () => {
+    const secondaryPoint = { x: 850, y: 545 }
+    const locked = createGame(skin, completedSave())
+    startShift(locked)
+    locked.rules.activeOrderWindow = 0
+    locked.player.trayItems['vanilla-cone'] = 1
+    locked.player.tray = 1
+    Object.assign(locked.player, secondaryPoint)
+    step(locked, .05)
+    expect(locked.player.tray).toBe(1)
+    expect(locked.counter.stock).toBe(0)
+    expect(locked.secondaryCounter).toEqual({ serveTimer: 0, servingCustomerId: null })
+
+    const built = createGame(skin, completedSave(true))
+    startShift(built)
+    built.rules.activeOrderWindow = 0
+    built.player.trayItems['vanilla-cone'] = 1
+    built.player.tray = 1
+    Object.assign(built.player, stationPoint(skin, 'counter'))
+    step(built, .05)
+    runFor(built, .65)
+    built.player.trayItems.sundae = 1
+    built.player.tray = 1
+    Object.assign(built.player, secondaryPoint)
+    step(built, .05)
+
+    expect(built.counter).toMatchObject({ stock: 2, items: { 'vanilla-cone': 1, sundae: 1 } })
+    expect(built.events.filter(event => event.kind === 'drop').map(({ x, y }) => [x, y]))
+      .toEqual([[560, 545], [850, 545]])
+  })
+
+  it('keeps stable id lanes while level 0 continues serving every id on primary', () => {
+    expect([1, 2, 3, 4].map(id => customerCounterLane({ id })))
+      .toEqual(['primary', 'secondary', 'primary', 'secondary'])
+
+    const { game, primary, secondary } = servicePair(false)
+    game.counter.items[primary.order.item] = 0
+    game.counter.stock = 1
+    runFor(game, .71)
+    expect([primary.served, secondary.served]).toEqual([false, true])
+    expect(game.counter.servingCustomerId).toBeNull()
+    expect(game.secondaryCounter).toEqual({ serveTimer: 0, servingCustomerId: null })
+  })
+
+  it('settles both lanes concurrently at 0.7 seconds in primary-then-secondary order', () => {
+    const base = servicePair(false)
+    const expanded = servicePair(true)
+    runFor(base.game, .69)
+    runFor(expanded.game, .69)
+    expect([base.game.shift.served, expanded.game.shift.served]).toEqual([0, 0])
+    expect(expanded.game.counter.serveTimer).toBeCloseTo(.69)
+    expect(expanded.game.secondaryCounter.serveTimer).toBeCloseTo(.69)
+
+    step(base.game, .01)
+    step(expanded.game, .01)
+    expect([base.game.shift.served, expanded.game.shift.served]).toEqual([1, 2])
+    expect(expanded.game.events.filter(event => event.kind === 'pay').map(event => [event.item, event.x, event.y]))
+      .toEqual([['vanilla-cone', 560, 545], ['sundae', 850, 545]])
+    expect(expanded.game.flyingCoins).toHaveLength(8)
+    expect(expanded.game.flyingCoins.slice(0, 4).every(coin => coin.x < 700)).toBe(true)
+    expect(expanded.game.flyingCoins.slice(4).every(coin => coin.x > 700)).toBe(true)
+  })
+
+  it('reserves shared stock by primary priority inside one global active window', () => {
+    const { game, primary, secondary } = servicePair(true)
+    setOrder(secondary, primary.order.item)
+    game.counter.items[primary.order.item] = 1
+    game.counter.items.sundae = 0
+    game.counter.stock = 1
+    runFor(game, .71)
+    expect([primary.served, secondary.served]).toEqual([true, false])
+    expect(game.counter.stock).toBe(0)
+    expect(game.secondaryCounter).toEqual({ serveTimer: 0, servingCustomerId: null })
+
+    const outside = servicePair(true)
+    outside.game.rules.activeOrderWindow = 1
+    outside.game.counter.items[outside.primary.order.item] = 0
+    outside.game.counter.stock = 1
+    runFor(outside.game, .75)
+    expect([outside.primary.served, outside.secondary.served]).toEqual([false, false])
+  })
+
+  it('does not reset one lane when the other lane walks out', () => {
+    for (const missed of ['primary', 'secondary'] as const) {
+      const { game, primary, secondary } = servicePair(true)
+      runFor(game, .4)
+      const walking = missed === 'primary' ? primary : secondary
+      const survivor = missed === 'primary' ? secondary : primary
+      const survivingService = missed === 'primary' ? game.secondaryCounter : game.counter
+      walking.patience = .05
+      step(game, .05)
+      expect(walking.missed).toBe(true)
+      expect(survivingService.servingCustomerId).toBe(survivor.id)
+      expect(survivingService.serveTimer).toBeCloseTo(.45)
+    }
   })
 })
 

@@ -83,6 +83,8 @@ export type ProducerState = { item: string; stock: number; timer: number }
 export type PrepJob = { item: string; remaining: number; assisted?: boolean }
 export type PrepState = { job: PrepJob | null; outputs: Inventory }
 export type HelperState = { targetCustomerId: number | null; remaining: number }
+export type CounterServiceState = { serveTimer: number; servingCustomerId: number | null }
+export type CounterLane = 'primary' | 'secondary'
 
 export type GameState = {
   skin: GameSkin
@@ -97,7 +99,8 @@ export type GameState = {
   machine: ProducerState
   prepStations: Record<string, PrepState>
   helper: HelperState
-  counter: { stock: number; items: Inventory; serveTimer: number; servingCustomerId: number | null }
+  counter: CounterServiceState & { stock: number; items: Inventory }
+  secondaryCounter: CounterServiceState
   customers: Customer[]
   flyingCoins: FlyingCoin[]
   events: GameEvent[]
@@ -145,14 +148,14 @@ function backfillDayUnlocks(skin: GameSkin, save: SaveV1): void {
   }
 }
 
-export function upgradeLevel(save: SaveV1, id: string): number {
-  return clamp(Math.floor(Number.isFinite(save.upgrades[id]) ? save.upgrades[id] : 0), 0, 3)
+export function upgradeLevel(save: SaveV1, id: string, max = 3): number {
+  return clamp(Math.floor(Number.isFinite(save.upgrades[id]) ? save.upgrades[id] : 0), 0, max)
 }
 
 function savedUpgradeEffect(skin: GameSkin, save: SaveV1, kind: UpgradeKind): number {
   return skin.upgrades.reduce((total, upgrade) => {
     if (upgrade.kind !== kind) return total
-    return total + (upgrade.levels[upgradeLevel(save, upgrade.id) - 1]?.effect ?? 0)
+    return total + (upgrade.levels[upgradeLevel(save, upgrade.id, upgrade.levels.length) - 1]?.effect ?? 0)
   }, 0)
 }
 
@@ -161,15 +164,16 @@ export function upgradeEffect(state: GameState, kind: UpgradeKind): number {
 }
 
 export function upgradeOffer(state: GameState, upgrade: SkinUpgrade): UpgradeOffer {
-  const level = upgradeLevel(state.save, upgrade.id)
+  const level = upgradeLevel(state.save, upgrade.id, upgrade.levels.length)
   const next = upgrade.levels[level]
   const before = upgrade.levels[level - 1]?.effect ?? 0
+  const available = upgrade.kind !== 'counterLanes' || campaignCompleted(state)
   return {
     level,
     price: next?.price ?? null,
     before,
     after: next?.effect ?? before,
-    affordable: Boolean(next && state.save.coins >= next.price),
+    affordable: Boolean(next && available && state.save.coins >= next.price),
     capped: !next,
   }
 }
@@ -190,11 +194,25 @@ export function annexUnlocked(state: GameState): boolean {
   const annex = state.skin.room.annex
   return !annex || state.save.unlockedStations.includes(annex.unlockStation)
 }
+export function campaignCompleted(state: GameState): boolean {
+  const finalDay = state.skin.days.length - 1
+  return state.save.scoreChaseLevel > 0
+    || state.save.dayStars[finalDay] > 0
+    || state.save.dayBestRevenue[finalDay] >= (state.skin.days[finalDay]?.cashGoal ?? Infinity)
+}
+export function secondCounterBuilt(state: GameState): boolean {
+  const expansion = state.skin.counterExpansion
+  if (!expansion) return false
+  const upgrade = state.skin.upgrades.find(candidate => candidate.id === expansion.upgradeId)
+  return upgradeLevel(state.save, expansion.upgradeId, upgrade?.levels.length ?? 1) > 0
+}
+export const customerCounterLane = (customer: Pick<Customer, 'id'>): CounterLane =>
+  customer.id % 2 === 1 ? 'primary' : 'secondary'
 export function helperInterval(state: GameState): number | null {
   const helper = state.skin.helper
   if (!helper) return null
   const upgrade = state.skin.upgrades.find(candidate => candidate.id === helper.upgradeId)
-  const rate = upgrade?.levels[upgradeLevel(state.save, helper.upgradeId) - 1]?.effect ?? 0
+  const rate = upgrade?.levels[upgradeLevel(state.save, helper.upgradeId, upgrade.levels.length) - 1]?.effect ?? 0
   return rate > 0 ? 60 / rate : null
 }
 
@@ -239,6 +257,7 @@ export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): Ga
     prepStations,
     helper: { targetCustomerId: null, remaining: 0 },
     counter: { stock: 0, items: emptyInventory(skin), serveTimer: 0, servingCustomerId: null },
+    secondaryCounter: { serveTimer: 0, servingCustomerId: null },
     customers: [customer(skin, saved, rules, 1, 0)],
     flyingCoins: [],
     events: [],
@@ -293,6 +312,7 @@ function customer(skin: GameSkin, save: SaveV1, rules: ActiveShiftRules, id: num
 
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y)
 const near = (a: Point, b: Point, radius = 68) => distance(a, b) < radius
+const pointAt = ([x, y]: number[]): Point => ({ x, y })
 
 export function step(state: GameState, seconds: number, input: Input = { x: 0, y: 0 }): void {
   if (state.phase !== 'playing') return
@@ -334,6 +354,9 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
 
   const capacity = trayCapacity(state)
   const counter = stationPoint(state.skin, 'counter')
+  const secondaryCounter = secondCounterBuilt(state) && state.skin.counterExpansion
+    ? pointAt(state.skin.counterExpansion.station.interaction)
+    : null
   if (state.sourceContact && !near(state.player, producerPoint(state.skin, state.sourceContact))) {
     state.sourceContact = null
   }
@@ -358,7 +381,12 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
 
   updatePrepStations(state, dt, capacity)
 
-  if (state.pickupCooldown === 0 && near(state.player, counter) && inventoryTotal(state.player.trayItems) > 0) {
+  const counterContact = near(state.player, counter)
+    ? counter
+    : secondaryCounter && near(state.player, secondaryCounter)
+      ? secondaryCounter
+      : null
+  if (state.pickupCooldown === 0 && counterContact && inventoryTotal(state.player.trayItems) > 0) {
     const waiting = state.customers.filter(item => !item.served && !item.missed)
     const active = waiting.slice(0, state.rules.activeOrderWindow)
     const front = waiting[0]
@@ -377,9 +405,9 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
         addStock(state.player.trayItems, returned, -1)
         state.player.tray = inventoryTotal(state.player.trayItems)
         state.sources[owner].stock++
-        emit(state, 'reject', counter, { item: returned, expectedItem: front?.order.item, source: owner, reason: 'returned-raw' })
+        emit(state, 'reject', counterContact, { item: returned, expectedItem: front?.order.item, source: owner, reason: 'returned-raw' })
       } else {
-        emit(state, 'reject', counter, { item, expectedItem: front?.order.item, reason: 'needs-prep' })
+        emit(state, 'reject', counterContact, { item, expectedItem: front?.order.item, reason: 'needs-prep' })
       }
     } else {
       const from = { x: state.player.x, y: state.player.y }
@@ -388,9 +416,9 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
       state.player.tray = inventoryTotal(state.player.trayItems)
       state.counter.stock = inventoryTotal(state.counter.items)
       state.player.trayWobble = Math.max(state.player.trayWobble, .8)
-      emit(state, 'drop', counter, { item, from })
+      emit(state, 'drop', counterContact, { item, from })
       if (front && !active.some(customer => customer.order.item === item)) {
-        emit(state, 'reject', counter, { item, expectedItem: front.order.item, reason: 'wrong-item' })
+        emit(state, 'reject', counterContact, { item, expectedItem: front.order.item, reason: 'wrong-item' })
       }
     }
   }
@@ -493,6 +521,7 @@ function updatePrepStations(state: GameState, dt: number, capacity: number): voi
 
 function updateCustomers(state: GameState, dt: number): void {
   const register = stationPoint(state.skin, 'register')
+  const expanded = secondCounterBuilt(state)
   state.spawnTimer -= dt
   if (state.spawnTimer <= 0 && state.customers.filter(item => !item.served && !item.missed).length < 4) {
     const id = state.nextOrder + 1
@@ -502,28 +531,49 @@ function updateCustomers(state: GameState, dt: number): void {
   }
 
   const brokenStreak = state.shift.streak
-  let walkedOut: Customer | undefined
+  const walkedOut: Customer[] = []
   state.customers.filter(item => !item.served && !item.missed).forEach(item => {
     item.patience = Math.max(0, item.patience - dt)
     if (item.patience > 0) return
     item.missed = true
     state.shift.missed++
-    walkedOut ??= item
+    walkedOut.push(item)
   })
-  if (walkedOut) {
+  if (walkedOut.length > 0) {
     state.shift.streak = 0
-    state.counter.serveTimer = 0
-    state.counter.servingCustomerId = null
-    if (brokenStreak > 0) emit(state, 'combo-break', walkedOut, { streak: brokenStreak })
+    if (expanded) {
+      resetWalkedOutService(state.counter, walkedOut)
+      resetWalkedOutService(state.secondaryCounter, walkedOut)
+    } else {
+      state.counter.serveTimer = 0
+      state.counter.servingCustomerId = null
+    }
+    if (brokenStreak > 0) emit(state, 'combo-break', walkedOut[0], { streak: brokenStreak })
   }
 
   const waiting = state.customers.filter(item => !item.served && !item.missed)
-  waiting.forEach((item, index) => {
-    const targetX = 610 + index * 24
-    item.x += (targetX - item.x) * Math.min(1, dt * 5)
-    item.y = 550 + index * 25
-  })
+  if (expanded) positionCounterLanes(waiting, dt)
+  else {
+    waiting.forEach((item, index) => {
+      const targetX = 610 + index * 24
+      item.x += (targetX - item.x) * Math.min(1, dt * 5)
+      item.y = 550 + index * 25
+    })
+  }
 
+  if (expanded) updateExpandedCounter(state, waiting, dt, register)
+  else updatePrimaryCounter(state, waiting, dt, register)
+
+  state.customers.forEach(item => {
+    if (!item.served && !item.missed) return
+    item.exit += dt
+    item.x += 115 * dt
+    item.y += (item.missed ? 18 : -18) * dt
+  })
+  state.customers = state.customers.filter(item => item.exit < 2)
+}
+
+function updatePrimaryCounter(state: GameState, waiting: Customer[], dt: number, register: Point): void {
   const target = waiting.slice(0, state.rules.activeOrderWindow)
     .find(customer => (state.counter.items[customer.order.item] ?? 0) >= customer.order.quantity)
   if (target) {
@@ -537,39 +587,95 @@ function updateCustomers(state: GameState, dt: number): void {
       state.counter.stock = inventoryTotal(state.counter.items)
       state.counter.serveTimer = 0
       state.counter.servingCustomerId = null
-      target.served = true
-      state.shift.served++
-      state.shift.streak++
-      state.shift.bestStreak = Math.max(state.shift.bestStreak, state.shift.streak)
-      const tip = tipFor(target.patience, customerPatience(state))
-      const combo = comboBonus(state, state.shift.streak)
-      const payout = target.order.price + tip + combo
-      emit(state, 'pay', register, { amount: payout, tip, combo, streak: state.shift.streak, item: target.order.item })
-      for (let i = 0; i < 4; i++) {
-        const angle = -2.7 + i * .45
-        state.flyingCoins.push({
-          x: register.x,
-          y: register.y - 35,
-          vx: Math.cos(angle) * (80 + i * 12),
-          vy: Math.sin(angle) * (95 + i * 8),
-          age: 0,
-          collected: false,
-          value: Math.floor(payout / 4) + (i < payout % 4 ? 1 : 0),
-        })
-      }
+      settleCustomer(state, target, register)
     }
   } else {
     state.counter.serveTimer = 0
     state.counter.servingCustomerId = null
   }
+}
 
-  state.customers.forEach(item => {
-    if (!item.served && !item.missed) return
-    item.exit += dt
-    item.x += 115 * dt
-    item.y += (item.missed ? 18 : -18) * dt
-  })
-  state.customers = state.customers.filter(item => item.exit < 2)
+function updateExpandedCounter(state: GameState, waiting: Customer[], dt: number, primaryPoint: Point): void {
+  const active = waiting.slice(0, state.rules.activeOrderWindow)
+  const available = { ...state.counter.items }
+  const primary = laneTarget(active, 'primary', available)
+  if (primary) addStock(available, primary.order.item, -primary.order.quantity)
+  const secondary = laneTarget(active, 'secondary', available)
+  const secondaryPoint = pointAt(state.skin.counterExpansion!.station.interaction)
+
+  advanceCounterService(state, state.counter, primary, dt, primaryPoint)
+  advanceCounterService(state, state.secondaryCounter, secondary, dt, secondaryPoint)
+}
+
+function laneTarget(active: Customer[], lane: CounterLane, available: Inventory): Customer | undefined {
+  return active.find(customer => customerCounterLane(customer) === lane
+    && (available[customer.order.item] ?? 0) >= customer.order.quantity)
+}
+
+function advanceCounterService(
+  state: GameState,
+  service: CounterServiceState,
+  target: Customer | undefined,
+  dt: number,
+  point: Point,
+): void {
+  if (!target) {
+    service.serveTimer = 0
+    service.servingCustomerId = null
+    return
+  }
+  if (service.servingCustomerId !== target.id) {
+    service.servingCustomerId = target.id
+    service.serveTimer = 0
+  }
+  service.serveTimer += dt
+  if (service.serveTimer < .7) return
+  addStock(state.counter.items, target.order.item, -target.order.quantity)
+  state.counter.stock = inventoryTotal(state.counter.items)
+  service.serveTimer = 0
+  service.servingCustomerId = null
+  settleCustomer(state, target, point)
+}
+
+function resetWalkedOutService(service: CounterServiceState, walkedOut: Customer[]): void {
+  if (!walkedOut.some(customer => customer.id === service.servingCustomerId)) return
+  service.serveTimer = 0
+  service.servingCustomerId = null
+}
+
+function positionCounterLanes(waiting: Customer[], dt: number): void {
+  let primary = 0
+  let secondary = 0
+  for (const customer of waiting) {
+    const lane = customerCounterLane(customer)
+    const index = lane === 'primary' ? primary++ : secondary++
+    const targetX = lane === 'primary' ? 610 + index * 24 : 900 - index * 24
+    customer.x += (targetX - customer.x) * Math.min(1, dt * 5)
+    customer.y = 550 + index * 25
+  }
+}
+
+function settleCustomer(state: GameState, target: Customer, point: Point): void {
+  target.served = true
+  state.shift.served++
+  state.shift.streak++
+  state.shift.bestStreak = Math.max(state.shift.bestStreak, state.shift.streak)
+  const tip = tipFor(target.patience, customerPatience(state))
+  const combo = comboBonus(state, state.shift.streak)
+  const payout = target.order.price + tip + combo
+  emit(state, 'pay', point, { amount: payout, tip, combo, streak: state.shift.streak, item: target.order.item })
+  for (let i = 0; i < 4; i++) {
+    const angle = -2.7 + i * .45
+    state.flyingCoins.push({
+      x: point.x,
+      y: point.y - 35,
+      vx: Math.cos(angle) * (80 + i * 12),
+      vy: Math.sin(angle) * (95 + i * 8),
+      age: 0,
+      collected: false,
+      value: Math.floor(payout / 4) + (i < payout % 4 ? 1 : 0),
+    })
+  }
 }
 
 function updateCoins(state: GameState, dt: number): void {
@@ -724,6 +830,7 @@ export function purchaseUpgrade(state: GameState, id: string): boolean {
   if (state.phase !== 'shop') return false
   const upgrade = state.skin.upgrades.find(candidate => candidate.id === id)
   if (!upgrade) return false
+  if (upgrade.kind === 'counterLanes' && !campaignCompleted(state)) return false
   const offer = upgradeOffer(state, upgrade)
   if (offer.price === null || !offer.affordable) return false
   state.save.coins -= offer.price

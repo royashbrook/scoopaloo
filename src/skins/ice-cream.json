@@ -491,6 +491,15 @@
       ]
     }
   },
+  "counterExpansion": {
+    "upgradeId": "second-counter",
+    "station": {
+      "interaction": [850, 545],
+      "depth": 555,
+      "draw": [795, 445, 110, 105],
+      "sprite": [3, 2]
+    }
+  },
   "upgrades": [
     {
       "id": "shoes",
@@ -545,6 +554,15 @@
         { "price": 180, "effect": 2 },
         { "price": 360, "effect": 3 },
         { "price": 720, "effect": 4 }
+      ]
+    },
+    {
+      "id": "second-counter",
+      "name": "SECOND COUNTER",
+      "kind": "counterLanes",
+      "unit": "SERVICE LANES",
+      "levels": [
+        { "price": 250, "effect": 1 }
       ]
     }
   ]

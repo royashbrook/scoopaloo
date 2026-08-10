@@ -1,7 +1,7 @@
 import type { Point } from './engine'
 
 export type StationKey = 'counter' | 'register'
-export type UpgradeKind = 'walkSpeed' | 'trayCapacity' | 'churnTime' | 'customerPatience' | 'helperRate'
+export type UpgradeKind = 'walkSpeed' | 'trayCapacity' | 'churnTime' | 'customerPatience' | 'helperRate' | 'counterLanes'
 export type SkinOrder = { item: string; quantity: number }
 export type SkinRecipe = {
   station: string
@@ -84,6 +84,15 @@ export type SkinHelper = {
   prepStation: string
   upgradeId: string
 }
+export type SkinCounterExpansion = {
+  upgradeId: string
+  station: {
+    interaction: number[]
+    depth: number
+    draw: number[]
+    sprite: number[]
+  }
+}
 export type SkinRoomImage = { image: string; draw: number[] }
 export type SkinRoomAnnex = {
   label: string
@@ -111,6 +120,7 @@ export type GameSkin = {
   prepStations: Record<string, PrepStation>
   progression: { startingStation: string; startingStations: string[] }
   helper?: SkinHelper
+  counterExpansion?: SkinCounterExpansion
   upgrades: SkinUpgrade[]
   palette: {
     strawberry: string
