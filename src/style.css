@@ -808,6 +808,7 @@ canvas {
     max-height: 132px;
   }
   .next-orders li { width: 46px; height: 51px; }
+  .next-orders .next-state { right: 2px; left: 2px; }
   .next-orders img { width: 28px; height: 30px; }
   .ticket-body > strong { max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .inventory-readout:not(.is-empty) > div {
