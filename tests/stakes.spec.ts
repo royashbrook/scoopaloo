@@ -58,6 +58,7 @@ async function layout(page: Page) {
       clear: !overlaps(ticket, rail) && !overlaps(panel, hud) && !overlaps(panel, save) && !overlaps(panel, sound),
       railBeforeTicket: rail.right <= ticket.left,
       ticketBeforeRail: ticket.right <= rail.left,
+      gap: rail.right <= ticket.left ? ticket.left - rail.right : rail.left - ticket.right,
       panelEndsWithTicket: Math.abs(panel.bottom - ticket.bottom),
       payout: sized('[data-field="order-payout"]'),
       seconds: sized('[data-field="patience-seconds"]'),
@@ -121,11 +122,14 @@ test('shows live maximum stakes, waiting clocks, and one accessible hurry cue', 
     const view = await layout(page)
     expect(view.allInside, size.name).toBe(true)
     expect(view.clear, size.name).toBe(true)
-    const expectedPanel = size.width < 600 ? size.width - 24 : 298
+    const phone = size.width < 600
+    const expectedPanel = phone ? size.width - 24 : 298
     expect(view.panel.width, size.name).toBeCloseTo(expectedPanel, 0)
-    expect(view.ticket.width, size.name).toBeCloseTo(expectedPanel - 68, 0)
-    expect(view.rail.width, size.name).toBeCloseTo(60, 0)
-    expect(view.ticket.height, size.name).toBeLessThanOrEqual(244)
+    expect(view.ticket.width, size.name).toBeCloseTo(phone ? 308 : expectedPanel - 68, 0)
+    expect(view.rail.width, size.name).toBeCloseTo(phone ? 52 : 60, 0)
+    expect(view.gap, size.name).toBeCloseTo(phone ? 6 : 8, 0)
+    if (phone) expect(view.ticket.height, size.name).toBe(132)
+    else expect(view.ticket.height, size.name).toBeLessThanOrEqual(244)
     expect(view.railBeforeTicket, size.name).toBe(size.railFirst)
     expect(view.ticketBeforeRail, size.name).toBe(!size.railFirst)
     expect(view.panelEndsWithTicket, size.name).toBeLessThanOrEqual(1)

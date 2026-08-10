@@ -26,8 +26,15 @@ async function setPhoneSafeArea(page: Page): Promise<void> {
   await page.waitForTimeout(50)
 }
 
-async function expectPaintedCanvas(page: Page, originX: number, playerMustBeVisible = true): Promise<void> {
-  await expect.poll(() => page.evaluate(() => window.__scoopaloo.viewport().originX)).toBe(originX)
+async function expectPaintedCanvas(page: Page, originX: number | 'east', playerMustBeVisible = true): Promise<void> {
+  if (originX === 'east') {
+    await expect.poll(() => page.evaluate(() => {
+      const view = window.__scoopaloo.viewport()
+      return Math.abs(view.originX - (960 - view.viewWidth))
+    })).toBeLessThan(.001)
+  } else {
+    await expect.poll(() => page.evaluate(() => window.__scoopaloo.viewport().originX)).toBe(originX)
+  }
   const report = await page.evaluate(() => {
     const canvas = document.querySelector('canvas')!
     const context = canvas.getContext('2d')!
@@ -180,7 +187,7 @@ for (const size of PHONES) {
     })
     expect(locked.playerX).toBeCloseTo(725, 0)
     expect(locked).toMatchObject({ active: false, unlocked: false })
-    await expectPaintedCanvas(page, 320)
+    await expectPaintedCanvas(page, 'east')
     await page.screenshot({ path: `test-results/chocolate-day1-locked-${size.name}.png` })
   })
 
@@ -257,7 +264,7 @@ for (const size of PHONES) {
       await expect.poll(() => page.evaluate(() =>
         window.__scoopaloo.snapshot().player.trayItems['chocolate-scoop'] ?? 0)).toBe(1)
       await stop()
-      await expectPaintedCanvas(page, 320)
+      await expectPaintedCanvas(page, 'east')
       await expect(marker).toBeVisible()
       await expect(marker).toHaveAttribute('data-direction', 'left')
       await expect(marker).toHaveAttribute('aria-label', 'CONE ingredient is offscreen to the left')

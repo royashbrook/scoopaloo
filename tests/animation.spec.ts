@@ -332,7 +332,7 @@ test('focuses interaction rings and keeps the player readable behind foreground 
     cssHeight: 912,
     scale: .65625,
     originX: 160,
-    originY: -224.76190476190482,
+    originY: -46.98412698412692,
     dpr: 1,
   })
 

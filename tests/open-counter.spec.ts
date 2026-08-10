@@ -189,12 +189,12 @@ test('serves the second open order by pointer while keeping the front ticket', a
 
   const phone = await layout(page)
   expect(phone.panel.width).toBeCloseTo(390 - 24, 0)
-  expect(phone.ticket.width).toBeCloseTo(390 - 92, 0)
-  expect(phone.ticket.height).toBeLessThanOrEqual(244)
-  expect(phone.rail.width).toBeCloseTo(60, 0)
+  expect(phone.ticket.width).toBeCloseTo(308, 0)
+  expect(phone.ticket.height).toBe(132)
+  expect(phone.rail.width).toBeCloseTo(52, 0)
   expect(phone.inside && phone.clear && phone.railBeforeTicket).toBe(true)
   for (const row of phone.rows) {
-    expect(row, row.state).toMatchObject({ height: 54, font: 13, stateFits: true, rowFits: true, labelsClear: true })
+    expect(row, row.state).toMatchObject({ height: 51, font: 13, stateFits: true, rowFits: true, labelsClear: true })
   }
   await page.screenshot({ path: 'test-results/open-counter-phone-actionable.png' })
 

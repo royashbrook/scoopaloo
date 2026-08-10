@@ -184,10 +184,14 @@ test('renders the cached parlor shell behind depth-sorted play at every target s
       const view = window.__scoopaloo.viewport()
       const room = window.__scoopaloo.snapshot().skin.room
       const [x, y, width, height] = room.backdrop.draw
+      const dock = document.querySelector('.order-panel')!.getBoundingClientRect()
+      const playableBottom = innerWidth < 600
+        ? view.originY + dock.top / view.scale
+        : view.originY + view.viewHeight
       return x <= view.originX
         && x + width >= view.originX + view.viewWidth
         && y <= room.horizon
-        && y + height >= view.originY + view.viewHeight
+        && y + height >= playableBottom
     })
     expect(floorCoverage, size.name).toBe(true)
     if (size.name === 'air') {

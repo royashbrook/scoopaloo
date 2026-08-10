@@ -367,7 +367,8 @@ test('Pip is a phone-first purchase, visible prep timer, and real assisted servi
     expect(layout.trace?.labels).toContain('PIP · 30s')
     expect(layout.sprite.left).toBeGreaterThanOrEqual(0)
     expect(layout.sprite.right).toBeLessThanOrEqual(viewport.width)
-    expect(layout.sprite.top).toBeGreaterThan(layout.ticket.bottom)
+    if (viewport.width === 390) expect(layout.sprite.bottom).toBeLessThan(layout.ticket.top)
+    else expect(layout.sprite.top).toBeGreaterThan(layout.ticket.bottom)
     expect(layout.sprite.bottom).toBeLessThanOrEqual(viewport.height)
     expect(layout.describedBy).toBe('helper-status')
     expect(layout.status).toBe('PIP will be ready in 30 seconds.')
@@ -503,7 +504,7 @@ test('Pip is a phone-first purchase, visible prep timer, and real assisted servi
     const guidance = document.querySelector<HTMLElement>('[data-field="ticket-guidance"]')!
     return { height: ticket.height, fits: guidance.scrollWidth <= guidance.clientWidth, font: parseFloat(getComputedStyle(guidance).fontSize) }
   })
-  expect(assistedTicket.height).toBeLessThanOrEqual(244)
+  expect(assistedTicket.height).toBe(132)
   expect(assistedTicket).toMatchObject({ fits: true, font: 15 })
   const assisted = await page.evaluate(() => {
     const state = window.__scoopaloo.snapshot()
