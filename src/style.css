@@ -641,8 +641,18 @@ canvas {
   text-align: left;
 }
 .helper-upgrade .helper-avatar { width: 48px; height: 58px; object-fit: contain; }
+.staff-avatar {
+  display: grid;
+  place-items: center;
+  border: 3px solid #4a3b45;
+  border-radius: 50%;
+  color: #4a3b45;
+  background: #ffd45e;
+  font-size: 13px;
+  font-weight: 900;
+}
 .helper-copy { min-width: 0; }
-.helper-upgrade h2 { min-height: 0; font-size: 20px; line-height: 1; }
+.helper-upgrade h2 { min-height: 0; font-size: 20px; line-height: 1.15; }
 .helper-role {
   margin: 3px 0;
   color: #946119;
@@ -741,8 +751,11 @@ canvas {
     margin-block: 0;
     padding: .75rem;
   }
-  .shop-heading { margin-bottom: .5rem; }
-  .upgrade-grid { gap: .3rem; }
+  .shop-heading { align-items: center; margin-bottom: .5rem; }
+  .shop-card h1 { font-size: 25px; }
+  .shop-wallet { min-width: 5.8rem; padding: .3rem .45rem; }
+  .shop-wallet strong { font-size: 21px; }
+  .upgrade-grid { gap: .25rem; }
   .shop-actions { margin-top: .5rem; }
   .upgrade-card:not(.helper-upgrade, [data-kind="construction"]) {
     display: grid;
@@ -758,11 +771,14 @@ canvas {
   .upgrade-card:not(.helper-upgrade, [data-kind="construction"]) h2 {
     grid-area: name;
     min-height: 0;
-    font-size: 15px;
+    font-size: 14px;
   }
   .upgrade-card:not(.helper-upgrade, [data-kind="construction"]) .upgrade-level {
     grid-area: level;
     margin: 0;
+    letter-spacing: -.04em;
+    line-height: 1;
+    white-space: nowrap;
   }
   .upgrade-card:not(.helper-upgrade, [data-kind="construction"]) .upgrade-change {
     grid-area: change;
@@ -771,6 +787,10 @@ canvas {
     text-align: center;
   }
   .upgrade-card:not(.helper-upgrade, [data-kind="construction"]) .upgrade-change strong { font-size: 16px; }
+  .upgrade-card:not(.helper-upgrade, [data-kind="construction"]) .upgrade-change small {
+    letter-spacing: -.04em;
+    line-height: 1;
+  }
   .upgrade-card:not(.helper-upgrade, [data-kind="construction"]) button { grid-area: buy; }
   .upgrade-card[data-kind="construction"] {
     display: grid;
@@ -788,7 +808,9 @@ canvas {
   .upgrade-card[data-kind="construction"] h2 {
     grid-area: name;
     min-height: 0;
-    font-size: 20px;
+    font-size: 16px;
+    line-height: 1;
+    white-space: nowrap;
   }
   .upgrade-card[data-kind="construction"] .upgrade-level {
     grid-area: level;
@@ -799,7 +821,13 @@ canvas {
     margin: 0;
     text-align: center;
   }
+  .upgrade-card[data-kind="construction"] .upgrade-change strong { font-size: 16px; }
+  .upgrade-card[data-kind="construction"] .upgrade-change small { line-height: 1; }
   .upgrade-card[data-kind="construction"] button { grid-area: buy; }
+  .helper-upgrade h2 { font-size: 17px; }
+  .helper-upgrade { padding-block: 3px; }
+  .helper-role { letter-spacing: 0; line-height: 1; }
+  .helper-description { line-height: 1; }
   .shift-hud { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .shift-hud .hud-stat:nth-child(1),
   .shift-hud .hud-stat:nth-child(4),
@@ -816,6 +844,7 @@ canvas {
     bottom: calc(var(--safe-bottom) + 8px);
     left: max(12px, var(--safe-left));
     z-index: 15;
+    justify-self: stretch;
     grid-template-columns: 52px minmax(0, 1fr);
     gap: 6px;
     width: auto;
@@ -872,7 +901,14 @@ canvas {
     min-height: 0;
   }
   .inventory-readout.is-empty { min-height: 0; }
-  .inventory-readout.is-empty::after { padding: .25rem; font-size: 13px; text-align: center; }
+  .inventory-readout.is-empty::after {
+    content: "TRAY + COUNTER\A EMPTY";
+    padding: .25rem;
+    font-size: 13px;
+    line-height: 1;
+    text-align: center;
+    white-space: pre-line;
+  }
   .next-orders {
     width: 52px;
     height: 132px;

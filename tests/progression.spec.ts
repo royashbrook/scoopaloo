@@ -149,7 +149,7 @@ test('finishes Day 1, buys a visible upgrade, and restores Day 2 with its real e
 
   const shop = page.getByRole('dialog', { name: 'UPGRADE SHOP' })
   await expect(shop).toBeVisible()
-  await expect(page.locator('[data-upgrade-card]')).toHaveCount(6)
+  await expect(page.locator('[data-upgrade-card]')).toHaveCount(7)
   expect(await page.locator('[data-upgrade-card][data-affordable="true"]').count()).toBeGreaterThanOrEqual(2)
   await expect(page.locator('#shop-title')).toBeFocused()
 

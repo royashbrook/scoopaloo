@@ -16,10 +16,12 @@ describe('save v1', () => {
     }
     const save = { ...defaultSave(skin), coins: 12, bestRevenue: 74, bestStars: 2 }
     save.upgrades.helper = 2
+    save.upgrades['counter-runner'] = 2
     storeSave(save, storage)
     expect(values.has(SAVE_KEY)).toBe(true)
     expect(loadSave(skin, storage)).toMatchObject({
-      coins: 12, text: true, bestRevenue: 74, bestStars: 2, upgrades: { helper: 2 },
+      coins: 12, text: true, bestRevenue: 74, bestStars: 2,
+      upgrades: { helper: 2, 'counter-runner': 2 },
     })
   })
 
@@ -56,6 +58,7 @@ describe('save v1', () => {
       unlockedStations: [...skin.progression.startingStations, legacyUnlock],
     }
     save.upgrades.helper = 2
+    save.upgrades['counter-runner'] = 3
     const code = await encodeSave(save)
     expect(code.startsWith('sc1.')).toBe(true)
     expect(await decodeSave(skin, code)).toEqual(save)
@@ -75,7 +78,7 @@ describe('save v1', () => {
       version: 1,
       coins: 19,
       unlockedStations: skin.progression.startingStations,
-      upgrades: { shoes: 1, tray: 0, machine: 0, helper: 0 },
+      upgrades: { shoes: 1, tray: 0, machine: 0, helper: 0, 'counter-runner': 0 },
       text: true,
       bestRevenue: 0,
       bestStars: 0,
@@ -124,7 +127,10 @@ describe('save v1', () => {
         legacyUnlock,
         ...skin.progression.startingStations.slice(1),
       ],
-      upgrades: { shoes: 1, tray: 0, machine: 0, patience: 0, helper: 0, 'second-counter': 0 },
+      upgrades: {
+        shoes: 1, tray: 0, machine: 0, patience: 0, helper: 0,
+        'second-counter': 0, 'counter-runner': 0,
+      },
       skin: skin.id,
       text: true,
       bestRevenue: 0,
@@ -144,7 +150,10 @@ describe('save v1', () => {
       version: 1,
       coins: 42,
       unlockedStations: ['retired-cart'],
-      upgrades: { shoes: 8, tray: -2, machine: 1, helper: 8, 'second-counter': 8, 'retired-upgrade': 8 },
+      upgrades: {
+        shoes: 8, tray: -2, machine: 1, helper: 8,
+        'second-counter': 8, 'counter-runner': 8, 'retired-upgrade': 8,
+      },
       skin: skin.id,
       bestRevenue: 74,
       bestStars: 2,
@@ -157,7 +166,10 @@ describe('save v1', () => {
       lifetimeCash: 42,
       dayStars: [2, 0, 0],
       dayBestRevenue: [74, 0, 0],
-      upgrades: { shoes: 3, tray: 0, machine: 1, patience: 0, helper: 3, 'second-counter': 1, 'retired-upgrade': 8 },
+      upgrades: {
+        shoes: 3, tray: 0, machine: 1, patience: 0, helper: 3,
+        'second-counter': 1, 'counter-runner': 3, 'retired-upgrade': 8,
+      },
     })
     expect(restored.unlockedStations).toEqual(['retired-cart', ...skin.progression.startingStations])
   })

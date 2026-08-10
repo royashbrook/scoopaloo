@@ -83,6 +83,7 @@ export type ProducerState = { item: string; stock: number; timer: number }
 export type PrepJob = { item: string; remaining: number; assisted?: boolean }
 export type PrepState = { job: PrepJob | null; outputs: Inventory }
 export type HelperState = { targetCustomerId: number | null; remaining: number }
+export type CounterRunnerState = { remaining: number }
 export type CounterServiceState = { serveTimer: number; servingCustomerId: number | null }
 export type CounterLane = 'primary' | 'secondary'
 
@@ -99,6 +100,7 @@ export type GameState = {
   machine: ProducerState
   prepStations: Record<string, PrepState>
   helper: HelperState
+  counterRunner: CounterRunnerState
   counter: CounterServiceState & { stock: number; items: Inventory }
   secondaryCounter: CounterServiceState
   customers: Customer[]
@@ -167,7 +169,9 @@ export function upgradeOffer(state: GameState, upgrade: SkinUpgrade): UpgradeOff
   const level = upgradeLevel(state.save, upgrade.id, upgrade.levels.length)
   const next = upgrade.levels[level]
   const before = upgrade.levels[level - 1]?.effect ?? 0
-  const available = upgrade.kind !== 'counterLanes' || campaignCompleted(state)
+  const available = upgrade.kind === 'counterLanes'
+    ? campaignCompleted(state)
+    : upgrade.kind !== 'runnerRate' || secondCounterBuilt(state)
   return {
     level,
     price: next?.price ?? null,
@@ -215,6 +219,13 @@ export function helperInterval(state: GameState): number | null {
   const rate = upgrade?.levels[upgradeLevel(state.save, helper.upgradeId, upgrade.levels.length) - 1]?.effect ?? 0
   return rate > 0 ? 60 / rate : null
 }
+export function counterRunnerInterval(state: GameState): number | null {
+  const runner = state.skin.counterRunner
+  if (!runner || !secondCounterBuilt(state)) return null
+  const upgrade = state.skin.upgrades.find(candidate => candidate.id === runner.upgradeId)
+  const rate = upgrade?.levels[upgradeLevel(state.save, runner.upgradeId, upgrade.levels.length) - 1]?.effect ?? 0
+  return rate > 0 ? 60 / rate : null
+}
 
 export function prepSeconds(state: GameState, item: string): number {
   const recipe = itemFor(state.skin, item).recipe
@@ -256,6 +267,7 @@ export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): Ga
     machine,
     prepStations,
     helper: { targetCustomerId: null, remaining: 0 },
+    counterRunner: { remaining: 0 },
     counter: { stock: 0, items: emptyInventory(skin), serveTimer: 0, servingCustomerId: null },
     secondaryCounter: { serveTimer: 0, servingCustomerId: null },
     customers: [customer(skin, saved, rules, 1, 0)],
@@ -268,6 +280,7 @@ export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): Ga
     save: saved,
   }
   state.helper.remaining = helperInterval(state) ?? 0
+  state.counterRunner.remaining = counterRunnerInterval(state) ?? 0
   return state
 }
 
@@ -425,6 +438,7 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
 
   updateCustomers(state, dt)
   updateHelper(state, dt)
+  updateCounterRunner(state, dt)
   updateCoins(state, dt)
   state.events.forEach(event => { event.age += dt })
   state.events = state.events.filter(event => event.age < .9)
@@ -471,6 +485,41 @@ function updateHelper(state: GameState, dt: number): void {
     item: front.order.item,
     station: helper.prepStation,
     source: 'helper',
+  })
+}
+
+function updateCounterRunner(state: GameState, dt: number): void {
+  const interval = counterRunnerInterval(state)
+  const runner = state.skin.counterRunner
+  if (interval === null || !runner) {
+    state.counterRunner.remaining = 0
+    return
+  }
+  state.counterRunner.remaining = Math.max(0, state.counterRunner.remaining - dt)
+  if (state.counterRunner.remaining > 0) return
+
+  const active = state.customers.filter(customer => !customer.served && !customer.missed)
+    .slice(0, state.rules.activeOrderWindow)
+  const demand: Inventory = {}
+  const order = active.find(customer => {
+    addStock(demand, customer.order.item, customer.order.quantity)
+    const staged = (state.counter.items[customer.order.item] ?? 0)
+      + (state.player.trayItems[customer.order.item] ?? 0)
+    return demand[customer.order.item] > staged
+  })
+  const recipe = order && itemFor(state.skin, order.order.item).recipe
+  const prep = recipe && state.prepStations[recipe.station]
+  if (!order || !recipe || !prep || (prep.outputs[order.order.item] ?? 0) <= 0) return
+
+  addStock(prep.outputs, order.order.item, -1)
+  addStock(state.counter.items, order.order.item, 1)
+  state.counter.stock = inventoryTotal(state.counter.items)
+  state.counterRunner.remaining = interval
+  emit(state, 'drop', pointAt(state.skin.counterExpansion!.station.interaction), {
+    item: order.order.item,
+    source: runner.upgradeId,
+    station: recipe.station,
+    from: prepPoint(state.skin, recipe.station),
   })
 }
 
@@ -831,10 +880,14 @@ export function purchaseUpgrade(state: GameState, id: string): boolean {
   const upgrade = state.skin.upgrades.find(candidate => candidate.id === id)
   if (!upgrade) return false
   if (upgrade.kind === 'counterLanes' && !campaignCompleted(state)) return false
+  if (upgrade.kind === 'runnerRate' && !secondCounterBuilt(state)) return false
   const offer = upgradeOffer(state, upgrade)
   if (offer.price === null || !offer.affordable) return false
   state.save.coins -= offer.price
   state.save.upgrades[id] = offer.level + 1
+  if (upgrade.kind === 'runnerRate' || upgrade.kind === 'counterLanes') {
+    state.counterRunner.remaining = counterRunnerInterval(state) ?? 0
+  }
   return true
 }
 
