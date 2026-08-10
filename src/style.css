@@ -755,7 +755,7 @@ canvas {
   .shop-card h1 { font-size: 25px; }
   .shop-wallet { min-width: 5.8rem; padding: .3rem .45rem; }
   .shop-wallet strong { font-size: 21px; }
-  .upgrade-grid { gap: .3rem; }
+  .upgrade-grid { gap: .25rem; }
   .shop-actions { margin-top: .5rem; }
   .upgrade-card:not(.helper-upgrade, [data-kind="construction"]) {
     display: grid;
@@ -825,6 +825,7 @@ canvas {
   .upgrade-card[data-kind="construction"] .upgrade-change small { line-height: 1; }
   .upgrade-card[data-kind="construction"] button { grid-area: buy; }
   .helper-upgrade h2 { font-size: 17px; }
+  .helper-upgrade { padding-block: 3px; }
   .helper-role { letter-spacing: 0; line-height: 1; }
   .helper-description { line-height: 1; }
   .shift-hud { grid-template-columns: repeat(3, minmax(0, 1fr)); }
