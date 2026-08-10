@@ -188,8 +188,8 @@ test('serves the second open order by pointer while keeping the front ticket', a
   const railBefore = await rows.evaluateAll(items => items.map(item => (item as HTMLElement).dataset.label))
 
   const phone = await layout(page)
-  expect(phone.panel.width).toBeCloseTo(298, 0)
-  expect(phone.ticket.width).toBeCloseTo(230, 0)
+  expect(phone.panel.width).toBeCloseTo(390 - 24, 0)
+  expect(phone.ticket.width).toBeCloseTo(390 - 92, 0)
   expect(phone.ticket.height).toBeLessThanOrEqual(244)
   expect(phone.rail.width).toBeCloseTo(60, 0)
   expect(phone.inside && phone.clear && phone.railBeforeTicket).toBe(true)

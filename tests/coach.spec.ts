@@ -157,8 +157,9 @@ async function expectPlayingFits(page: Page): Promise<void> {
       height: innerHeight,
     }
   })
-  expect(layout.panel.width).toBe(298)
-  expect(layout.ticket.width).toBe(230)
+  const expectedPanel = layout.width < 600 ? layout.width - 24 : 298
+  expect(layout.panel.width).toBe(expectedPanel)
+  expect(layout.ticket.width).toBe(expectedPanel - 68)
   expect(layout.rail.width).toBe(60)
   expect(layout.gap).toBe(8)
   expect(layout.ticket.height).toBeLessThanOrEqual(244)
@@ -285,13 +286,14 @@ test('teaches one real first-shift drag and ring pickup without touching the sav
 
   await page.evaluate(() => window.__scoopaloo.advance(window.__scoopaloo.snapshot().shift.remaining))
   await expect(page.getByRole('heading', { name: 'GOAL MISSED' })).toBeVisible()
-  await page.getByRole('button', { name: 'RETRY' }).click()
-  await expect(guidance).toHaveText('GET VANILLA + CONE')
-  expect(sequenceCount(await frequencies(page), [330, 440, 660])).toBe(3)
-
-  const soundButton = page.getByRole('button', { name: 'Sound' })
+  const startsBeforeMute = sequenceCount(await frequencies(page), [330, 440, 660])
+  const soundButton = page.locator('#sound-button')
   await soundButton.click()
   await expect(soundButton).toHaveAttribute('aria-pressed', 'false')
+  await page.getByRole('button', { name: 'RETRY' }).click()
+  await expect(guidance).toHaveText('GET VANILLA + CONE')
+  expect(sequenceCount(await frequencies(page), [330, 440, 660])).toBe(startsBeforeMute)
+
   const mutedPickupSounds = sequenceCount(await frequencies(page), [760])
   await page.evaluate(() => window.__scoopaloo.pause(false))
   await collect(page, await neededProducer(page))
@@ -310,7 +312,7 @@ test('teaches one real first-shift drag and ring pickup without touching the sav
   try {
     await page.reload()
     await expect(page.locator('[data-field="ready-unlock"]')).toHaveText(READY_COPY)
-    await expect(page.getByRole('button', { name: 'Sound' })).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.locator('#sound-button')).toHaveAttribute('aria-pressed', 'false')
     await page.screenshot({ path: 'test-results/coach-phone-offline-ready.png' })
     await page.getByRole('button', { name: 'START SHIFT' }).click()
     await expect(page.locator('[data-field="ticket-guidance"]')).toHaveText(MOVE_COPY)

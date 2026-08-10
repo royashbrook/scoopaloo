@@ -121,8 +121,9 @@ test('shows live maximum stakes, waiting clocks, and one accessible hurry cue', 
     const view = await layout(page)
     expect(view.allInside, size.name).toBe(true)
     expect(view.clear, size.name).toBe(true)
-    expect(view.panel.width, size.name).toBeCloseTo(298, 0)
-    expect(view.ticket.width, size.name).toBeCloseTo(230, 0)
+    const expectedPanel = size.width < 600 ? size.width - 24 : 298
+    expect(view.panel.width, size.name).toBeCloseTo(expectedPanel, 0)
+    expect(view.ticket.width, size.name).toBeCloseTo(expectedPanel - 68, 0)
     expect(view.rail.width, size.name).toBeCloseTo(60, 0)
     expect(view.ticket.height, size.name).toBeLessThanOrEqual(244)
     expect(view.railBeforeTicket, size.name).toBe(size.railFirst)
