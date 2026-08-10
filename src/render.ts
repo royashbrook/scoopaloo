@@ -234,6 +234,7 @@ export class Renderer {
     const k = view.dpr * view.scale
     ctx.setTransform(k, 0, 0, k, -view.originX * k, -view.originY * k)
     this.drawRoom(view)
+    this.drawAnnex(state)
 
     // every drawable is one grounded unit (#14): sprite, shadow, stock, rings all
     // scale together around the unit's ground-contact anchor. byDepth is the ONLY
@@ -308,6 +309,43 @@ export class Renderer {
     const anchor = roomPropAnchor(draw)
     this.shadow(anchor.x, anchor.y - 2, 30, 8)
     this.context.drawImage(this.roomFloorProp, ...draw)
+  }
+
+  private drawAnnex(state: GameState): void {
+    const annex = this.skin.room.annex
+    if (!annex) return
+    const [x, y, width, height] = annex.doorway
+    const unlocked = state.save.unlockedStations.includes(annex.unlockStation)
+    const ctx = this.context
+    ctx.save()
+    if (unlocked) {
+      ctx.strokeStyle = this.skin.palette.cocoa
+      ctx.globalAlpha = .24
+      ctx.lineWidth = 5
+      ctx.beginPath()
+      ctx.moveTo(x + width / 2, y)
+      ctx.lineTo(x + width / 2, y + 64)
+      ctx.moveTo(x + width / 2, y + height - 64)
+      ctx.lineTo(x + width / 2, y + height)
+      ctx.stroke()
+      ctx.restore()
+      return
+    }
+    ctx.fillStyle = this.skin.palette.waffle
+    ctx.strokeStyle = this.skin.palette.cocoa
+    ctx.lineWidth = 5
+    rounded(ctx, x, y, width, height, width / 2)
+    ctx.fill()
+    ctx.stroke()
+    ctx.globalAlpha = .38
+    ctx.lineWidth = 3
+    for (let at = y + 24; at < y + height - 12; at += 34) {
+      ctx.beginPath()
+      ctx.moveTo(x + 3, at)
+      ctx.lineTo(x + width - 3, at + 16)
+      ctx.stroke()
+    }
+    ctx.restore()
   }
 
   private drawHelper(state: GameState): void {

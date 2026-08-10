@@ -19,12 +19,18 @@ describe('static parlor shell (#15)', () => {
       wall: '#FFE7CA',
       floor: '#FFF3E6',
       backdrop: {
-        image: '/assets/room/ice-cream-wall.svg?v=2',
+        image: '/assets/room/ice-cream-wall.svg?v=3',
         draw: [-416, 0, 1792, 1200],
       },
       floorProp: {
         image: '/assets/room/mint-plant.svg?v=1',
         draw: [190, 400, 80, 112],
+      },
+      annex: {
+        label: 'CHOCOLATE CORNER',
+        unlockStation: 'chocolate-scoop',
+        boundaryX: 780,
+        doorway: [770, 320, 20, 800],
       },
     })
     expect(roomPropAnchor(skinData.room.floorProp.draw)).toEqual({ x: 230, y: 512 })

@@ -11,6 +11,11 @@
       <path d="M-416 320h536l-160 880h-376zM840 320h536v880h-376z"/>
     </g>
     <path id="work-floor" fill="#FFE7CA" stroke="#4A3B45" stroke-opacity=".1" stroke-width="4" d="M360 332h240l190 868H170l190-868Z"/>
+    <g id="chocolate-corner-floor">
+      <path fill="#8B5A44" fill-opacity=".08" d="M760 320h200v880H760z"/>
+      <path stroke="#8B5A44" stroke-opacity=".14" stroke-width="3" d="M800 320v880m40-880v880m40-880v880m40-880v880M760 470h200M760 680h200M760 930h200"/>
+      <path stroke="#8B5A44" stroke-opacity=".2" stroke-width="5" d="M760 320v880"/>
+    </g>
     <g id="floor-seams" stroke="#4A3B45" stroke-opacity=".075" stroke-width="3">
       <path d="M341 420h278M319 520h322M290 650h380M253 820h454M207 1030h546"/>
       <path d="m420 332-80 868M480 332v868m60-868 80 868"/>
@@ -26,6 +31,14 @@
   <path fill="#FFD9B8" fill-opacity=".5" d="M88 0h32v320H88zM840 0h32v320h-32z"/>
   <path stroke="#4A3B45" stroke-opacity=".12" stroke-width="3" d="M120 0v320M840 0v320"/>
   <path stroke="#4A3B45" stroke-opacity=".18" stroke-width="12" d="M-416 320h1792"/>
+
+  <g id="chocolate-corner-wall" stroke="#4A3B45" stroke-linecap="round" stroke-linejoin="round">
+    <path fill="#8B5A44" fill-opacity=".12" stroke-opacity=".22" stroke-width="4" d="M804 224h132v76H804z"/>
+    <path fill="#FFD9B8" stroke-width="5" d="M790 288h160v16H790z"/>
+    <path stroke-width="5" d="m812 304-12 16m128-16 12 16"/>
+    <path fill="#8B5A44" stroke-width="4" d="M824 270c0-18 16-32 36-32s36 14 36 32H824z"/>
+    <path fill="#FF8FAB" stroke-width="4" d="M858 270c0-13 12-24 27-24s27 11 27 24h-54z"/>
+  </g>
 
   <g stroke="#4A3B45" stroke-linecap="round" stroke-linejoin="round">
     <path fill="#FFD9B8" stroke-width="5" d="M180 283h158v15H180z"/>

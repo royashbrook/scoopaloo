@@ -75,9 +75,24 @@ function cssPixels(name: string): number {
   return Number.isFinite(value) ? Math.max(0, value) : 0
 }
 
-let viewport = computeViewport(innerWidth, innerHeight, devicePixelRatio, cssPixels('--safe-bottom'))
+let viewportBottomReserve = cssPixels('--safe-bottom')
+let viewport = computeViewport(
+  innerWidth,
+  innerHeight,
+  devicePixelRatio,
+  viewportBottomReserve,
+  state.player.x,
+)
 function fitViewport(): void {
-  viewport = computeViewport(innerWidth, innerHeight, devicePixelRatio, cssPixels('--safe-bottom'))
+  viewportBottomReserve = cssPixels('--safe-bottom')
+  viewport = computeViewport(
+    innerWidth,
+    innerHeight,
+    devicePixelRatio,
+    viewportBottomReserve,
+    state.player.x,
+    viewport.originX,
+  )
   const backing = backingSize(viewport)
   if (canvas.width !== backing.width) canvas.width = backing.width
   if (canvas.height !== backing.height) canvas.height = backing.height
@@ -158,6 +173,14 @@ function frame(now: number): void {
     && Math.hypot(state.player.x - coachOrigin.x, state.player.y - coachOrigin.y) >= 24) coachStep = 'ring'
   if (coachingFrame && coachStep === 'ring'
     && state.events.some(event => event.kind === 'pickup' && event.source)) coachStep = null
+  viewport = computeViewport(
+    innerWidth,
+    innerHeight,
+    devicePixelRatio,
+    viewportBottomReserve,
+    state.player.x,
+    viewport.originX,
+  )
   updateSound()
   renderer.draw(state, controls.joystick, viewport)
   updateShiftUi()
@@ -209,6 +232,7 @@ function updateShiftUi(): void {
     || (event.kind === 'pay' && skin.comboTiers.some(tier => tier.streak === event.streak)))
   let order = null
   let recipe = null
+  let neededMarker: { label: string; icon: string; direction: 'left' | 'right' } | null = null
   if (front) {
     const stake = serviceStake(front)
     order = {
@@ -235,12 +259,27 @@ function updateShiftUi(): void {
         ? 1 - prep.job.remaining / prepSeconds(state, front.order.item)
         : null
       const steps = Object.entries(itemRecipe.inputs).map(([item, need]) => ({
+        item,
         label: skin.items[item].label,
         icon: skin.items[item].icon,
         have: working || ready || carrying ? need : state.player.trayItems[item] ?? 0,
         need,
       }))
       const missing = steps.filter(step => step.have < step.need).map(step => step.label)
+      const nextIngredient = steps.find(step => step.have < step.need)
+      const source = nextIngredient && Object.entries(state.sources)
+        .find(([, producer]) => producer.item === nextIngredient.item)?.[0]
+      if (nextIngredient && source) {
+        const x = skin.producers[source].interaction[0]
+        const direction = x < viewport.originX ? 'left'
+          : x > viewport.originX + viewport.viewWidth ? 'right'
+            : null
+        if (direction) neededMarker = {
+          label: nextIngredient.label,
+          icon: nextIngredient.icon,
+          direction,
+        }
+      }
       recipe = {
         instruction: coachStep === 'move' ? 'DRAG ANYWHERE TO MOVE'
           : coachStep === 'ring' ? `WALK INTO ${missing[0] ?? 'INGREDIENT'} RING`
@@ -307,6 +346,7 @@ function updateShiftUi(): void {
     recipe,
     trayItems: inventoryUi(state.player.trayItems),
     counterItems: inventoryUi(state.counter.items),
+    neededMarker,
     upcomingOrders: upcomingOrders(state, 2).map((upcoming, index) => ({
       label: upcoming.label,
       icon: upcoming.icon,

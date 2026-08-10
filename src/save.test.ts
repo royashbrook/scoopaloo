@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createGame, defaultSave, startShift, step } from './engine'
+import { annexUnlocked, createGame, defaultSave, startShift, step } from './engine'
 import { decodeSave, encodeSave, loadSave, SAVE_KEY, storeSave } from './save'
 import type { GameSkin } from './skin'
 import skinData from './skins/ice-cream.json'
@@ -82,6 +82,24 @@ describe('save v1', () => {
       scoreChaseLevel: 0,
       scoreChaseBest: 0,
     })
+  })
+
+  it('opens Chocolate Corner for legacy Day 2 and Rush rescue codes without SaveV2', async () => {
+    const rescue = async (currentDay: number, scoreChaseLevel = 0) => createGame(skin, await decodeSave(skin, await encodeSave({
+      version: 1,
+      coins: 0,
+      currentDay,
+      scoreChaseLevel,
+      unlockedStations: skin.progression.startingStations,
+    } as unknown as ReturnType<typeof defaultSave>)))
+
+    const day2 = await rescue(1)
+    const rush = await rescue(0, 1)
+    expect([day2.save.version, rush.save.version]).toEqual([1, 1])
+    expect([day2.save.currentDay, rush.save.currentDay]).toEqual([1, 2])
+    expect([annexUnlocked(day2), annexUnlocked(rush)]).toEqual([true, true])
+    expect(day2.save.unlockedStations).toContain('chocolate-scoop')
+    expect(rush.save.unlockedStations).toContain('chocolate-scoop')
   })
 
   it('adds result records to an existing v1 save without losing progress', () => {

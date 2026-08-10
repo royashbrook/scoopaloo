@@ -348,7 +348,14 @@ test('focuses interaction rings and keeps the player readable behind foreground 
   const focusedGeometry = await geometry(page)
   expect(focusedGeometry.ui).toEqual(original.ui)
   expect(focusedGeometry.anchors).toEqual(original.anchors)
-  expect(focusedGeometry.viewport).toEqual(original.viewport)
+  expect(focusedGeometry.viewport).toMatchObject({
+    cssWidth: original.viewport.cssWidth,
+    cssHeight: original.viewport.cssHeight,
+    scale: original.viewport.scale,
+    originY: original.viewport.originY,
+    dpr: original.viewport.dpr,
+  })
+  expect(focusedGeometry.viewport.originX).toBeLessThan(original.viewport.originX)
   await page.screenshot({ path: 'test-results/animation-air-ring-focus.png' })
 
   const pickup = await createPickup(page, 'cone-shell')
@@ -360,7 +367,14 @@ test('focuses interaction rings and keeps the player readable behind foreground 
   await page.screenshot({ path: 'test-results/animation-air-ring-settled.png' })
   const afterContact = await geometry(page)
   expect(afterContact.anchors).toEqual(original.anchors)
-  expect(afterContact.viewport).toEqual(original.viewport)
+  expect(afterContact.viewport).toMatchObject({
+    cssWidth: original.viewport.cssWidth,
+    cssHeight: original.viewport.cssHeight,
+    scale: original.viewport.scale,
+    originY: original.viewport.originY,
+    dpr: original.viewport.dpr,
+  })
+  expect(afterContact.viewport.originX).toBeLessThan(focusedGeometry.viewport.originX)
 
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await startPaused(page)
