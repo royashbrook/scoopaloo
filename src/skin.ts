@@ -85,12 +85,19 @@ export type SkinHelper = {
   upgradeId: string
 }
 export type SkinRoomImage = { image: string; draw: number[] }
+export type SkinRoomAnnex = {
+  label: string
+  unlockStation: string
+  boundaryX: number
+  doorway: number[]
+}
 export type SkinRoom = {
   horizon: number
   wall: string
   floor: string
   backdrop: SkinRoomImage
   floorProp: SkinRoomImage
+  annex?: SkinRoomAnnex
 }
 export type GameSkin = {
   id: string

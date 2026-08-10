@@ -186,6 +186,10 @@ export const producerInterval = (state: GameState, source = state.skin.progressi
   state.skin.producers[source].interval
 export const machineInterval = producerInterval
 export const customerPatience = (state: GameState): number => state.rules.customerPatience + upgradeEffect(state, 'customerPatience')
+export function annexUnlocked(state: GameState): boolean {
+  const annex = state.skin.room.annex
+  return !annex || state.save.unlockedStations.includes(annex.unlockStation)
+}
 export function helperInterval(state: GameState): number | null {
   const helper = state.skin.helper
   if (!helper) return null
@@ -306,7 +310,9 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
   const ny = length > 1 ? input.y / length : input.y
   state.player.moving = length > 0.05
   if (state.player.moving) {
-    state.player.x = clamp(state.player.x + nx * speed * dt, 55, WORLD.width - 55)
+    const annex = state.skin.room.annex
+    const maxX = annex && !annexUnlocked(state) ? annex.boundaryX - 55 : WORLD.width - 55
+    state.player.x = clamp(state.player.x + nx * speed * dt, 55, maxX)
     state.player.y = clamp(state.player.y + ny * speed * .72 * dt, 330, WORLD.height - 45)
     if (Math.abs(nx) > .1) state.player.facing = Math.sign(nx)
   }

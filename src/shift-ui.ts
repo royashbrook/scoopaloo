@@ -43,6 +43,7 @@ export type ShiftUiState = {
   trayItems?: InventoryUiItem[]
   counterItems?: InventoryUiItem[]
   upcomingOrders?: UpcomingOrderUiItem[]
+  neededMarker?: { label: string; icon: string; direction: 'left' | 'right' } | null
   order?: {
     label: string
     quantity: number
@@ -150,6 +151,11 @@ export class ShiftUi {
           </div>
         </aside>
       </div>
+
+      <aside class="needed-marker" data-field="needed-marker" aria-live="polite" hidden>
+        <span data-field="needed-direction" aria-hidden="true">›</span>
+        <img data-field="needed-icon" src="/assets/items/soft-scoop.svg" alt="" />
+      </aside>
 
       <section class="shift-card ready-card" aria-labelledby="ready-title">
         <img src="/assets/brand/scoopaloo-logo.svg" alt="Scoopaloo" />
@@ -376,6 +382,16 @@ export class ShiftUi {
     if (inventoryEmpty) inventory?.setAttribute('aria-label', 'Tray and counter empty')
     else inventory?.removeAttribute('aria-label')
     this.renderUpcoming(state.upcomingOrders ?? [])
+    const marker = state.neededMarker
+    const markerElement = this.fields['needed-marker']
+    markerElement.hidden = !marker || state.phase !== 'playing'
+    if (marker) {
+      markerElement.dataset.direction = marker.direction
+      markerElement.setAttribute('aria-label', `${marker.label} ingredient is offscreen to the ${marker.direction}`)
+      this.set('needed-direction', marker.direction === 'left' ? '‹' : '›')
+      const markerIcon = this.fields['needed-icon'] as HTMLImageElement
+      if (markerIcon.getAttribute('src') !== marker.icon) markerIcon.src = marker.icon
+    }
     if (!state.order?.urgent) this.set('urgent-status', '')
     if (!state.order) return
     this.set('order-label', state.order.label)

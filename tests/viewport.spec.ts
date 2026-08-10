@@ -18,9 +18,11 @@ async function assertSize(page: Page, name: string): Promise<void> {
     const view = game.viewport()
     const canvas = document.querySelector('canvas')!
     const rect = canvas.getBoundingClientRect()
-    const skin = game.snapshot().skin
+    const state = game.snapshot()
+    const skin = state.skin
+    const activeSources = Object.keys(state.sources)
     const points = [
-      ...Object.values(skin.producers).map(station => ({ kind: 'source', at: station.interaction })),
+      ...activeSources.map(source => ({ kind: 'source', at: skin.producers[source].interaction })),
       ...Object.values(skin.prepStations).map(station => ({ kind: 'prep', at: station.interaction })),
       ...Object.values(skin.stations).map(station => ({ kind: 'service', at: station.interaction })),
     ].filter((point, index, all) => all.findIndex(candidate => candidate.at.join(',') === point.at.join(',')) === index)
@@ -56,7 +58,8 @@ async function assertSize(page: Page, name: string): Promise<void> {
       // Four-person queue envelope, including each 116x132 customer sprite.
       worldRect(counterX - 8, counterY - 117, counterX + 180, counterY + 90),
     ]
-    const sourceVisuals = Object.values(skin.producers).map(producer => {
+    const sourceVisuals = activeSources.map(source => {
+      const producer = skin.producers[source]
       const [x, y, width, height] = producer.draw
       const [px, py] = producer.interaction
       const { origin, step, size } = producer.stockDisplay
@@ -86,9 +89,11 @@ async function assertSize(page: Page, name: string): Promise<void> {
         opaque(0, 0), opaque(canvas.width - 1, 0),
         opaque(0, canvas.height - 1), opaque(canvas.width - 1, canvas.height - 1),
       ],
-      stationsInView: points.every(({ at: [x, y] }) =>
+      activeStationsInView: points.every(({ at: [x, y] }) =>
         x >= view.originX && x <= view.originX + view.viewWidth &&
         y >= view.originY && y <= view.originY + view.viewHeight),
+      playerInView: state.player.x >= view.originX && state.player.x <= view.originX + view.viewWidth
+        && state.player.y >= view.originY && state.player.y <= view.originY + view.viewHeight,
       uiInside: boxes.every(inside),
       stationsClear: points.every(point => boxes.every(box => !overlapsPoint(box, client(point.at)))),
       serviceVisualsInside: visuals.every(inside),
@@ -121,7 +126,8 @@ async function assertSize(page: Page, name: string): Promise<void> {
   expect(checks.canvasBox, name).toEqual({ w: checks.window.w, h: checks.window.h })
   expect(checks.backing, name).toEqual(checks.expectedBacking)
   expect(checks.corners, name).toEqual([true, true, true, true])
-  expect(checks.stationsInView, name).toBe(true)
+  expect(checks.activeStationsInView, name).toBe(true)
+  expect(checks.playerInView, name).toBe(true)
   expect(checks.uiInside, name).toBe(true)
   expect(checks.stationsClear, name).toBe(true)
   expect(checks.serviceVisualsInside, name).toBe(true)
@@ -144,8 +150,10 @@ async function assertSize(page: Page, name: string): Promise<void> {
   // the real pointer path: press each station's world point, the joystick origin
   // must land on that same world point through the live viewport
   const stations = await page.evaluate(() => {
-    const skin = window.__scoopaloo.snapshot().skin
-    return [...Object.values(skin.producers), ...Object.values(skin.prepStations), ...Object.values(skin.stations)]
+    const state = window.__scoopaloo.snapshot()
+    const skin = state.skin
+    return [...Object.keys(state.sources).map(source => skin.producers[source]),
+      ...Object.values(skin.prepStations), ...Object.values(skin.stations)]
       .map(station => station.interaction)
       .filter((point, index, all) => all.findIndex(candidate => candidate.join(',') === point.join(',')) === index)
   })

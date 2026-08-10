@@ -40,16 +40,21 @@ async function crossMovementThreshold(page: Page): Promise<void> {
   await page.mouse.move(195, 700)
   await page.mouse.down()
   await page.mouse.move(199, 700)
-  await expect.poll(() => page.evaluate(origin => {
-    const player = window.__scoopaloo.snapshot().player
-    return Math.hypot(player.x - origin.x, player.y - origin.y)
-  }, start)).toBeGreaterThanOrEqual(12)
-  await page.evaluate(() => window.__scoopaloo.pause(true))
+  const belowThreshold = await page.evaluate(origin => new Promise<number>(resolve => {
+    const stopBelowLessonThreshold = () => {
+      const player = window.__scoopaloo.snapshot().player
+      const distance = Math.hypot(player.x - origin.x, player.y - origin.y)
+      if (distance >= 12) {
+        window.__scoopaloo.pause(true)
+        resolve(distance)
+        return
+      }
+      requestAnimationFrame(stopBelowLessonThreshold)
+    }
+    requestAnimationFrame(stopBelowLessonThreshold)
+  }), start)
   await page.mouse.up()
-  const belowThreshold = await page.evaluate(origin => {
-    const player = window.__scoopaloo.snapshot().player
-    return Math.hypot(player.x - origin.x, player.y - origin.y)
-  }, start)
+  expect(belowThreshold).toBeGreaterThanOrEqual(12)
   expect(belowThreshold).toBeLessThan(24)
   await expect(guidance).toHaveText(MOVE_COPY)
   await page.evaluate(() => window.__scoopaloo.pause(false))

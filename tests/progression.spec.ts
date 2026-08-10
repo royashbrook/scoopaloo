@@ -200,6 +200,25 @@ test('finishes Day 1, buys a visible upgrade, and restores Day 2 with its real e
     unlocked: window.__scoopaloo.snapshot().save.unlockedStations.includes('chocolate-scoop'),
   }))).toEqual({ active: true, unlocked: true })
   await page.getByRole('button', { name: 'START SHIFT' }).click()
+  expect(await page.evaluate(() => {
+    const state = window.__scoopaloo.snapshot()
+    const front = state.customers.find(customer => !customer.served && !customer.missed)
+    return {
+      day: state.rules.level,
+      goal: state.rules.cashGoal,
+      patience: state.rules.customerPatience,
+      frontPatience: front?.patience,
+      spawnInterval: state.rules.spawnInterval,
+      activeOrders: state.rules.activeOrderWindow,
+    }
+  })).toEqual({
+    day: 2,
+    goal: 60,
+    patience: 32,
+    frontPatience: 32,
+    spawnInterval: 8.5,
+    activeOrders: 2,
+  })
   const dayTwoSpeed = await page.evaluate(() => {
     const game = window.__scoopaloo
     game.movePlayer({ x: 200, y: 470 })

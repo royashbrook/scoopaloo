@@ -1,8 +1,8 @@
 import type { Point } from './engine'
 import { WORLD } from './engine'
 
-// One shared camera for rendering and input (#13). Portrait zooms into the
-// central play lane; landscape fits the full shop. Both branches use
+// One shared camera for rendering and input (#13). Portrait phones follow a
+// horizontal play lane; landscape fits the full shop. Both branches use
 // one uniform transform, so touch and drawing cannot drift apart.
 export type Viewport = {
   cssWidth: number
@@ -17,14 +17,22 @@ export type Viewport = {
 
 export const DPR_CAP = 2
 export const PORTRAIT_LANE_WIDTH = 640
+const CAMERA_DEAD_ZONE = [.4, .6] as const
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.max(low, Math.min(high, value))
+}
 
 export function computeViewport(
   cssWidth: number,
   cssHeight: number,
   devicePixelRatio = 1,
   bottomReserve = 0,
+  focusX = WORLD.width / 2,
+  currentOriginX?: number,
 ): Viewport {
   const portrait = cssHeight >= cssWidth * 1.25
+  const phone = portrait && cssWidth < 600
   const frameWidth = portrait ? PORTRAIT_LANE_WIDTH : WORLD.width
   const framedHeight = Math.max(1, cssHeight - Math.max(0, bottomReserve))
   const scale = Math.min(cssWidth / frameWidth, framedHeight / WORLD.height)
@@ -32,13 +40,28 @@ export function computeViewport(
   const viewHeight = cssHeight / scale
   const safeViewHeight = framedHeight / scale
   const extraHeight = Math.max(0, safeViewHeight - WORLD.height)
+  const centeredOriginX = (WORLD.width - viewWidth) / 2
+  let originX = centeredOriginX
+  if (phone && viewWidth < WORLD.width) {
+    const maxOriginX = WORLD.width - viewWidth
+    const previous = clamp(currentOriginX ?? centeredOriginX, 0, maxOriginX)
+    const left = previous + viewWidth * CAMERA_DEAD_ZONE[0]
+    const right = previous + viewWidth * CAMERA_DEAD_ZONE[1]
+    originX = clamp(
+      focusX < left ? focusX - viewWidth * CAMERA_DEAD_ZONE[0]
+        : focusX > right ? focusX - viewWidth * CAMERA_DEAD_ZONE[1]
+          : previous,
+      0,
+      maxOriginX,
+    )
+  }
   return {
     cssWidth,
     cssHeight,
     scale,
     viewWidth,
     viewHeight,
-    originX: (WORLD.width - viewWidth) / 2,
+    originX,
     // On a tall phone, bias the shop down into the lower thumb zone while the
     // wall remains behind the DOM HUD/ticket. Tablets that fit the whole shop
     // need no bias.

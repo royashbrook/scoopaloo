@@ -36,3 +36,39 @@ test('stops keyboard movement when the window loses focus', async ({ page }) => 
   expect(await page.evaluate(() => window.__scoopaloo.snapshot().player.y)).toBeCloseTo(stoppedAt, 5)
   await page.keyboard.up('w')
 })
+
+test('held joystick anchor stays in CSS space while the live viewport changes', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  const start = { x: 90, y: 500 }
+  await page.evaluate(point => {
+    const canvas = document.querySelector('canvas')!
+    canvas.setPointerCapture = () => undefined
+    canvas.dispatchEvent(new PointerEvent('pointerdown', {
+      pointerId: 7,
+      clientX: point.x,
+      clientY: point.y,
+      bubbles: true,
+    }))
+  }, start)
+  await page.setViewportSize({ width: 768, height: 1024 })
+  await expect.poll(() => page.evaluate(() => window.__scoopaloo.viewport().cssWidth)).toBe(768)
+  const anchor = await page.evaluate(() => {
+    const view = window.__scoopaloo.viewport()
+    const origin = window.__scoopaloo.joystickOrigin()!
+    const rect = document.querySelector('canvas')!.getBoundingClientRect()
+    return {
+      x: rect.left + (origin.x - view.originX) * view.scale,
+      y: rect.top + (origin.y - view.originY) * view.scale,
+    }
+  })
+  await page.evaluate(point => document.querySelector('canvas')!.dispatchEvent(new PointerEvent('pointerup', {
+    pointerId: 7,
+    clientX: point.x,
+    clientY: point.y,
+    bubbles: true,
+  })), start)
+
+  expect(anchor.x).toBeCloseTo(start.x)
+  expect(anchor.y).toBeCloseTo(start.y)
+})

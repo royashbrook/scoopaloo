@@ -123,6 +123,37 @@ canvas {
 }
 .order-panel[hidden] { display: none; }
 
+.needed-marker {
+  position: fixed;
+  top: 55%;
+  z-index: 12;
+  display: grid;
+  width: 52px;
+  height: 60px;
+  place-items: center;
+  border: 3px solid #4a3b45;
+  border-radius: 16px;
+  color: #4a3b45;
+  background: rgb(255 243 230 / .96);
+  box-shadow: 0 .25rem 0 rgb(74 59 69 / .2);
+  pointer-events: none;
+}
+.needed-marker[hidden] { display: none; }
+.needed-marker[data-direction="left"] { left: max(8px, var(--safe-left)); }
+.needed-marker[data-direction="right"] { right: max(8px, var(--safe-right)); }
+.needed-marker span {
+  position: absolute;
+  top: 17px;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+}
+.needed-marker[data-direction="left"] span { left: 2px; }
+.needed-marker[data-direction="right"] span { right: 2px; }
+.needed-marker img { width: 34px; height: 42px; object-fit: contain; }
+.needed-marker[data-direction="left"] img { translate: 6px 0; }
+.needed-marker[data-direction="right"] img { translate: -6px 0; }
+
 .order-ticket {
   grid-column: 1;
   grid-row: 1;

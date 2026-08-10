@@ -12,8 +12,14 @@ const ROOM = {
   horizon: 320,
   wall: '#FFE7CA',
   floor: '#FFF3E6',
-  backdrop: { image: '/assets/room/ice-cream-wall.svg?v=2', draw: [-416, 0, 1792, 1200] },
+  backdrop: { image: '/assets/room/ice-cream-wall.svg?v=3', draw: [-416, 0, 1792, 1200] },
   floorProp: { image: '/assets/room/mint-plant.svg?v=1', draw: [190, 400, 80, 112] },
+  annex: {
+    label: 'CHOCOLATE CORNER',
+    unlockStation: 'chocolate-scoop',
+    boundaryX: 780,
+    doorway: [770, 320, 20, 800],
+  },
 }
 
 type DrawTrace = {
@@ -138,7 +144,8 @@ test('renders the cached parlor shell behind depth-sorted play at every target s
       forbidden: document.querySelectorAll('text, script, foreignObject, image').length,
       external,
       viewBox,
-      shellParts: ['floor', 'side-returns', 'work-floor', 'floor-seams']
+      shellParts: ['floor', 'side-returns', 'work-floor', 'floor-seams',
+        'chocolate-corner-floor', 'chocolate-corner-wall']
         .filter(id => document.getElementById(id)).length,
       ratio: viewBox[2] / viewBox[3],
       decoded: image.naturalWidth > 0,
@@ -151,7 +158,7 @@ test('renders the cached parlor shell behind depth-sorted play at every target s
       / [room.backdrop, room.floorProp][index].draw[3], 6)
   }
   expect(svgReports[0].viewBox).toEqual(room.backdrop.draw)
-  expect(svgReports.map(report => report.shellParts)).toEqual([4, 0])
+  expect(svgReports.map(report => report.shellParts)).toEqual([6, 0])
 
   await installTrace(page)
   const draws = await trace(page)

@@ -3,17 +3,31 @@ import { clientToWorld, type Viewport } from './viewport'
 
 const MOVEMENT_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'])
 
+export function dragVector(origin: Point, current: Point): Input {
+  const dx = current.x - origin.x
+  const dy = current.y - origin.y
+  const length = Math.max(55, Math.hypot(dx, dy))
+  return { x: dx / length, y: dy / length }
+}
+
 function isEditable(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (target.isContentEditable || target.matches('input, textarea, select'))
 }
 
 export class Controls {
   readonly vector: Input = { x: 0, y: 0 }
-  readonly joystick = { active: false, origin: { x: 0, y: 0 }, current: { x: 0, y: 0 } }
+  readonly joystick: { readonly active: boolean; readonly origin: Point; readonly current: Point }
+  private joystickCss = { active: false, origin: { x: 0, y: 0 }, current: { x: 0, y: 0 } }
   private keys = new Set<string>()
   private pointer: number | null = null
 
   constructor(private canvas: HTMLCanvasElement, private view: () => Viewport) {
+    const controls = this
+    this.joystick = {
+      get active() { return controls.joystickCss.active },
+      get origin() { return controls.toWorld(controls.joystickCss.origin) },
+      get current() { return controls.toWorld(controls.joystickCss.current) },
+    }
     addEventListener('keydown', event => {
       const key = event.key.toLowerCase()
       if (event.metaKey || event.ctrlKey || event.altKey || !MOVEMENT_KEYS.has(key) || isEditable(event.target)) return
@@ -33,26 +47,22 @@ export class Controls {
     if (this.pointer !== null) return
     this.pointer = event.pointerId
     this.canvas.setPointerCapture(event.pointerId)
-    const point = this.toWorld(event)
-    this.joystick.active = true
-    this.joystick.origin = point
-    this.joystick.current = point
+    const point = this.toCss(event)
+    this.joystickCss.active = true
+    this.joystickCss.origin = point
+    this.joystickCss.current = point
   }
 
   private move(event: PointerEvent): void {
     if (event.pointerId !== this.pointer) return
-    this.joystick.current = this.toWorld(event)
-    const dx = this.joystick.current.x - this.joystick.origin.x
-    const dy = this.joystick.current.y - this.joystick.origin.y
-    const length = Math.max(55, Math.hypot(dx, dy))
-    this.vector.x = dx / length
-    this.vector.y = dy / length
+    this.joystickCss.current = this.toCss(event)
+    Object.assign(this.vector, dragVector(this.joystickCss.origin, this.joystickCss.current))
   }
 
   private up(event: PointerEvent): void {
     if (event.pointerId !== this.pointer) return
     this.pointer = null
-    this.joystick.active = false
+    this.joystickCss.active = false
     this.vector.x = 0
     this.vector.y = 0
     this.readKeys()
@@ -65,10 +75,13 @@ export class Controls {
     this.vector.y = Number(pressed('s', 'arrowdown')) - Number(pressed('w', 'arrowup'))
   }
 
-  private toWorld(event: PointerEvent): Point {
-    // same viewport object the renderer draws through, so a live resize cannot
-    // leave input and rendering with different ideas of where the world is (#13)
+  private toCss(event: PointerEvent): Point {
     const rect = this.canvas.getBoundingClientRect()
-    return clientToWorld(this.view(), event.clientX - rect.left, event.clientY - rect.top)
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top }
+  }
+
+  private toWorld(point: Point): Point {
+    // Keep held touch points screen-anchored while the shared camera pans.
+    return clientToWorld(this.view(), point.x, point.y)
   }
 }

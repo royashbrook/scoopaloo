@@ -6,12 +6,18 @@
     "wall": "#FFE7CA",
     "floor": "#FFF3E6",
     "backdrop": {
-      "image": "/assets/room/ice-cream-wall.svg?v=2",
+      "image": "/assets/room/ice-cream-wall.svg?v=3",
       "draw": [-416, 0, 1792, 1200]
     },
     "floorProp": {
       "image": "/assets/room/mint-plant.svg?v=1",
       "draw": [190, 400, 80, 112]
+    },
+    "annex": {
+      "label": "CHOCOLATE CORNER",
+      "unlockStation": "chocolate-scoop",
+      "boundaryX": 780,
+      "doorway": [770, 320, 20, 800]
     }
   },
   "comboTiers": [
@@ -213,12 +219,12 @@
     },
     "chocolate-scoop": {
       "item": "chocolate-scoop",
-      "interaction": [600, 1070],
+      "interaction": [870, 1070],
       "depth": 1076,
-      "draw": [520, 915, 160, 190],
+      "draw": [790, 915, 160, 190],
       "sprite": [1, 2],
       "stockDisplay": {
-        "origin": [555, 1058],
+        "origin": [825, 1058],
         "step": [30, -3],
         "size": [42, 52]
       },

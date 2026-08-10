@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  annexUnlocked,
   comboBonus,
   currentDay,
   customerPatience,
@@ -26,6 +27,7 @@ import {
   upgradeOffer,
   upcomingOrders,
   walkSpeed,
+  WORLD,
   type GameState,
   type Point,
 } from './engine'
@@ -47,7 +49,7 @@ describe('ice cream stand loop', () => {
     expect(prepPoint(skin, 'build-station')).toEqual({ x: 480, y: 730 })
     expect(stationPoint(skin, 'counter')).toEqual({ x: skin.stations.counter.interaction[0], y: skin.stations.counter.interaction[1] })
     expect(producerPoint(skin, 'soft-scoop')).toEqual({ x: 360, y: 1070 })
-    expect(producerPoint(skin, 'chocolate-scoop')).toEqual({ x: 600, y: 1070 })
+    expect(producerPoint(skin, 'chocolate-scoop')).toEqual({ x: 870, y: 1070 })
     expect(producerPoint(skin, 'cone-shell')).toEqual({ x: 270, y: 920 })
     expect(producerPoint(skin, 'sundae-cup')).toEqual({ x: 690, y: 920 })
   })
@@ -400,6 +402,61 @@ describe('score chase rush ladder (#27)', () => {
     retryShift(game)
     finishAt(game, 140)
     expect(game.save).toMatchObject({ ...campaignRecords, scoreChaseBest: 220 })
+  })
+})
+
+describe('Chocolate Corner annex (#50)', () => {
+  const started = (day: number, scoreChaseLevel = 0) => {
+    const save = defaultSave(skin)
+    Object.assign(save, { currentDay: day, scoreChaseLevel })
+    const game = createGame(skin, save)
+    startShift(game)
+    return game
+  }
+
+  it('keeps the 960x1120 world and grounds the east doorway at one exact boundary', () => {
+    expect(WORLD).toEqual({ width: 960, height: 1120 })
+    expect(skin.room.annex).toEqual({
+      label: 'CHOCOLATE CORNER', unlockStation: 'chocolate-scoop',
+      boundaryX: 780, doorway: [770, 320, 20, 800],
+    })
+    expect(skin.producers['chocolate-scoop']).toMatchObject({
+      interaction: [870, 1070], draw: [790, 915, 160, 190],
+      stockDisplay: { origin: [825, 1058] },
+    })
+  })
+
+  it('clamps Day 1 at x725 and opens the full x905 walk range on Day 2', () => {
+    const locked = started(0)
+    expect(annexUnlocked(locked)).toBe(false)
+    Object.assign(locked.player, { x: 700, y: 800 })
+    runFor(locked, 1, { x: 1, y: 0 })
+    expect(locked.player).toMatchObject({ x: 725, y: 800 })
+
+    const unlocked = started(1)
+    expect(annexUnlocked(unlocked)).toBe(true)
+    Object.assign(unlocked.player, { x: 700, y: 800 })
+    runFor(unlocked, 2, { x: 1, y: 0 })
+    expect(unlocked.player).toMatchObject({ x: 905, y: 800 })
+  })
+
+  it('derives both legacy Day 2 and Rush access from the existing station unlock', () => {
+    const legacyDay2 = defaultSave(skin)
+    legacyDay2.currentDay = 1
+    legacyDay2.unlockedStations.push('retired-cart')
+    const day2 = createGame(skin, legacyDay2)
+    expect(day2.save).toMatchObject({ version: 1, currentDay: 1 })
+    expect(day2.save.unlockedStations).toEqual([
+      ...skin.progression.startingStations, 'retired-cart', 'chocolate-scoop',
+    ])
+    expect(annexUnlocked(day2)).toBe(true)
+
+    const legacyRush = defaultSave(skin)
+    Object.assign(legacyRush, { currentDay: 0, scoreChaseLevel: 1 })
+    const rush = createGame(skin, legacyRush)
+    expect(rush.save).toMatchObject({ version: 1, currentDay: 2, scoreChaseLevel: 1 })
+    expect(rush.save.unlockedStations).toContain('chocolate-scoop')
+    expect(annexUnlocked(rush)).toBe(true)
   })
 })
 
@@ -1383,6 +1440,7 @@ describe('timed Day 1 shift (#22)', () => {
     const playGame = (game: GameState, openingDelay = 0, previewPlanned = false, triageLater = false) => {
       startShift(game)
       runFor(game, openingDelay)
+      const deliberateRoute = previewPlanned || game.rules.kind === 'campaign'
       const moveTo = (target: Point) => {
         while (game.phase === 'playing') {
           const dx = target.x - game.player.x
@@ -1396,6 +1454,20 @@ describe('timed Day 1 shift (#22)', () => {
         // Flavor machines sit behind the vessel row. Use the center aisle so
         // this deterministic route models a deliberate choice, not a drive-by pickup.
         if (target.y > 1000) {
+          if (deliberateRoute && game.player.y > 1000 && Math.abs(game.player.x - target.x) <= 120) {
+            moveTo(target)
+            return
+          }
+          if (target.x >= (skin.room.annex?.boundaryX ?? WORLD.width)) {
+            if (deliberateRoute) {
+              moveTo(target)
+            } else {
+              moveTo({ x: game.player.x, y: 800 })
+              moveTo({ x: target.x, y: 800 })
+              moveTo(target)
+            }
+            return
+          }
           moveTo({ x: 480, y: game.player.y })
           moveTo({ x: 480, y: target.y })
           moveTo(target)
@@ -1434,7 +1506,7 @@ describe('timed Day 1 shift (#22)', () => {
           runFor(game, .1)
           continue
         }
-        if (!previewPlanned || triageLater) {
+        if (!previewPlanned || triageLater || game.skin.room.annex) {
           const recipe = itemFor(skin, work.order.item).recipe
           if (!recipe) throw new Error(`order has no recipe: ${work.order.item}`)
           while (game.phase === 'playing' && !work.served && !work.missed
@@ -1450,7 +1522,17 @@ describe('timed Day 1 shift (#22)', () => {
                 && (game.player.trayItems[ingredient] ?? 0) < targets[ingredient]) {
                 routeTo(source)
                 runFor(game, .1)
-                if (source.y > 1000) moveTo({ x: 480, y: source.y })
+                if (deliberateRoute && source.y > 1000
+                  && (game.player.trayItems[ingredient] ?? 0) < targets[ingredient]) {
+                  const direction = source.x >= (skin.room.annex?.boundaryX ?? WORLD.width) ? -1 : 1
+                  moveTo({ x: source.x + direction * 90, y: source.y })
+                  continue
+                }
+                if (source.y > 1000) {
+                  if (source.x < (skin.room.annex?.boundaryX ?? WORLD.width)) {
+                    moveTo({ x: 480, y: source.y })
+                  }
+                }
                 moveTo({ x: 480, y: 880 })
               }
             }
@@ -1497,13 +1579,27 @@ describe('timed Day 1 shift (#22)', () => {
             && (game.player.trayItems[ingredient] ?? 0) < target) {
             routeTo(source)
             runFor(game, .1)
-            if (source.y > 1000) moveTo({ x: 480, y: source.y })
+            if (deliberateRoute && source.y > 1000 && (game.player.trayItems[ingredient] ?? 0) < target) {
+              const direction = source.x >= (skin.room.annex?.boundaryX ?? WORLD.width) ? -1 : 1
+              moveTo({ x: source.x + direction * 90, y: source.y })
+              continue
+            }
+            if (source.y > 1000) {
+              if (source.x < (skin.room.annex?.boundaryX ?? WORLD.width)) {
+                moveTo({ x: 480, y: source.y })
+              }
+            }
             moveTo({ x: 480, y: 880 })
           }
         }
         if (front.missed) {
-          runFor(game, .8)
-          continue
+          const salvage = products.find(product => Object.entries(itemFor(skin, product).recipe!.inputs)
+            .every(([item, quantity]) => (game.player.trayItems[item] ?? 0) >= quantity))
+          if (!salvage) {
+            runFor(game, .8)
+            continue
+          }
+          products.splice(0, products.length, salvage)
         }
 
         const targets = Object.fromEntries([...new Set(products)].map(product => [
@@ -1511,7 +1607,7 @@ describe('timed Day 1 shift (#22)', () => {
           (game.player.trayItems[product] ?? 0) + products.filter(item => item === product).length,
         ]))
         routeTo(prepPoint(skin, 'build-station'))
-        while (game.phase === 'playing' && !front.missed && Object.entries(targets)
+        while (game.phase === 'playing' && Object.entries(targets)
           .some(([product, quantity]) => (game.player.trayItems[product] ?? 0) < quantity)) runFor(game, .1)
         routeTo(stationPoint(skin, 'counter'))
         runFor(game, products.length * .7 + .4)
@@ -1547,7 +1643,7 @@ describe('timed Day 1 shift (#22)', () => {
     expect(campaign.shift.missed).toBeLessThan(dayTwoBase.shift.missed)
     expect(enterShop(campaign)).toBe(true)
     expect([purchaseUpgrade(campaign, 'tray'), purchaseUpgrade(campaign, 'patience')]).toEqual([true, true])
-    expect(campaign.save.coins).toBe(4)
+    expect(campaign.save.coins).toBe(5)
     expect(nextDay(campaign)).toBe(true)
     playGame(campaign)
     const dayThreeUpgraded = [campaign.shift.revenue, campaign.shift.served, campaign.shift.missed, campaign.shift.stars]
@@ -1572,15 +1668,15 @@ describe('timed Day 1 shift (#22)', () => {
     ]).toEqual([
       [54, 4, 2, 1],
       [27, 2, 5, 0],
-      [65, 4, 3, 1],
-      [55, 2, 7, 0],
+      [66, 4, 3, 1],
+      [87, 3, 6, 1],
       [158, 6, 2, 2],
-      [195, 7, 0, 3],
+      [227, 8, 0, 3],
     ])
-    expect(campaign.save.coins).toBe(199)
+    expect(campaign.save.coins).toBe(232)
     expect(enterShop(campaign)).toBe(true)
     expect(purchaseUpgrade(campaign, 'helper')).toBe(true)
-    expect(campaign.save).toMatchObject({ coins: 19, upgrades: { helper: 1 } })
+    expect(campaign.save).toMatchObject({ coins: 52, upgrades: { helper: 1 } })
 
     const playRush = (
       level: number,
@@ -1600,8 +1696,8 @@ describe('timed Day 1 shift (#22)', () => {
     }))
     expect(rushTuples).toEqual([
       [217, 9, 0, 3], [253, 10, 0, 3],
-      [225, 9, 0, 3], [251, 10, 0, 3],
-      [212, 9, 0, 0], [249, 10, 0, 2],
+      [194, 8, 0, 1], [248, 10, 0, 3],
+      [189, 9, 1, 0], [245, 10, 0, 2],
     ])
     for (let index = 0; index < rushTuples.length; index += 2) {
       expect(rushTuples[index + 1][0]).toBeGreaterThan(rushTuples[index][0])
@@ -1610,30 +1706,30 @@ describe('timed Day 1 shift (#22)', () => {
     expect([false, true].map(previewPlanned => {
       const game = playRush(1, previewPlanned, entryBuild)
       return [game.shift.revenue, game.shift.served, game.shift.missed, game.shift.stars]
-    })).toEqual([[123, 5, 2, 0], [143, 6, 1, 1]])
+    })).toEqual([[124, 6, 3, 0], [144, 6, 1, 1]])
 
     const helperEntryRoutes = [0, 1].map(helper => {
       const game = playRush(1, true, { ...entryBuild, helper }, true)
       return [game.shift.revenue, game.shift.served, game.shift.missed, game.shift.stars]
     })
-    expect(helperEntryRoutes).toEqual([[143, 6, 2, 1], [153, 7, 1, 1]])
+    expect(helperEntryRoutes).toEqual([[175, 7, 2, 2], [184, 8, 1, 3]])
 
     const lastPlannedPass = playRush(11, true)
     const firstPlannedFail = playRush(12, true)
     expect([lastPlannedPass, firstPlannedFail].map(game => [
       game.rules.cashGoal, game.shift.revenue, game.shift.served, game.shift.missed, game.shift.stars,
-    ])).toEqual([[240, 251, 10, 0, 1], [250, 233, 9, 0, 0]])
+    ])).toEqual([[240, 248, 10, 0, 1], [250, 230, 9, 0, 0]])
     expect(lastPlannedPass.rules).toMatchObject({ customerPatience: 34, spawnInterval: 5.5 })
     expect(firstPlannedFail.rules).toMatchObject({ customerPatience: 34, spawnInterval: 5.5 })
     expect(goalMet(lastPlannedPass)).toBe(true)
     expect(goalMet(firstPlannedFail)).toBe(false)
 
     const helperMax = { shoes: 3, tray: 3, machine: 3, patience: 3, helper: 3 }
-    const helperLastPass = playRush(15, true, helperMax, true)
-    const helperFirstFail = playRush(16, true, helperMax, true)
+    const helperLastPass = playRush(14, true, helperMax, true)
+    const helperFirstFail = playRush(15, true, helperMax, true)
     expect([helperLastPass, helperFirstFail].map(game => [
       game.rules.cashGoal, game.shift.revenue, game.shift.served, game.shift.missed, game.shift.stars,
-    ])).toEqual([[280, 296, 13, 1, 1], [290, 273, 12, 1, 0]])
+    ])).toEqual([[270, 291, 13, 1, 2], [280, 232, 10, 1, 0]])
     expect(helperLastPass.rules).toMatchObject({ customerPatience: 34, spawnInterval: 5.5 })
     expect(helperFirstFail.rules).toMatchObject({ customerPatience: 34, spawnInterval: 5.5 })
     expect(goalMet(helperLastPass)).toBe(true)
