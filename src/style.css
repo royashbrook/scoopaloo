@@ -652,7 +652,7 @@ canvas {
   font-weight: 900;
 }
 .helper-copy { min-width: 0; }
-.helper-upgrade h2 { min-height: 0; font-size: 20px; line-height: 1; }
+.helper-upgrade h2 { min-height: 0; font-size: 20px; line-height: 1.15; }
 .helper-role {
   margin: 3px 0;
   color: #946119;
