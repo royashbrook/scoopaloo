@@ -239,7 +239,7 @@ test('Pip is a phone-first purchase, visible prep timer, and real assisted servi
   await expect(card).toHaveAttribute('aria-label', 'PIP, Prep Pal, not hired. Stages ingredients for the front order every 30 seconds.')
   await expect(card.getByRole('button')).toHaveAttribute('aria-label', 'Hire PIP for $180; stages ingredients for the front order every 30 seconds')
   await expect(card.locator('img')).toHaveAttribute('alt', '')
-  await expect(card.locator('.helper-description')).toHaveText('PIP STAGES INGREDIENTS. YOU FINISH + SERVE.')
+  await expect(card.locator('.helper-description')).toHaveText('STAGES. YOU FINISH + SERVE.')
   await expect(card.locator('.helper-change small')).toHaveText('STAGES/MIN')
   const shop = await page.evaluate(() => {
     const box = (element: Element) => element.getBoundingClientRect()

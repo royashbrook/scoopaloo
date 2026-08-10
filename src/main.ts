@@ -419,7 +419,7 @@ function upgradeUi(upgrade: SkinUpgrade, basePatience: number): UpgradeUiItem {
           name: skin.helper.name,
           image: skin.helper.image,
           role: 'Prep Pal',
-          description: `${skin.helper.name} STAGES INGREDIENTS. YOU FINISH + SERVE.`,
+          description: 'STAGES. YOU FINISH + SERVE.',
           activity: 'Stages ingredients for the front order',
           stat: 'STAGES/MIN',
           available: true,
@@ -428,7 +428,7 @@ function upgradeUi(upgrade: SkinUpgrade, basePatience: number): UpgradeUiItem {
         ? {
             name: skin.counterRunner.name,
             role: 'Counter Runner',
-            description: `${skin.counterRunner.name} MOVES FINISHED ORDERS TO THE COUNTER.`,
+            description: 'MOVES FINISHED ORDERS.',
             activity: 'Moves finished orders to the shared counter',
             stat: 'MOVES/MIN',
             available: secondCounterBuilt(state),

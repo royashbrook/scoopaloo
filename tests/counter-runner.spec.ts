@@ -425,7 +425,7 @@ test('MEL is gated, uses HIRE/TRAIN, survives offline rescue and the Day 3 to Ru
   shop = await openStore(page)
   card = shop.locator('[data-upgrade-card="counter-runner"]')
   await expect(card).toHaveAttribute('data-available', 'true')
-  await expect(card.locator('.helper-description')).toHaveText('MEL MOVES FINISHED ORDERS TO THE COUNTER.')
+  await expect(card.locator('.helper-description')).toHaveText('MOVES FINISHED ORDERS.')
   const soundsAtPurchase = await page.evaluate(() =>
     (window as unknown as { __runnerFrequencies: number[] }).__runnerFrequencies.length)
   for (const [level, label, status] of [
