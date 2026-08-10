@@ -11,6 +11,7 @@ import {
   roomPropAnchor,
   stationOcclusionAlpha,
   transferPose,
+  visibleCounterRunner,
   visibleCounters,
   walkPose,
 } from './render'
@@ -51,6 +52,16 @@ describe('second service counter (#53)', () => {
       { id: 'primary', station: skinData.stations.counter, serveTimer: 0 },
       { id: 'secondary', station: skinData.counterExpansion.station, serveTimer: .35 },
     ])
+  })
+})
+
+describe('parked counter runner (#54)', () => {
+  it('appears beside the built second counter before hiring and keeps skin-owned geometry', () => {
+    const state = createGame(skinData as GameSkin)
+    expect(visibleCounterRunner(state)).toBeNull()
+
+    state.save.upgrades['second-counter'] = 1
+    expect(visibleCounterRunner(state)).toEqual(skinData.counterRunner)
   })
 })
 

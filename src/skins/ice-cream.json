@@ -500,6 +500,13 @@
       "sprite": [3, 2]
     }
   },
+  "counterRunner": {
+    "name": "MEL",
+    "upgradeId": "counter-runner",
+    "draw": [804, 622, 64, 78],
+    "status": [772, 588, 128, 30],
+    "sprite": [1, 1]
+  },
   "upgrades": [
     {
       "id": "shoes",
@@ -563,6 +570,17 @@
       "unit": "SERVICE LANES",
       "levels": [
         { "price": 250, "effect": 1 }
+      ]
+    },
+    {
+      "id": "counter-runner",
+      "name": "COUNTER RUNNER",
+      "kind": "runnerRate",
+      "unit": "DELIVERIES / MIN",
+      "levels": [
+        { "price": 300, "effect": 4 },
+        { "price": 600, "effect": 6 },
+        { "price": 1000, "effect": 8 }
       ]
     }
   ]

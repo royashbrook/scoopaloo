@@ -227,7 +227,7 @@ for (const size of PHONES) {
       goal: 60,
       patience: 32,
       frontPatience: 32,
-      upgrades: [0, 0, 0, 0, 0, 0],
+      upgrades: [0, 0, 0, 0, 0, 0, 0],
     })
 
     const marker = page.locator('.needed-marker')
@@ -310,6 +310,7 @@ for (const size of PHONES) {
       patience: 0,
       helper: 0,
       'second-counter': 0,
+      'counter-runner': 0,
     })
     expect(result.revenue).toBeGreaterThanOrEqual(result.goal)
     expect(result.stars).toBeGreaterThanOrEqual(1)

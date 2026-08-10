@@ -3,6 +3,7 @@ import './style.css'
 import {
   campaignCompleted,
   comboBonus,
+  counterRunnerInterval,
   createGame,
   customerPatience,
   enterShop,
@@ -14,6 +15,7 @@ import {
   prepSeconds,
   retryShift,
   runFor,
+  secondCounterBuilt,
   startShift,
   step,
   tipFor,
@@ -168,7 +170,7 @@ const shiftUi = new ShiftUi(shiftRoot, {
   pause: setPlayerPaused,
 })
 canvas.setAttribute('aria-label', 'Scoopaloo ice cream stand game. Drag anywhere to move, or use W A S D or arrow keys. Walk into dashed ingredient rings to pick up ingredients automatically. Hold at prep until complete.')
-canvas.setAttribute('aria-describedby', 'helper-status')
+canvas.setAttribute('aria-describedby', 'helper-status runner-status')
 let previous = performance.now()
 let saveClock = 0
 let previousSoundPhase = state.phase
@@ -241,6 +243,7 @@ function serviceStake(customer: Customer): { tip: number; combo: number; payout:
 function updateShiftUi(): void {
   const rules = state.rules
   const helperSeconds = helperInterval(state)
+  const runnerSeconds = counterRunnerInterval(state)
   const waitingCustomers = state.customers.filter(customer => !customer.served && !customer.missed)
   const front = waitingCustomers[0]
   const rejection = [...state.events].reverse().find(event => event.kind === 'reject')
@@ -357,6 +360,12 @@ function updateShiftUi(): void {
       remaining: state.helper.remaining,
       enabled: helperSeconds !== null,
     } : undefined,
+    runner: skin.counterRunner ? {
+      name: skin.counterRunner.name,
+      remaining: state.counterRunner.remaining,
+      enabled: runnerSeconds !== null,
+      available: secondCounterBuilt(state),
+    } : undefined,
     warning: rejection?.reason === 'returned-raw' ? 'EXTRA RETURNED TO SOURCE'
       : rejection?.reason === 'needs-prep' ? 'FINISH IT AT PREP'
         : rejection ? 'WRONG ITEM' : '',
@@ -405,9 +414,26 @@ function upgradeUi(upgrade: SkinUpgrade, basePatience: number): UpgradeUiItem {
     construction: skin.counterExpansion?.upgradeId === upgrade.id
       ? { available: campaignCompleted(state) }
       : undefined,
-    helper: skin.helper?.upgradeId === upgrade.id
-      ? { name: skin.helper.name, image: skin.helper.image }
-      : undefined,
+    staff: skin.helper?.upgradeId === upgrade.id
+      ? {
+          name: skin.helper.name,
+          image: skin.helper.image,
+          role: 'Prep Pal',
+          description: `${skin.helper.name} STAGES INGREDIENTS. YOU FINISH + SERVE.`,
+          activity: 'Stages ingredients for the front order',
+          stat: 'STAGES/MIN',
+          available: true,
+        }
+      : skin.counterRunner?.upgradeId === upgrade.id
+        ? {
+            name: skin.counterRunner.name,
+            role: 'Counter Runner',
+            description: `${skin.counterRunner.name} MOVES FINISHED ORDERS TO THE COUNTER.`,
+            activity: 'Moves finished orders to the shared counter',
+            stat: 'MOVES/MIN',
+            available: secondCounterBuilt(state),
+          }
+        : undefined,
   }
 }
 

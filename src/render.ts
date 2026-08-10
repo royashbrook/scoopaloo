@@ -136,6 +136,10 @@ export function visibleCounters(state: GameState): CounterVisual[] {
   return counters
 }
 
+export function visibleCounterRunner(state: GameState): GameSkin['counterRunner'] | null {
+  return state.skin.counterRunner && secondCounterBuilt(state) ? state.skin.counterRunner : null
+}
+
 export function walkPose(time: number, moving: boolean, facing: number, reducedMotion = false): WalkPose {
   if (!moving) return { stride: 0, x: 0, y: 0, lean: 0, shadowX: 43, shadowY: 13 }
   const scale = motionScale(reducedMotion)
@@ -260,6 +264,7 @@ export class Renderer {
     // scale together around the unit's ground-contact anchor. byDepth is the ONLY
     // ordering rule; ties keep this list's order (room prop, stations, creatures).
     const counters = visibleCounters(state)
+    const counterRunner = visibleCounterRunner(state)
     const things: (Drawable & { anchor: Point })[] = [
       {
         anchor: roomPropAnchor(this.skin.room.floorProp.draw),
@@ -278,6 +283,7 @@ export class Renderer {
         draw: () => this.drawCounter(state, counter, counter.id === 'primary'),
       })),
       ...(this.skin.helper ? [{ anchor: roomPropAnchor(this.skin.helper.draw), draw: () => this.drawHelper(state) }] : []),
+      ...(counterRunner ? [{ anchor: roomPropAnchor(counterRunner.draw), draw: () => this.drawCounterRunner(state) }] : []),
       ...state.customers.map(customer => ({
         anchor: { x: customer.x, y: customer.y },
         draw: () => this.drawCustomer(customer, state.time),
@@ -397,6 +403,36 @@ export class Renderer {
     const wait = Math.ceil(Math.max(0, state.helper.remaining))
     const status = !enabled ? 'OFF' : wait ? `${wait}s` : 'READY'
     ctx.fillText(`${helper.name} · ${status}`, pillX + pillWidth / 2, pillY + pillHeight / 2 + 1)
+  }
+
+  private drawCounterRunner(state: GameState): void {
+    const runner = visibleCounterRunner(state)
+    if (!runner) return
+    const ctx = this.context
+    const enabled = (state.save.upgrades[runner.upgradeId] ?? 0) > 0
+    const [x, y, width, height] = runner.draw
+    const [column, row] = runner.sprite
+    const anchor = roomPropAnchor(runner.draw)
+
+    this.shadow(anchor.x, anchor.y + 1, 25, 8)
+    ctx.save()
+    ctx.globalAlpha = enabled ? 1 : .45
+    this.sprite(column, row, x, y, width, height)
+    ctx.restore()
+
+    const [pillX, pillY, pillWidth, pillHeight] = runner.status
+    rounded(ctx, pillX, pillY, pillWidth, pillHeight, 15)
+    ctx.fillStyle = enabled && state.counterRunner.remaining <= 0 ? this.skin.palette.mint : this.skin.palette.cream
+    ctx.fill()
+    ctx.strokeStyle = this.skin.palette.cocoa
+    ctx.lineWidth = 3
+    ctx.stroke()
+    ctx.fillStyle = this.skin.palette.cocoa
+    ctx.font = '900 21px ui-rounded, system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const wait = Math.ceil(Math.max(0, state.counterRunner.remaining))
+    ctx.fillText(`${runner.name} · ${!enabled ? 'OFF' : wait ? `${wait}s` : 'READY'}`, pillX + pillWidth / 2, pillY + pillHeight / 2 + 1)
   }
 
   private drawProducer(state: GameState, sourceId: string): void {

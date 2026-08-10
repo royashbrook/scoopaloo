@@ -234,10 +234,10 @@ test('Pip is a phone-first purchase, visible prep timer, and real assisted servi
   await finishShift(page)
   await page.getByRole('button', { name: 'UPGRADES' }).click()
 
-  await expect(page.locator('[data-upgrade-card]')).toHaveCount(6)
+  await expect(page.locator('[data-upgrade-card]')).toHaveCount(7)
   const card = page.locator('[data-upgrade-card="helper"]')
   await expect(card).toHaveAttribute('aria-label', 'PIP, Prep Pal, not hired. Stages ingredients for the front order every 30 seconds.')
-  await expect(card.getByRole('button')).toHaveAttribute('aria-label', 'Buy PIP level 1 for $180; stages ingredients every 30 seconds')
+  await expect(card.getByRole('button')).toHaveAttribute('aria-label', 'Hire PIP for $180; stages ingredients for the front order every 30 seconds')
   await expect(card.locator('img')).toHaveAttribute('alt', '')
   await expect(card.locator('.helper-description')).toHaveText('PIP STAGES INGREDIENTS. YOU FINISH + SERVE.')
   await expect(card.locator('.helper-change small')).toHaveText('STAGES/MIN')
@@ -303,7 +303,7 @@ test('Pip is a phone-first purchase, visible prep timer, and real assisted servi
   expect(before.coins).toBeGreaterThanOrEqual(180)
   await card.getByRole('button').click()
   await expect(card).toHaveAttribute('data-level', '1')
-  await expect(page.locator('[data-field="purchase-status"]')).toHaveText('PIP hired. Stages ingredients every 30 seconds.')
+  await expect(page.locator('[data-field="purchase-status"]')).toHaveText('PIP hired. Stages ingredients for the front order every 30 seconds.')
   const purchase = await page.evaluate(start => ({
     save: window.__scoopaloo.snapshot().save,
     sounds: (window as unknown as { __pipFrequencies: number[] }).__pipFrequencies.slice(start),
@@ -370,7 +370,7 @@ test('Pip is a phone-first purchase, visible prep timer, and real assisted servi
     if (viewport.width === 390) expect(layout.sprite.bottom).toBeLessThan(layout.ticket.top)
     else expect(layout.sprite.top).toBeGreaterThan(layout.ticket.bottom)
     expect(layout.sprite.bottom).toBeLessThanOrEqual(viewport.height)
-    expect(layout.describedBy).toBe('helper-status')
+    expect(layout.describedBy).toBe('helper-status runner-status')
     expect(layout.status).toBe('PIP will be ready in 30 seconds.')
     expect(layout.portrait).toBe(true)
     if (viewport.width === 390) expect(21 * depthScale(700) * layout.viewScale).toBeGreaterThanOrEqual(12)

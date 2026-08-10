@@ -33,6 +33,7 @@ export type ShiftUiState = {
   shopReturnPhase?: 'ready' | 'results'
   upgrades?: UpgradeUiItem[]
   helper?: { name: string; remaining: number; enabled: boolean }
+  runner?: { name: string; remaining: number; enabled: boolean; available: boolean }
   wrongItem?: boolean
   warning?: string
   recipe?: {
@@ -81,7 +82,15 @@ export type UpgradeUiItem = {
   affordable: boolean
   capped: boolean
   construction?: { available: boolean }
-  helper?: { name: string; image: string }
+  staff?: {
+    name: string
+    image?: string
+    role: string
+    description: string
+    activity: string
+    stat: string
+    available: boolean
+  }
 }
 
 type ShiftActions = {
@@ -106,6 +115,7 @@ export class ShiftUi {
     root.className = 'shift-ui'
     root.innerHTML = `
       <p class="sr-only" id="helper-status" data-field="helper-status"></p>
+      <p class="sr-only" id="runner-status" data-field="runner-status"></p>
       <section class="shift-hud" aria-label="Shift status">
         <div class="hud-stat"><span data-field="hud-mode">DAY</span><strong><b data-field="hud-day">1</b><small class="hud-rule" data-field="hud-best" hidden></small></strong></div>
         <div class="hud-stat hud-time"><span data-field="hud-time-label">TIME</span><strong><b data-field="time">1:30</b><small class="hud-rule" data-field="hud-arrival" hidden></small></strong></div>
@@ -378,6 +388,15 @@ export class ShiftUi {
           ? `${state.helper.name} will be ready in ${Math.ceil(state.helper.remaining)} seconds.`
           : `${state.helper.name} is ready for the next front order.`
       : '')
+    this.set('runner-status', state.runner
+      ? !state.runner.available
+        ? `${state.runner.name} is locked. Build the second counter first.`
+        : !state.runner.enabled
+          ? `${state.runner.name} is off. Hire the Counter Runner in the upgrade shop.`
+          : state.runner.remaining > 0
+            ? `${state.runner.name} will deliver again in ${Math.ceil(state.runner.remaining)} seconds.`
+            : `${state.runner.name} is ready for a finished order.`
+      : '')
 
     const canAdvance = state.canAdvance ?? state.success
     this.root.querySelectorAll<HTMLButtonElement>('[data-action="next"]').forEach(button => { button.disabled = !canAdvance })
@@ -463,12 +482,12 @@ export class ShiftUi {
     const signature = upgrades.map(upgrade => [
       upgrade.id, upgrade.level, upgrade.price, upgrade.before, upgrade.after, upgrade.affordable,
       upgrade.construction?.available,
-      upgrade.helper?.name, upgrade.helper?.image,
+      upgrade.staff?.name, upgrade.staff?.image, upgrade.staff?.available,
     ].join(':')).join('|')
     if (target.dataset.signature === signature) return
     target.dataset.signature = signature
     target.replaceChildren(...upgrades.map(upgrade => {
-      if (upgrade.helper) return this.renderHelperUpgrade(upgrade)
+      if (upgrade.staff) return this.renderStaffUpgrade(upgrade)
       const card = document.createElement('article')
       card.className = 'upgrade-card'
       card.dataset.upgradeCard = upgrade.id
@@ -523,39 +542,48 @@ export class ShiftUi {
     }))
   }
 
-  private renderHelperUpgrade(upgrade: UpgradeUiItem): HTMLElement {
-    const helper = upgrade.helper!
+  private renderStaffUpgrade(upgrade: UpgradeUiItem): HTMLElement {
+    const staff = upgrade.staff!
     const card = document.createElement('article')
-    card.className = 'upgrade-card helper-upgrade'
+    card.className = 'upgrade-card helper-upgrade staff-upgrade'
     card.dataset.upgradeCard = upgrade.id
+    card.dataset.kind = 'staff'
     card.dataset.level = String(upgrade.level)
     card.dataset.price = upgrade.price === null ? '' : String(upgrade.price)
     card.dataset.affordable = String(upgrade.affordable)
+    card.dataset.available = String(staff.available)
 
-    const currentSeconds = upgrade.level ? Math.round(60 / Number(upgrade.before)) : null
-    const nextSeconds = Math.round(60 / Number(upgrade.after))
+    const seconds = (rate: string): number => Number((60 / Number(rate)).toFixed(1))
+    const currentSeconds = upgrade.level ? seconds(upgrade.before) : null
+    const nextSeconds = seconds(upgrade.after)
     card.setAttribute('aria-label', upgrade.level
-      ? `${helper.name}, Prep Pal, level ${upgrade.level} of ${upgrade.maxLevel}. Stages ingredients for the front order every ${currentSeconds} seconds.`
-      : `${helper.name}, Prep Pal, not hired. Stages ingredients for the front order every ${nextSeconds} seconds.`)
+      ? `${staff.name}, ${staff.role}, level ${upgrade.level} of ${upgrade.maxLevel}. ${staff.activity} every ${currentSeconds} seconds.`
+      : `${staff.name}, ${staff.role}, not hired. ${staff.available ? `${staff.activity} every ${nextSeconds} seconds.` : 'Build the second counter first.'}`)
     card.dataset.purchaseMessage = upgrade.level
-      ? `${helper.name} upgraded. Stages ingredients every ${nextSeconds} seconds.`
-      : `${helper.name} hired. Stages ingredients every ${nextSeconds} seconds.`
+      ? `${staff.name} trained. ${staff.activity} every ${nextSeconds} seconds.`
+      : `${staff.name} hired. ${staff.activity} every ${nextSeconds} seconds.`
 
-    const avatar = document.createElement('img')
+    const avatar = staff.image ? document.createElement('img') : document.createElement('span')
     avatar.className = 'helper-avatar'
-    avatar.src = helper.image
-    avatar.alt = ''
+    if (avatar instanceof HTMLImageElement) {
+      avatar.src = staff.image!
+      avatar.alt = ''
+    } else {
+      avatar.classList.add('staff-avatar')
+      avatar.ariaHidden = 'true'
+      avatar.textContent = staff.name
+    }
 
     const copy = document.createElement('div')
     copy.className = 'helper-copy'
     const name = document.createElement('h2')
-    name.textContent = helper.name
+    name.textContent = staff.name
     const role = document.createElement('p')
     role.className = 'helper-role'
-    role.textContent = `PREP PAL · LV ${upgrade.level}/${upgrade.maxLevel}`
+    role.textContent = `${staff.role.toUpperCase()} · LV ${upgrade.level}/${upgrade.maxLevel}`
     const description = document.createElement('p')
     description.className = 'helper-description'
-    description.textContent = `${helper.name} STAGES INGREDIENTS. YOU FINISH + SERVE.`
+    description.textContent = staff.available ? staff.description : 'BUILD SECOND COUNTER FIRST.'
     copy.append(name, role, description)
 
     const offer = document.createElement('div')
@@ -569,17 +597,20 @@ export class ShiftUi {
     const after = document.createElement('strong')
     after.textContent = upgrade.capped ? '' : `${upgrade.after}/MIN`
     const stat = document.createElement('small')
-    stat.textContent = 'STAGES/MIN'
+    stat.textContent = staff.stat
     change.append(before, arrow, after, stat)
 
     const buy = document.createElement('button')
     buy.type = 'button'
     buy.dataset.upgrade = upgrade.id
+    const verb = upgrade.level ? 'Train' : 'Hire'
     buy.setAttribute('aria-label', upgrade.capped
-      ? `${helper.name} is at maximum level`
-      : `${upgrade.affordable ? 'Buy' : 'Need cash for'} ${helper.name} level ${upgrade.level + 1} for $${upgrade.price}; stages ingredients every ${nextSeconds} seconds`)
-    buy.textContent = upgrade.capped ? 'MAX LEVEL' : `${upgrade.affordable ? 'BUY' : 'NEED'} $${upgrade.price}`
-    buy.disabled = upgrade.capped || !upgrade.affordable
+      ? `${staff.name} is at maximum level`
+      : !staff.available
+        ? `Build the second counter before hiring ${staff.name}`
+        : `${upgrade.affordable ? verb : `Need cash to ${verb.toLowerCase()}`} ${staff.name}${upgrade.level ? ` to level ${upgrade.level + 1}` : ''} for $${upgrade.price}; ${staff.activity.toLowerCase()} every ${nextSeconds} seconds`)
+    buy.textContent = upgrade.capped ? 'MAX LEVEL' : `${verb.toUpperCase()} $${upgrade.price}`
+    buy.disabled = upgrade.capped || !staff.available || !upgrade.affordable
     offer.append(change, buy)
     card.append(avatar, copy, offer)
     return card
