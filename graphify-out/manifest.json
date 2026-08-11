@@ -1,0 +1,127 @@
+{
+  "/Users/roy/gh/scoopaloo/.githooks/commit-msg": {
+    "mtime": 1786165705.5382204,
+    "ast_hash": "2324eba00e6cfb1ecb6a53ce28fa7bb0",
+    "semantic_hash": "2324eba00e6cfb1ecb6a53ce28fa7bb0"
+  },
+  "/Users/roy/gh/scoopaloo/package.json": {
+    "mtime": 1786169181.8384407,
+    "ast_hash": "53388def47999eca7a4f6c40bbe512ec",
+    "semantic_hash": "53388def47999eca7a4f6c40bbe512ec"
+  },
+  "/Users/roy/gh/scoopaloo/playwright.config.ts": {
+    "mtime": 1786169181.838766,
+    "ast_hash": "5c5a097ac3b18a16371c9343bd3d32f4",
+    "semantic_hash": "5c5a097ac3b18a16371c9343bd3d32f4"
+  },
+  "/Users/roy/gh/scoopaloo/public/sw.js": {
+    "mtime": 1786169181.843277,
+    "ast_hash": "1fb0cb6d3d60bbd05e90f347637f6156",
+    "semantic_hash": "1fb0cb6d3d60bbd05e90f347637f6156"
+  },
+  "/Users/roy/gh/scoopaloo/src/engine.test.ts": {
+    "mtime": 1786169181.8436263,
+    "ast_hash": "bd6e625fd32960d6f6b16a33e15e769e",
+    "semantic_hash": "bd6e625fd32960d6f6b16a33e15e769e"
+  },
+  "/Users/roy/gh/scoopaloo/src/engine.ts": {
+    "mtime": 1786169181.8439474,
+    "ast_hash": "d3fe5a6381b0d4b9970b3f1fa08a7a83",
+    "semantic_hash": "d3fe5a6381b0d4b9970b3f1fa08a7a83"
+  },
+  "/Users/roy/gh/scoopaloo/src/input.ts": {
+    "mtime": 1786169181.8441565,
+    "ast_hash": "d520628eabb3589006acf7e177acf657",
+    "semantic_hash": "d520628eabb3589006acf7e177acf657"
+  },
+  "/Users/roy/gh/scoopaloo/src/main.ts": {
+    "mtime": 1786169181.8452995,
+    "ast_hash": "72d523fd61b0886824937f862d87fcc9",
+    "semantic_hash": "72d523fd61b0886824937f862d87fcc9"
+  },
+  "/Users/roy/gh/scoopaloo/src/render.ts": {
+    "mtime": 1786169181.8455167,
+    "ast_hash": "d6fcbdbdc95f979affb026ee096c4406",
+    "semantic_hash": "d6fcbdbdc95f979affb026ee096c4406"
+  },
+  "/Users/roy/gh/scoopaloo/src/save.test.ts": {
+    "mtime": 1786169181.8457444,
+    "ast_hash": "10ef4e9c09c6562d260b03b91489201d",
+    "semantic_hash": "10ef4e9c09c6562d260b03b91489201d"
+  },
+  "/Users/roy/gh/scoopaloo/src/save.ts": {
+    "mtime": 1786169181.8459759,
+    "ast_hash": "40ee1c191d7dbbc1f850443f4ce739e4",
+    "semantic_hash": "40ee1c191d7dbbc1f850443f4ce739e4"
+  },
+  "/Users/roy/gh/scoopaloo/src/skin.ts": {
+    "mtime": 1786169181.8461816,
+    "ast_hash": "1bf498775ce6af57724a4c6f7482ef86",
+    "semantic_hash": "1bf498775ce6af57724a4c6f7482ef86"
+  },
+  "/Users/roy/gh/scoopaloo/src/skins/ice-cream.json": {
+    "mtime": 1786169181.8464384,
+    "ast_hash": "75993a270f96fb5403a4435a1fd2cf18",
+    "semantic_hash": "75993a270f96fb5403a4435a1fd2cf18"
+  },
+  "/Users/roy/gh/scoopaloo/tests/offline.spec.ts": {
+    "mtime": 1786169181.8468697,
+    "ast_hash": "1e128dceb337477a812f518040db18e6",
+    "semantic_hash": "1e128dceb337477a812f518040db18e6"
+  },
+  "/Users/roy/gh/scoopaloo/tests/performance.spec.ts": {
+    "mtime": 1786169181.8470619,
+    "ast_hash": "c74e90dcb8ba15be0e9ad47ae7db1722",
+    "semantic_hash": "c74e90dcb8ba15be0e9ad47ae7db1722"
+  },
+  "/Users/roy/gh/scoopaloo/tests/smoke.spec.ts": {
+    "mtime": 1786169181.8472595,
+    "ast_hash": "8f7792f1c248fc271902aeaad8bcc1c0",
+    "semantic_hash": "8f7792f1c248fc271902aeaad8bcc1c0"
+  },
+  "/Users/roy/gh/scoopaloo/tsconfig.json": {
+    "mtime": 1786169181.8474488,
+    "ast_hash": "a27ea413d6e0e5b42670d397e9a2e015",
+    "semantic_hash": "a27ea413d6e0e5b42670d397e9a2e015"
+  },
+  "/Users/roy/gh/scoopaloo/vite.config.ts": {
+    "mtime": 1786169181.8476276,
+    "ast_hash": "99a1a6994450bcc34089a84e44f4e57b",
+    "semantic_hash": "99a1a6994450bcc34089a84e44f4e57b"
+  },
+  "/Users/roy/gh/scoopaloo/.github/workflows/commit-guard.yml": {
+    "mtime": 1786180947.761394,
+    "ast_hash": "20f6d886b24fa934543455ac531fd316",
+    "semantic_hash": "20f6d886b24fa934543455ac531fd316"
+  },
+  "/Users/roy/gh/scoopaloo/.github/workflows/deploy-site.yml": {
+    "mtime": 1786180938.8694339,
+    "ast_hash": "90135a041b51d38e233e8fec261d65b4",
+    "semantic_hash": "90135a041b51d38e233e8fec261d65b4"
+  },
+  "/Users/roy/gh/scoopaloo/README.md": {
+    "mtime": 1786169181.8372173,
+    "ast_hash": "b12652ad98ec1fc3d16c2c7eda9bfa37",
+    "semantic_hash": "b12652ad98ec1fc3d16c2c7eda9bfa37"
+  },
+  "/Users/roy/gh/scoopaloo/docs/SPEC.md": {
+    "mtime": 1786165692.3009787,
+    "ast_hash": "fb395f423a1dc6d9c93a011d78707fa9",
+    "semantic_hash": "fb395f423a1dc6d9c93a011d78707fa9"
+  },
+  "/Users/roy/gh/scoopaloo/index.html": {
+    "mtime": 1786169181.8375046,
+    "ast_hash": "f38ee5e1cbb6069fa19a35d477926cb2",
+    "semantic_hash": "f38ee5e1cbb6069fa19a35d477926cb2"
+  },
+  "/Users/roy/gh/scoopaloo/public/rescue.html": {
+    "mtime": 1786169181.8426292,
+    "ast_hash": "3b2ca2bcfc6dd0c96f6f7a1c76132a7a",
+    "semantic_hash": "3b2ca2bcfc6dd0c96f6f7a1c76132a7a"
+  },
+  "/Users/roy/gh/scoopaloo/public/assets/scoopaloo-atlas.png": {
+    "mtime": 1786169181.8420103,
+    "ast_hash": "6cc8d812c6e48749367736bb6814b801",
+    "semantic_hash": "6cc8d812c6e48749367736bb6814b801"
+  }
+}
