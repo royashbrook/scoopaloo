@@ -5,8 +5,10 @@ no accounts. one engine, many shop skins; ice cream is skin one.
 
 ## pillars (the non-negotiables)
 
-1. **kid-safe by construction.** zero network requests after load. no analytics, no accounts,
-   no notifications. there is nothing to collect, so there is nothing to disclose.
+1. **kid-safe by construction.** no ads, no lives, no timers, nothing to buy, no accounts, no
+   cookies, nothing sold or shared. no notifications. the game itself makes no network requests
+   after load; the host serves a cookieless analytics beacon that measures page paint and
+   nothing else. there is no identifier, so there is nothing to collect and nothing to disclose.
 2. **readable pressure.** icons teach spatial actions; concise labels and real numbers explain
    goals, orders, time, value, and performance. text is ON and functional. the player should
    always know what to make, how long is left, what it pays, and why a shift succeeded or failed.
