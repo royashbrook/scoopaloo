@@ -2,6 +2,10 @@ import { expect, test, type Page } from '@playwright/test'
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion: 'reduce' })
 
+async function useDayTwo(page: Page): Promise<void> {
+  await page.addInitScript(() => localStorage.setItem('scoopaloo_save_v1', JSON.stringify({ version: 1, currentDay: 1 })))
+}
+
 async function expectStatusLayout(page: Page): Promise<void> {
   const boxes = await page.evaluate(() => {
     const box = (selector: string) => {
@@ -22,6 +26,7 @@ async function expectStatusLayout(page: Page): Promise<void> {
 }
 
 test('rejects wrong stock, recovers, and completes the deterministic mixed deck', async ({ page }) => {
+  await useDayTwo(page)
   await page.goto('/')
   await page.getByRole('button', { name: 'START SHIFT' }).click()
   await page.evaluate(() => window.__scoopaloo.pause(true))
@@ -65,8 +70,12 @@ test('rejects wrong stock, recovers, and completes the deterministic mixed deck'
     serveFront()
     const mixed = game.snapshot()
     const front = mixed.customers.find(customer => !customer.served && !customer.missed)!
+    const activeItems = new Set(mixed.customers
+      .filter(customer => !customer.served && !customer.missed)
+      .slice(0, mixed.rules.activeOrderWindow)
+      .map(customer => customer.order.item))
     const wrongItem = Object.keys(mixed.skin.items)
-      .find(item => item !== front.order.item && mixed.skin.items[item].recipe)!
+      .find(item => !activeItems.has(item) && mixed.skin.items[item].recipe)!
     prepareOne(wrongItem)
 
     // Leave every interaction ring before measuring the deliberate wrong drop.
@@ -153,6 +162,7 @@ test('rejects wrong stock, recovers, and completes the deterministic mixed deck'
 })
 
 test('shows typed tray and counter stock without status overlap at every target size', async ({ page }) => {
+  await useDayTwo(page)
   await page.goto('/')
   await page.getByRole('button', { name: 'START SHIFT' }).click()
   await page.evaluate(() => {
@@ -177,10 +187,12 @@ test('shows typed tray and counter stock without status overlap at every target 
         && (game.snapshot().player.trayItems[item] ?? 0) <= before; tick++) game.advance(.2)
     }
     const front = state.customers.find(customer => !customer.served && !customer.missed)!
-    const wrong = Object.keys(state.skin.items).find(item => item !== front.order.item && state.skin.items[item].recipe)!
-    prepareOne(wrong)
-    game.movePlayer(point(state.skin.stations.counter.interaction))
-    for (let tick = 0; tick < 20 && (game.snapshot().player.trayItems[wrong] ?? 0) > 0; tick++) game.advance(.1)
+    const activeItems = new Set(state.customers
+      .filter(customer => !customer.served && !customer.missed)
+      .slice(0, state.rules.activeOrderWindow)
+      .map(customer => customer.order.item))
+    const wrong = Object.keys(state.skin.items).find(item => !activeItems.has(item) && state.skin.items[item].recipe)!
+    game.stockCounter({ [wrong]: 1 })
     prepareOne(front.order.item)
     game.movePlayer({ x: 480, y: 880 })
     game.advance(.05)

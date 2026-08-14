@@ -234,7 +234,7 @@ for (const size of PHONES) {
     await expectPaintedCanvas(page, 0)
     await expect(marker).toBeVisible()
     await expect(marker).toHaveAttribute('data-direction', 'right')
-    await expect(marker).toHaveAttribute('aria-label', 'CHOCOLATE ingredient is offscreen to the right')
+    await expect(marker).toHaveAttribute('aria-label', 'CHOCOLATE is offscreen to the right')
     await expect(marker.locator('img')).toHaveAttribute('src', '/assets/items/chocolate-scoop.svg')
     await page.screenshot({ path: `test-results/chocolate-day2-west-${size.name}.png` })
 
@@ -267,7 +267,7 @@ for (const size of PHONES) {
       await expectPaintedCanvas(page, 'east')
       await expect(marker).toBeVisible()
       await expect(marker).toHaveAttribute('data-direction', 'left')
-      await expect(marker).toHaveAttribute('aria-label', 'CONE ingredient is offscreen to the left')
+      await expect(marker).toHaveAttribute('aria-label', 'CONE is offscreen to the left')
       await expect(marker.locator('img')).toHaveAttribute('src', '/assets/items/cone-shell.svg')
       await page.screenshot({ path: `test-results/chocolate-day2-east-${size.name}.png` })
 

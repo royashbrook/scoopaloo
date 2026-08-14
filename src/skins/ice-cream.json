@@ -1,6 +1,7 @@
 {
   "id": "ice-cream",
   "spriteSheet": "/assets/scoopaloo-atlas.png?v=2",
+  "playerWalkSheet": "/assets/player-walk.png?v=1",
   "room": {
     "horizon": 320,
     "wall": "#FFE7CA",
@@ -37,11 +38,19 @@
       "customerPatience": 50,
       "spawnInterval": 10,
       "activeOrderWindow": 1,
+      "intro": {
+        "directSources": [
+          { "source": "soft-scoop", "item": "vanilla-cone", "unlockAfterServes": 0 },
+          { "source": "sundae-cup", "item": "sundae", "unlockAfterServes": 3 }
+        ],
+        "protectedServes": 3,
+        "guidedServes": 3
+      },
       "orderDeck": [
         { "item": "vanilla-cone", "quantity": 1 },
         { "item": "vanilla-cone", "quantity": 1 },
+        { "item": "vanilla-cone", "quantity": 1 },
         { "item": "sundae", "quantity": 1 },
-        { "item": "vanilla-cone", "quantity": 2 },
         { "item": "sundae", "quantity": 2 },
         { "item": "vanilla-cone", "quantity": 1 },
         { "item": "sundae", "quantity": 1 },
@@ -60,6 +69,11 @@
       "customerPatience": 32,
       "spawnInterval": 8.5,
       "activeOrderWindow": 2,
+      "intro": {
+        "directSources": [],
+        "protectedServes": 1,
+        "guidedServes": 1
+      },
       "orderDeck": [
         { "item": "chocolate-cone", "quantity": 1 },
         { "item": "vanilla-cone", "quantity": 1 },
@@ -556,7 +570,7 @@
       "id": "helper",
       "name": "PIP HELPER",
       "kind": "helperRate",
-      "unit": "STAGES / MIN",
+      "unit": "ORDERS / MIN",
       "levels": [
         { "price": 180, "effect": 2 },
         { "price": 360, "effect": 3 },

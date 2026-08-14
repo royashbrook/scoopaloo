@@ -2,6 +2,10 @@ import { expect, test, type Page } from '@playwright/test'
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion: 'reduce' })
 
+async function useDayTwo(page: Page): Promise<void> {
+  await page.addInitScript(() => localStorage.setItem('scoopaloo_save_v1', JSON.stringify({ version: 1, currentDay: 1 })))
+}
+
 async function expectInsideViewport(page: Page, selector: string): Promise<void> {
   const box = await page.locator(selector).boundingBox()
   expect(box).not.toBeNull()
@@ -12,6 +16,7 @@ async function expectInsideViewport(page: Page, selector: string): Promise<void>
 }
 
 test('shows a readable order, times out, and freezes a missed goal', async ({ page }) => {
+  await useDayTwo(page)
   await page.goto('/')
   await expect(page.getByRole('img', { name: 'Scoopaloo' })).toBeVisible()
   const goal = await page.evaluate(() => {
@@ -28,10 +33,19 @@ test('shows a readable order, times out, and freezes a missed goal', async ({ pa
   await start.click()
   await page.evaluate(() => window.__scoopaloo.pause(true))
   await expect(page.getByLabel('Shift status')).toBeVisible()
-  await expect(page.getByLabel('Current order')).toContainText('VANILLA CONE')
-  const price = await page.evaluate(() => window.__scoopaloo.snapshot().customers[0].order.price)
-  await expect(page.getByLabel('Current order')).toContainText(`$${price}`)
-  await expect(page.getByText('1:30', { exact: true })).toBeVisible()
+  const current = await page.evaluate(() => {
+    const state = window.__scoopaloo.snapshot()
+    const front = state.customers.find(customer => !customer.served && !customer.missed)!
+    const seconds = Math.ceil(state.shift.remaining)
+    return {
+      label: front.order.label,
+      price: front.order.price,
+      clock: `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`,
+    }
+  })
+  await expect(page.getByLabel('Current order')).toContainText(current.label)
+  await expect(page.getByLabel('Current order')).toContainText(`$${current.price}`)
+  await expect(page.getByText(current.clock, { exact: true })).toBeVisible()
   await expectInsideViewport(page, '.shift-hud')
   await expectInsideViewport(page, '.order-ticket')
 
@@ -39,7 +53,7 @@ test('shows a readable order, times out, and freezes a missed goal', async ({ pa
   expect(minimumType).toBeGreaterThanOrEqual(13)
   await page.screenshot({ path: 'test-results/shift-phone-playing.png' })
 
-  await page.evaluate(() => window.__scoopaloo.advance(90))
+  await page.evaluate(() => window.__scoopaloo.advance(window.__scoopaloo.snapshot().shift.remaining))
   await expect(page.getByRole('heading', { name: 'GOAL MISSED' })).toBeVisible()
   await expect(page.locator('.results-card').getByText('$0', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'RETRY' })).toBeVisible()
@@ -54,6 +68,7 @@ test('shows a readable order, times out, and freezes a missed goal', async ({ pa
 })
 
 test('earns a real goal and keeps results readable at every target size', async ({ page }) => {
+  await useDayTwo(page)
   await page.goto('/')
   await page.evaluate(() => {
     const game = window.__scoopaloo

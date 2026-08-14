@@ -261,12 +261,10 @@ test('the post-campaign counter build is gated, costs exactly $250 once, persist
 
   let shop = await openStore(page)
   let card = shop.locator('[data-upgrade-card="second-counter"]')
-  await expect(card).toHaveAttribute('data-kind', 'construction')
-  await expect(card.locator('h2')).toHaveText('SECOND COUNTER')
-  await expect(card.getByRole('button')).toBeDisabled()
-  await expect(card.getByRole('button')).toHaveText('FINISH DAY 3')
-  await expectShopFits(page, card, SAFE_TOP, SAFE_BOTTOM)
-  await page.screenshot({ path: 'test-results/second-counter-phone-locked.png' })
+  await expect(card).toHaveCount(0)
+  const helperCard = shop.locator('[data-upgrade-card="helper"]')
+  await expectShopFits(page, helperCard, SAFE_TOP, SAFE_BOTTOM)
+  await page.screenshot({ path: 'test-results/second-counter-phone-hidden.png' })
 
   await replaceSave(page, completedSave(0, 249, false))
   await setSafeArea(page)
@@ -324,7 +322,7 @@ test('the post-campaign counter build is gated, costs exactly $250 once, persist
   }
 
   const worker = await page.evaluate(async () => (await fetch('/sw.js')).text())
-  expect(worker).toContain("const CACHE = 'scoopaloo-v14'")
+  expect(worker).toContain("const CACHE = 'scoopaloo-v15'")
   expect(worker).not.toContain('second-counter')
   expect(await page.evaluate(() => window.__scoopaloo.snapshot().skin.counterExpansion?.station.sprite)).toEqual([3, 2])
 

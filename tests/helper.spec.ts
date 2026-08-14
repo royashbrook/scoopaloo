@@ -182,7 +182,7 @@ async function captureTransfer(page: Page, reducedMotion: 'no-preference' | 'red
     }
   })
   await repaint(page)
-  await expect(page.locator('[data-field="ticket-guidance"]')).toHaveText('PIP READY · HOLD AT PREP')
+  await expect(page.locator('[data-field="ticket-guidance"]')).toHaveText('PIP IS MAKING CHOCOLATE CONE')
   await page.screenshot({ path })
   return worldHash(page, bounds)
 }
@@ -234,13 +234,13 @@ test('Pip is a phone-first purchase, visible prep timer, and real assisted servi
   await finishShift(page)
   await page.getByRole('button', { name: 'UPGRADES' }).click()
 
-  await expect(page.locator('[data-upgrade-card]')).toHaveCount(7)
+  await expect(page.locator('[data-upgrade-card]')).toHaveCount(6)
   const card = page.locator('[data-upgrade-card="helper"]')
-  await expect(card).toHaveAttribute('aria-label', 'PIP, Prep Pal, not hired. Stages ingredients for the front order every 30 seconds.')
-  await expect(card.getByRole('button')).toHaveAttribute('aria-label', 'Hire PIP for $180; stages ingredients for the front order every 30 seconds')
+  await expect(card).toHaveAttribute('aria-label', 'PIP, Prep Pal, not hired. Makes the front order every 30 seconds.')
+  await expect(card.getByRole('button')).toHaveAttribute('aria-label', 'Hire PIP for $180; makes the front order every 30 seconds')
   await expect(card.locator('img')).toHaveAttribute('alt', '')
-  await expect(card.locator('.helper-description')).toHaveText('STAGES. YOU FINISH + SERVE.')
-  await expect(card.locator('.helper-change small')).toHaveText('STAGES/MIN')
+  await expect(card.locator('.helper-description')).toHaveText('MAKES THE FRONT ORDER')
+  await expect(card.locator('.helper-change small')).toHaveText('ORDERS/MIN')
   const shop = await page.evaluate(() => {
     const box = (element: Element) => element.getBoundingClientRect()
     const dialog = document.querySelector<HTMLDialogElement>('.shop-card')!
@@ -303,7 +303,7 @@ test('Pip is a phone-first purchase, visible prep timer, and real assisted servi
   expect(before.coins).toBeGreaterThanOrEqual(180)
   await card.getByRole('button').click()
   await expect(card).toHaveAttribute('data-level', '1')
-  await expect(page.locator('[data-field="purchase-status"]')).toHaveText('PIP hired. Stages ingredients for the front order every 30 seconds.')
+  await expect(page.locator('[data-field="purchase-status"]')).toHaveText('PIP hired. Makes the front order every 30 seconds.')
   const purchase = await page.evaluate(start => ({
     save: window.__scoopaloo.snapshot().save,
     sounds: (window as unknown as { __pipFrequencies: number[] }).__pipFrequencies.slice(start),
@@ -370,7 +370,7 @@ test('Pip is a phone-first purchase, visible prep timer, and real assisted servi
     if (viewport.width === 390) expect(layout.sprite.bottom).toBeLessThan(layout.ticket.top)
     else expect(layout.sprite.top).toBeGreaterThan(layout.ticket.bottom)
     expect(layout.sprite.bottom).toBeLessThanOrEqual(viewport.height)
-    expect(layout.describedBy).toBe('helper-status runner-status')
+    expect(layout.describedBy).toBe('helper-status')
     expect(layout.status).toBe('PIP will be ready in 30 seconds.')
     expect(layout.portrait).toBe(true)
     if (viewport.width === 390) expect(21 * depthScale(700) * layout.viewScale).toBeGreaterThanOrEqual(12)
@@ -498,7 +498,7 @@ test('Pip is a phone-first purchase, visible prep timer, and real assisted servi
   })
   await page.evaluate(time => window.__scoopaloo.setTime(time), event.createdAt + .14)
   await repaint(page)
-  await expect(page.locator('[data-field="ticket-guidance"]')).toHaveText('PIP READY · HOLD AT PREP')
+  await expect(page.locator('[data-field="ticket-guidance"]')).toHaveText('PIP IS MAKING CHOCOLATE CONE')
   const assistedTicket = await page.evaluate(() => {
     const ticket = document.querySelector('.order-ticket')!.getBoundingClientRect()
     const guidance = document.querySelector<HTMLElement>('[data-field="ticket-guidance"]')!
@@ -529,7 +529,7 @@ test('Pip is a phone-first purchase, visible prep timer, and real assisted servi
   await page.waitForTimeout(80)
   await page.evaluate(() => window.__scoopaloo.pause(true))
   await repaint(page)
-  await expect(page.locator('[data-field="ticket-guidance"]')).toHaveText(`MAKING ${route.label}`)
+  await expect(page.locator('[data-field="ticket-guidance"]')).toHaveText(`PIP IS MAKING ${route.label}`)
   await page.evaluate(() => window.__scoopaloo.pause(false))
   await expect.poll(() => page.evaluate(item => window.__scoopaloo.snapshot().player.trayItems[item] ?? 0, route.item), { timeout: 6_000 }).toBe(1)
   await dragTo(page, { x: route.counter[0], y: route.counter[1] })

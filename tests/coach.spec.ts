@@ -6,10 +6,10 @@ import skinData from '../src/skins/ice-cream.json' with { type: 'json' }
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion: 'reduce' })
 
-const READY_COPY = 'DRAG TO MOVE · WALK INTO DASHED RINGS TO PICK UP'
+const READY_COPY = 'DRAG TO MOVE · SERVE 3 CONES TO OPEN SUNDAES'
 const MOVE_COPY = 'DRAG ANYWHERE TO MOVE'
-const RING_COPY = 'WALK INTO VANILLA RING'
-const CANVAS_LABEL = 'Scoopaloo ice cream stand game. Drag anywhere to move, or use W A S D or arrow keys. Walk into dashed ingredient rings to pick up ingredients automatically. Hold at prep until complete.'
+const RING_COPY = 'WALK INTO VANILLA CONE RING'
+const CANVAS_LABEL = 'Scoopaloo ice cream stand game. Drag anywhere to move, or use W A S D or arrow keys. Walk into dashed rings to pick up and use stations automatically. Stay at prep until an order is finished.'
 const DEFAULT_SAVE = defaultSave(skinData as GameSkin)
 const PROGRESSED_SAVES = [
   { name: 'lifetime cash', save: { ...DEFAULT_SAVE, lifetimeCash: 1 } },
@@ -95,6 +95,16 @@ async function neededProducer(page: Page): Promise<{ id: string; item: string; p
   return page.evaluate(() => {
     const state = window.__scoopaloo.snapshot()
     const front = state.customers.find(customer => !customer.served && !customer.missed)!
+    const direct = state.rules.intro?.directSources.find(source =>
+      source.item === front.order.item && source.unlockAfterServes <= state.shift.served)
+    if (direct) {
+      const producer = state.skin.producers[direct.source]
+      return {
+        id: direct.source,
+        item: state.sources[direct.source].item,
+        point: { x: producer.interaction[0], y: producer.interaction[1] },
+      }
+    }
     const inputs = Object.keys(state.skin.items[front.order.item].recipe!.inputs)
     const candidates = Object.entries(state.skin.producers)
       .filter(([id, producer]) => id in state.sources && inputs.includes(producer.item))
@@ -158,10 +168,27 @@ async function expectPlayingFits(page: Page): Promise<void> {
       guidance: guidanceBox.toJSON(),
       guidanceFits: guidance.scrollWidth <= guidance.clientWidth + 1 && guidance.scrollHeight <= guidance.clientHeight + 1,
       guidanceFont: parseFloat(getComputedStyle(guidance).fontSize),
+      simple: document.querySelector('.shift-ui')?.getAttribute('data-complexity') === 'simple',
       width: innerWidth,
       height: innerHeight,
     }
   })
+  if (layout.simple) {
+    const expectedPanel = Math.min(300, layout.width - 24)
+    expect(layout.panel.width).toBe(expectedPanel)
+    expect(layout.ticket.width).toBe(expectedPanel)
+    expect(layout.ticket.height).toBe(126)
+    expect(layout.rail.width).toBe(0)
+    expect(layout.guidanceFits).toBe(true)
+    expect(layout.guidanceFont).toBeGreaterThanOrEqual(15)
+    for (const item of [layout.panel, layout.ticket, layout.guidance]) {
+      expect(item.left).toBeGreaterThanOrEqual(0)
+      expect(item.top).toBeGreaterThanOrEqual(0)
+      expect(item.right).toBeLessThanOrEqual(layout.width)
+      expect(item.bottom).toBeLessThanOrEqual(layout.height)
+    }
+    return
+  }
   const phone = layout.width < 600
   const expectedPanel = phone ? layout.width - 24 : 298
   expect(layout.panel.width).toBe(expectedPanel)
@@ -209,7 +236,8 @@ test('teaches one real first-shift drag and ring pickup without touching the sav
   await page.goto('/')
   await page.waitForFunction(() => window.__scoopaloo.atlasReady())
   const saveBefore = await page.evaluate(() => JSON.stringify(window.__scoopaloo.snapshot().save))
-  await expect(page.locator('[data-field="ready-unlock"]')).toHaveText(READY_COPY)
+  await expect(page.locator('[data-field="ready-challenge"]')).toHaveText(READY_COPY)
+  await expect(page.locator('[data-field="ready-unlock"]')).toHaveText('FIRST 3 ORDERS · NO TIMER')
   await expect(page.locator('#game')).toHaveAttribute('aria-label', CANVAS_LABEL)
   await expect(page.locator('.order-panel button')).toHaveCount(0)
   await expectReadyFits(page)
@@ -225,35 +253,6 @@ test('teaches one real first-shift drag and ring pickup without touching the sav
   expect(sequenceCount(await frequencies(page), [330, 440, 660])).toBe(1)
   await expectPlayingFits(page)
   await page.screenshot({ path: 'test-results/coach-phone-move.png' })
-
-  const warning = await page.evaluate(() => {
-    const game = window.__scoopaloo
-    const origin = { x: game.snapshot().player.x, y: game.snapshot().player.y }
-    const state = game.snapshot()
-    const front = state.customers.find(customer => !customer.served && !customer.missed)!
-    const input = Object.keys(state.skin.items[front.order.item].recipe!.inputs)[0]
-    const [, source] = Object.entries(state.skin.producers)
-      .find(([id, producer]) => id in state.sources && producer.item === input)!
-    game.movePlayer({ x: source.interaction[0], y: source.interaction[1] })
-    for (let tick = 0; tick < 40 && (game.snapshot().player.trayItems[input] ?? 0) === 0; tick++) game.advance(.1)
-    const [x, y] = game.snapshot().skin.stations.counter.interaction
-    game.movePlayer({ x, y })
-    for (let tick = 0; tick < 20 && !game.snapshot().events.some(event => event.kind === 'reject'); tick++) game.advance(.05)
-    game.movePlayer(origin)
-    const after = game.snapshot()
-    return {
-      distance: Math.hypot(after.player.x - origin.x, after.player.y - origin.y),
-      reason: after.events.find(event => event.kind === 'reject')?.reason,
-    }
-  })
-  expect(warning).toMatchObject({ distance: 0, reason: 'needs-prep' })
-  await expect(guidance).toHaveText('FINISH IT AT PREP')
-  await page.screenshot({ path: 'test-results/coach-phone-warning.png' })
-  await page.evaluate(() => window.__scoopaloo.advance(window.__scoopaloo.snapshot().shift.remaining))
-  await expect(page.getByRole('heading', { name: 'GOAL MISSED' })).toBeVisible()
-  await page.getByRole('button', { name: 'RETRY' }).click()
-  await expect(guidance).toHaveText(MOVE_COPY)
-  expect(sequenceCount(await frequencies(page), [330, 440, 660])).toBe(2)
 
   await page.evaluate(() => window.__scoopaloo.pause(false))
   await page.mouse.click(195, 700)
@@ -293,20 +292,9 @@ test('teaches one real first-shift drag and ring pickup without touching the sav
   await page.evaluate(() => { window.__scoopaloo.pause(true); window.__scoopaloo.setTime(4.26) })
   await page.screenshot({ path: 'test-results/coach-phone-picked-up.png' })
 
-  await page.evaluate(() => window.__scoopaloo.advance(window.__scoopaloo.snapshot().shift.remaining))
-  await expect(page.getByRole('heading', { name: 'GOAL MISSED' })).toBeVisible()
-  const startsBeforeMute = sequenceCount(await frequencies(page), [330, 440, 660])
   const soundButton = page.locator('#sound-button')
-  await soundButton.click()
+  await soundButton.evaluate(button => button.click())
   await expect(soundButton).toHaveAttribute('aria-pressed', 'false')
-  await page.getByRole('button', { name: 'RETRY' }).click()
-  await expect(guidance).toHaveText('GET VANILLA + CONE')
-  expect(sequenceCount(await frequencies(page), [330, 440, 660])).toBe(startsBeforeMute)
-
-  const mutedPickupSounds = sequenceCount(await frequencies(page), [760])
-  await page.evaluate(() => window.__scoopaloo.pause(false))
-  await collect(page, await neededProducer(page))
-  expect(sequenceCount(await frequencies(page), [760])).toBe(mutedPickupSounds)
   expect(await page.evaluate(() => JSON.stringify(window.__scoopaloo.snapshot().save))).toBe(saveBefore)
   expect(await page.evaluate(() => Object.keys(localStorage).filter(key => /coach|tutorial/i.test(key)))).toEqual([])
   expect(await page.evaluate(() => {
@@ -316,11 +304,11 @@ test('teaches one real first-shift drag and ring pickup without touching the sav
 
   await page.evaluate(() => navigator.serviceWorker.ready)
   await page.reload()
-  await expect(page.locator('[data-field="ready-unlock"]')).toHaveText(READY_COPY)
+  await expect(page.locator('[data-field="ready-challenge"]')).toHaveText(READY_COPY)
   await context.setOffline(true)
   try {
     await page.reload()
-    await expect(page.locator('[data-field="ready-unlock"]')).toHaveText(READY_COPY)
+    await expect(page.locator('[data-field="ready-challenge"]')).toHaveText(READY_COPY)
     await expect(page.locator('#sound-button')).toHaveAttribute('aria-pressed', 'false')
     await page.screenshot({ path: 'test-results/coach-phone-offline-ready.png' })
     await page.getByRole('button', { name: 'START SHIFT' }).click()
@@ -339,7 +327,7 @@ test('teaches one real first-shift drag and ring pickup without touching the sav
   }
 })
 
-test('keeps the movement lesson learned on the shift-ending frame', async ({ page }) => {
+test('keeps the movement lesson learned while the first-order clock is protected', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'START SHIFT' }).click()
   const guidance = page.locator('[data-field="ticket-guidance"]')
@@ -348,21 +336,21 @@ test('keeps the movement lesson learned on the shift-ending frame', async ({ pag
     game.pause(true)
     const state = game.snapshot()
     game.movePlayer({ x: state.player.x + 23, y: state.player.y })
-    game.advance(state.shift.remaining - .03)
   })
   await expect(guidance).toHaveText(MOVE_COPY)
+  const protectedTime = await page.evaluate(() => window.__scoopaloo.snapshot().shift.remaining)
 
   await page.mouse.move(195, 700)
   await page.mouse.down()
   try {
     await page.mouse.move(253, 700)
     await page.evaluate(() => window.__scoopaloo.pause(false))
-    await expect(page.getByRole('heading', { name: 'GOAL MISSED' })).toBeVisible()
+    await expect(guidance).toHaveText(RING_COPY)
+    await page.waitForTimeout(100)
+    expect(await page.evaluate(() => window.__scoopaloo.snapshot().shift.remaining)).toBe(protectedTime)
   } finally {
     await page.mouse.up()
   }
-  await page.getByRole('button', { name: 'RETRY' }).click()
-  await expect(guidance).toHaveText(RING_COPY)
 })
 
 for (const progress of PROGRESSED_SAVES) {
@@ -372,9 +360,9 @@ for (const progress of PROGRESSED_SAVES) {
       save: progress.save,
     })
     await page.goto('/')
-    await expect(page.locator('[data-field="ready-unlock"]')).toBeHidden()
+    await expect(page.locator('[data-field="ready-unlock"]')).toHaveText('FIRST 3 ORDERS · NO TIMER')
     await page.getByRole('button', { name: 'START SHIFT' }).click()
     await page.evaluate(() => window.__scoopaloo.pause(true))
-    await expect(page.locator('[data-field="ticket-guidance"]')).toHaveText('GET VANILLA + CONE')
+    await expect(page.locator('[data-field="ticket-guidance"]')).toHaveText('GET THE VANILLA CONE')
   })
 }

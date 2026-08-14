@@ -126,6 +126,7 @@ function includesSequence(values: number[], sequence: number[]): boolean {
 test('serves the second open order by pointer while keeping the front ticket', async ({ page }) => {
   test.setTimeout(120_000)
   await page.addInitScript(() => {
+    localStorage.setItem('scoopaloo_save_v1', JSON.stringify({ version: 1, currentDay: 1 }))
     const frequencies: number[] = []
     Object.defineProperty(window, '__openCounterFrequencies', { value: frequencies })
     class Param {
@@ -150,14 +151,8 @@ test('serves the second open order by pointer while keeping the front ticket', a
   await page.getByRole('button', { name: 'START SHIFT' }).click()
   await page.evaluate(() => {
     window.__scoopaloo.pause(true)
-    window.__scoopaloo.advance(2.05)
+    window.__scoopaloo.advance(window.__scoopaloo.snapshot().rules.spawnInterval + .05)
   })
-  const dayOneNext = page.getByLabel('Upcoming orders').locator('li').first()
-  await expect(dayOneNext).toHaveAttribute('data-state', 'waiting')
-  await expect(dayOneNext.locator('.next-state')).toBeVisible()
-  await expect(dayOneNext.locator('.next-state')).toHaveText('WAIT')
-  await expect(dayOneNext).toHaveAttribute('aria-label', /waiting outside the active service window/)
-  await finishDayOne(page)
 
   const route = await page.evaluate(() => {
     const state = window.__scoopaloo.snapshot()

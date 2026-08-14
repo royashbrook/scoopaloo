@@ -40,6 +40,23 @@ async function finishShift(page: Page) {
       const state = game.snapshot()
       const front = state.customers.find(customer => !customer.served && !customer.missed)
       if (!front) { game.advance(.1); return }
+      const direct = state.rules.intro?.directSources.find(source =>
+        source.item === front.order.item && source.unlockAfterServes <= state.shift.served)
+      if (direct) {
+        for (let made = 0; made < front.order.quantity && game.snapshot().phase === 'playing'; made++) {
+          const source = state.skin.producers[direct.source]
+          const target = (game.snapshot().player.trayItems[front.order.item] ?? 0) + 1
+          game.movePlayer(point(source.interaction))
+          for (let tick = 0; tick < 100 && game.snapshot().phase === 'playing'
+            && (game.snapshot().player.trayItems[front.order.item] ?? 0) < target; tick++) game.advance(.2)
+          const carried = game.snapshot().player.trayItems[front.order.item] ?? 0
+          game.movePlayer(point(state.skin.stations.counter.interaction))
+          for (let tick = 0; tick < 20 && game.snapshot().phase === 'playing'
+            && (game.snapshot().player.trayItems[front.order.item] ?? 0) >= carried; tick++) game.advance(.1)
+        }
+        game.advance(1)
+        return
+      }
       const recipe = state.skin.items[front.order.item].recipe!
       for (let made = 0; made < front.order.quantity && game.snapshot().phase === 'playing'; made++) {
         for (const [input, quantity] of Object.entries(recipe.inputs)) {

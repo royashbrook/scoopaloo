@@ -41,8 +41,15 @@ toca-boca-adjacent kawaii, from the approved concept board:
 
 ## the loop
 
-1. four sources produce vanilla or chocolate scoops, cone shells, and sundae cups over time.
-   vanilla opens on day 1; the chocolate machine is a saved day 2 unlock.
+day 1 teaches the payoff before the production puzzle: the first machine dispenses a finished
+vanilla cone to carry straight to the customer. the first three serves have no clock, patience
+loss, or second customer; then a visible sundae source opens and normal shift pressure begins.
+the compact hud shows only the goal, current order, guidance, and pause during that lesson.
+
+1. from day 2 onward, four sources produce vanilla or chocolate scoops, cone shells, and sundae
+   cups over time. the chocolate machine and its room corner are a saved day 2 unlock. the first
+   naturally reached day 2 order has one customer and no clock or patience loss, so the standard
+   recipe checklist can teach source → vessel → prep → counter before normal pressure begins.
 2. player reads the current ticket and two-order preview, then collects the requested flavor plus
    the correct vessel shown in the recipe checklist.
 3. carry both components to the prep station and hold in its ring. an exact recipe consumes
@@ -60,8 +67,9 @@ toca-boca-adjacent kawaii, from the approved concept board:
 7. a timed shift shows its cash goal, clock, served, missed, and streak. results show revenue,
    goal, best streak, and 1-3 stars before retry, upgrade, or next day.
 8. spend between shifts to choose: faster prep, faster movement, bigger tray, or more patience.
-9. helpers eventually automate one leg (source→prep) so the game becomes gently idle. player is always
-   strictly faster than a helper, so playing beats watching.
+9. helpers arrive only after the related bottleneck is visible. Pip makes the front order at prep;
+   Mel moves a finished prep output to the shared counter after the second service lane is built.
+   the player is always strictly faster than a helper, so playing beats watching.
 10. clearing day 3 unlocks score chase: repeatable 120-second full-menu rush levels rotate the
     deck, raise the cash goal, tighten arrivals/patience to fixed floors, and preserve a best score.
 
@@ -72,13 +80,13 @@ missing a goal means retry, never punishment or lost purchases.
 
 | # | moment | motion |
 |---|--------|--------|
-| 1 | walk | body bob + slight lean into direction, feet patter, shadow tracks |
+| 1 | walk | four-direction leg/arm gait driven by distance traveled, slight lean, feet patter, shadow tracks |
 | 2 | carry | tray items wobble with spring lag; big stacks wobble more |
 | 3 | pickup / drop | item squash-stretch hop with a little arc, tray dips |
 | 4 | machine pour | swirl builds up in 3 ellipse layers, tiny wiggle at the end |
 | 5 | pay | coin fountain arc, coins settle with bounce, magnet-fly to player |
 | 6 | served | heart pop + 3 sparkles, customer happy-hop, waddle out |
-| 7 | idle | characters blink every few seconds; machine hums (visual shimmy) |
+| 7 | idle | characters blink every few seconds; machines rest between production actions |
 | 8 | buttons / shop cards | squish on press; affordable choices use the sunshine action color |
 
 easing: everything springs or ease-out-backs. nothing moves linearly. respect

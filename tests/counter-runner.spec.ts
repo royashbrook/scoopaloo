@@ -408,17 +408,11 @@ test('MEL is gated, uses HIRE/TRAIN, survives offline rescue and the Day 3 to Ru
 
   let shop = await openStore(page)
   let card = shop.locator('[data-upgrade-card="counter-runner"]')
-  await expect(card).toHaveAttribute('data-kind', 'staff')
-  await expect(card).toHaveAttribute('data-available', 'false')
-  await expect(card.locator('h2')).toHaveText('MEL')
-  await expect(card.locator('.helper-role')).toHaveText('COUNTER RUNNER · LV 0/3')
-  await expect(card.locator('.helper-description')).toHaveText('BUILD SECOND COUNTER FIRST.')
-  await expect(card.locator('.helper-change small')).toHaveText('MOVES/MIN')
-  await expect(card.getByRole('button')).toHaveText('HIRE $300')
-  await expect(card.getByRole('button')).toBeDisabled()
-  await expect(shop.locator('[data-upgrade-card="helper"] button')).toHaveText('HIRE $180')
-  await expectStoreFits(page, card, SAFE_TOP, SAFE_BOTTOM)
-  await page.screenshot({ path: 'test-results/counter-runner-phone-locked.png' })
+  await expect(card).toHaveCount(0)
+  const helperCard = shop.locator('[data-upgrade-card="helper"]')
+  await expect(helperCard.getByRole('button')).toHaveText('HIRE $180')
+  await expectStoreFits(page, helperCard, SAFE_TOP, SAFE_BOTTOM)
+  await page.screenshot({ path: 'test-results/counter-runner-phone-hidden.png' })
 
   await replaceSave(page, staffSave(0, 1_900))
   await setSafeArea(page)
@@ -556,7 +550,8 @@ test('browser state exposes exact 15/10/7.5 cadence, READY without catch-up, and
     const state = window.__scoopaloo.snapshot()
     return { remaining: state.counterRunner.remaining, counter: state.counter.stock, coins: state.save.coins }
   })).toEqual({ remaining: 0, counter: 0, coins: 0 })
-  await expect(page.locator('#runner-status')).toHaveText('MEL is locked. Build the second counter first.')
+  await expect(page.locator('#runner-status')).toHaveText('')
+  await expect(page.locator('canvas')).toHaveAttribute('aria-describedby', 'helper-status')
 
   await replaceSave(page, staffSave(3, 0, 1, true, 3))
   await page.evaluate(() => {
