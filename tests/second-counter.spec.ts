@@ -322,7 +322,7 @@ test('the post-campaign counter build is gated, costs exactly $250 once, persist
   }
 
   const worker = await page.evaluate(async () => (await fetch('/sw.js')).text())
-  expect(worker).toContain("const CACHE = 'scoopaloo-v15'")
+  expect(worker).toContain("const CACHE = 'scoopaloo-v16'")
   expect(worker).not.toContain('second-counter')
   expect(await page.evaluate(() => window.__scoopaloo.snapshot().skin.counterExpansion?.station.sprite)).toEqual([3, 2])
 

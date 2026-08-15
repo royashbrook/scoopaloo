@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test('reloads offline after the first visit', async ({ context, page }) => {
   await page.goto('/')
   const worker = await page.evaluate(async () => (await fetch('/sw.js')).text())
-  expect(worker).toContain("const CACHE = 'scoopaloo-v15'")
+  expect(worker).toContain("const CACHE = 'scoopaloo-v16'")
   expect(worker).toContain("'/assets/room/ice-cream-wall.svg?v=3'")
   expect(worker).toContain("'/assets/player-walk.png?v=1'")
   await page.evaluate(() => navigator.serviceWorker.ready)
