@@ -5,6 +5,7 @@ import skinData from './skins/ice-cream.json'
 import {
   MOTION_DISTANCES,
   MOTION_TIMES,
+  LOCKED_PRODUCER_PLAQUE,
   Renderer,
   blinkPose,
   carryPose,
@@ -14,6 +15,7 @@ import {
   introStationAlpha,
   latestMachineEventAge,
   lockedProducerLabel,
+  lockedProducerLabelFont,
   machinePose,
   roomPropAnchor,
   sourceVisualItem,
@@ -266,6 +268,15 @@ describe('kid-first render guidance (#63)', () => {
     expect(introStationAlpha(true, false)).toBe(.16)
     expect(introStationAlpha(true, false, true)).toBe(.12)
     expect(introStationAlpha(false, false, true)).toBe(1)
+  })
+
+  it('steps down a wider fallback font instead of squashing locked labels', () => {
+    const width = (font: string): number => 78.2 * Number(font.match(/(\d+)px/)![1]) / 18
+    const font = lockedProducerLabelFont('3 MORE', candidate => width(candidate))
+
+    expect(font).toContain('17px')
+    expect(LOCKED_PRODUCER_PLAQUE.labelMaxWidth - width(font))
+      .toBeGreaterThanOrEqual(LOCKED_PRODUCER_PLAQUE.labelHeadroom)
   })
 
   it('gives served customers a damped but readable happy exit hop', () => {
