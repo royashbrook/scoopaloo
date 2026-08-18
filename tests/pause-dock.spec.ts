@@ -17,6 +17,7 @@ test.use({ hasTouch: true, reducedMotion: 'reduce' })
 async function seedSave(page: Page, helperLevel = 0): Promise<void> {
   const skin = skinData as GameSkin
   const save = defaultSave(skin)
+  save.currentDay = 1
   save.unlockedStations = [...new Set([...save.unlockedStations, ...Object.keys(skin.producers)])]
   save.upgrades.helper = helperLevel
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
@@ -60,31 +61,12 @@ async function loadTrayAndCounter(page: Page): Promise<void> {
       game.movePlayer(point(producer.interaction))
       for (let tick = 0; tick < 100 && (game.snapshot().player.trayItems[item] ?? 0) < target; tick++) game.advance(.1)
     }
-    const prepare = (item: string) => {
-      const recipe = game.snapshot().skin.items[item].recipe!
-      for (const [input, quantity] of Object.entries(recipe.inputs)) collect(input, quantity)
-      const before = game.snapshot().player.trayItems[item] ?? 0
-      game.movePlayer(point(game.snapshot().skin.prepStations[recipe.station].interaction))
-      for (let tick = 0; tick < 100 && (game.snapshot().player.trayItems[item] ?? 0) <= before; tick++) game.advance(.1)
-    }
-    const drop = (item: string) => {
-      game.movePlayer({ x: 480, y: 880 })
-      game.advance(.05)
-      game.movePlayer(point(game.snapshot().skin.stations.counter.interaction))
-      for (let tick = 0; tick < 20 && (game.snapshot().counter.items[item] ?? 0) < 1; tick++) game.advance(.05)
-    }
-
     game.advance(4)
-    prepare('sundae')
-    drop('sundae')
-    prepare('chocolate-cone')
-    drop('chocolate-cone')
-    game.movePlayer({ x: 480, y: 880 })
-    game.advance(.05)
     collect('soft-scoop')
     collect('chocolate-scoop')
     game.movePlayer({ x: 480, y: 880 })
     game.advance(.05)
+    game.stockCounter({ sundae: 1, 'chocolate-sundae': 1 })
   })
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())))
 }

@@ -6,9 +6,12 @@ import {
   counterRunnerInterval,
   createGame,
   customerPatience,
+  directSourceForItem,
   enterShop,
   goalMet,
+  guidedIntro,
   helperInterval,
+  introActive,
   leaveShop,
   nextDay,
   purchaseUpgrade,
@@ -26,7 +29,7 @@ import {
   type Point,
 } from './engine'
 import { Controls } from './input'
-import { Renderer } from './render'
+import { Renderer, visibleHelper } from './render'
 import { loadSave, rescueUrl, storeSave } from './save'
 import { ShiftUi, type UpgradeUiItem } from './shift-ui'
 import type { GameSkin, SkinUpgrade } from './skin'
@@ -169,8 +172,7 @@ const shiftUi = new ShiftUi(shiftRoot, {
   },
   pause: setPlayerPaused,
 })
-canvas.setAttribute('aria-label', 'Scoopaloo ice cream stand game. Drag anywhere to move, or use W A S D or arrow keys. Walk into dashed ingredient rings to pick up ingredients automatically. Hold at prep until complete.')
-canvas.setAttribute('aria-describedby', 'helper-status runner-status')
+canvas.setAttribute('aria-label', 'Scoopaloo ice cream stand game. Drag anywhere to move, or use W A S D or arrow keys. Walk into dashed rings to pick up and use stations automatically. Stay at prep until an order is finished.')
 let previous = performance.now()
 let saveClock = 0
 let previousSoundPhase = state.phase
@@ -242,8 +244,13 @@ function serviceStake(customer: Customer): { tip: number; combo: number; payout:
 
 function updateShiftUi(): void {
   const rules = state.rules
+  const directIntro = Boolean(rules.intro?.directSources.length)
+  const simple = directIntro && guidedIntro(state)
   const helperSeconds = helperInterval(state)
   const runnerSeconds = counterRunnerInterval(state)
+  const runnerUpgrade = skin.upgrades.find(upgrade => upgrade.id === skin.counterRunner?.upgradeId)
+  const showHelper = Boolean(visibleHelper(state))
+  const showRunner = Boolean(runnerUpgrade && upgradeVisible(runnerUpgrade))
   const waitingCustomers = state.customers.filter(customer => !customer.served && !customer.missed)
   const front = waitingCustomers[0]
   const rejection = [...state.events].reverse().find(event => event.kind === 'reject')
@@ -269,8 +276,37 @@ function updateShiftUi(): void {
       icon: front.order.icon,
     }
     const definition = skin.items[front.order.item]
+    const directSource = directSourceForItem(state, front.order.item)
     const itemRecipe = definition.recipe
-    if (itemRecipe) {
+    if (directSource) {
+      const carrying = state.player.trayItems[front.order.item] ?? 0
+      const atCounter = state.counter.items[front.order.item] ?? 0
+      const getting = state.counter.servingCustomerId === front.id
+        || state.secondaryCounter.servingCustomerId === front.id
+        || atCounter >= front.order.quantity
+      const source = skin.producers[directSource]
+      if (!carrying && !getting && source) {
+        const x = source.interaction[0]
+        const direction = x < viewport.originX ? 'left'
+          : x > viewport.originX + viewport.viewWidth ? 'right'
+            : null
+        if (direction) neededMarker = { label: definition.label, icon: definition.icon, direction }
+      }
+      recipe = {
+        instruction: coachStep === 'move' ? 'DRAG ANYWHERE TO MOVE'
+          : coachStep === 'ring' ? `WALK INTO ${definition.label} RING`
+            : getting ? 'CUSTOMER IS GETTING IT'
+              : carrying ? 'TAKE IT TO THE CUSTOMER'
+                : `GET THE ${definition.label}`,
+        progress: null,
+        steps: [{
+          label: definition.label,
+          icon: definition.icon,
+          have: Math.min(front.order.quantity, carrying + atCounter),
+          need: front.order.quantity,
+        }],
+      }
+    } else if (itemRecipe) {
       const prep = state.prepStations[itemRecipe.station]
       const working = prep?.job?.item === front.order.item
       const ready = (prep?.outputs[front.order.item] ?? 0) > 0
@@ -304,11 +340,11 @@ function updateShiftUi(): void {
         instruction: coachStep === 'move' ? 'DRAG ANYWHERE TO MOVE'
           : coachStep === 'ring' ? `WALK INTO ${missing[0] ?? 'INGREDIENT'} RING`
             : carrying ? 'DELIVER TO COUNTER'
-              : ready ? 'READY AT PREP'
-                : working ? prep.job?.assisted && progress === 0
-                  ? `${skin.helper?.name ?? 'HELPER'} READY · HOLD AT PREP`
+              : ready ? `PICK UP ${front.order.label}`
+                : working ? prep.job?.assisted
+                  ? `${skin.helper?.name ?? 'HELPER'} IS MAKING ${front.order.label}`
                   : `MAKING ${front.order.label}`
-                  : missing.length ? `GET ${missing.join(' + ')}` : 'HOLD AT PREP',
+                  : missing.length ? `GET ${missing.join(' + ')}` : 'GO TO PREP',
         progress,
         steps,
       }
@@ -316,9 +352,12 @@ function updateShiftUi(): void {
   }
   shiftUi.update({
     phase: state.phase,
+    simple,
     day: rules.kind === 'score-chase' ? `${rules.label} ${rules.level}` : rules.label,
-    challenge: rules.challenge,
-    readyBanner: coachStep && rules.kind === 'campaign' && rules.level === 1
+    challenge: simple ? 'DRAG TO MOVE · SERVE 3 CONES TO OPEN SUNDAES' : rules.challenge,
+    readyBanner: introActive(state)
+      ? (directIntro ? 'FIRST 3 ORDERS · NO TIMER' : 'FIRST ORDER · NO TIMER · FOLLOW THE RECIPE')
+      : coachStep && rules.kind === 'campaign' && rules.level === 1
       ? FIRST_SHIFT_COACH
       : rules.kind === 'score-chase'
         ? rules.level === 1 ? state.skin.days.at(-1)?.unlockBanner : `RUSH ${rules.level} UNLOCKED`
@@ -354,13 +393,13 @@ function updateShiftUi(): void {
     canStartScoreChase: rules.kind === 'campaign'
       && rules.level === state.skin.days.length && Boolean(state.skin.scoreChase),
     shopReturnPhase: state.shopReturnPhase,
-    upgrades: skin.upgrades.map(upgrade => upgradeUi(upgrade, rules.customerPatience)),
-    helper: skin.helper ? {
+    upgrades: skin.upgrades.filter(upgradeVisible).map(upgrade => upgradeUi(upgrade, rules.customerPatience)),
+    helper: skin.helper && showHelper ? {
       name: skin.helper.name,
       remaining: state.helper.remaining,
       enabled: helperSeconds !== null,
     } : undefined,
-    runner: skin.counterRunner ? {
+    runner: skin.counterRunner && showRunner ? {
       name: skin.counterRunner.name,
       remaining: state.counterRunner.remaining,
       enabled: runnerSeconds !== null,
@@ -373,7 +412,7 @@ function updateShiftUi(): void {
     trayItems: inventoryUi(state.player.trayItems),
     counterItems: inventoryUi(state.counter.items),
     neededMarker,
-    upcomingOrders: upcomingOrders(state, 2).map((upcoming, index) => ({
+    upcomingOrders: (simple ? [] : upcomingOrders(state, 2)).map((upcoming, index) => ({
       label: upcoming.label,
       icon: upcoming.icon,
       quantity: upcoming.quantity,
@@ -388,7 +427,19 @@ function updateShiftUi(): void {
     order,
     paused: playerPaused,
   })
+  const descriptions = [showHelper && 'helper-status', showRunner && 'runner-status'].filter(Boolean).join(' ')
+  if (descriptions) canvas.setAttribute('aria-describedby', descriptions)
+  else canvas.removeAttribute('aria-describedby')
   if (bottomNav) bottomNav.hidden = state.phase === 'playing' || state.phase === 'shop'
+}
+
+function upgradeVisible(upgrade: SkinUpgrade): boolean {
+  const day = state.rules.kind === 'score-chase' ? Number.POSITIVE_INFINITY : state.rules.level
+  if (upgrade.kind === 'walkSpeed' || upgrade.kind === 'trayCapacity') return true
+  if (upgrade.kind === 'churnTime' || upgrade.kind === 'customerPatience') return day >= 2
+  if (upgrade.kind === 'helperRate') return day >= 3
+  if (upgrade.kind === 'counterLanes') return campaignCompleted(state)
+  return upgrade.kind === 'runnerRate' && secondCounterBuilt(state)
 }
 
 function upgradeUi(upgrade: SkinUpgrade, basePatience: number): UpgradeUiItem {
@@ -419,9 +470,9 @@ function upgradeUi(upgrade: SkinUpgrade, basePatience: number): UpgradeUiItem {
           name: skin.helper.name,
           image: skin.helper.image,
           role: 'Prep Pal',
-          description: 'STAGES. YOU FINISH + SERVE.',
-          activity: 'Stages ingredients for the front order',
-          stat: 'STAGES/MIN',
+          description: 'MAKES THE FRONT ORDER',
+          activity: 'Makes the front order',
+          stat: 'ORDERS/MIN',
           available: true,
         }
       : skin.counterRunner?.upgradeId === upgrade.id

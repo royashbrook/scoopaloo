@@ -26,7 +26,7 @@ export type SaveV1 = {
 
 export type ActiveShiftRules = Pick<SkinDay,
   'id' | 'label' | 'challenge' | 'unlockBanner' | 'duration' | 'cashGoal' | 'starThresholds'
-  | 'customerPatience' | 'spawnInterval' | 'orderDeck'> & {
+  | 'customerPatience' | 'spawnInterval' | 'orderDeck' | 'intro'> & {
     kind: 'campaign' | 'score-chase'
     level: number
     activeOrderWindow: number
@@ -94,7 +94,15 @@ export type GameState = {
   shopReturnPhase: 'ready' | 'results'
   shift: ShiftState
   time: number
-  player: Point & { facing: number; moving: boolean; tray: number; trayItems: Inventory; trayWobble: number }
+  player: Point & {
+    facing: number
+    direction: 'down' | 'up' | 'left' | 'right'
+    moving: boolean
+    walkDistance: number
+    tray: number
+    trayItems: Inventory
+    trayWobble: number
+  }
   sources: Record<string, ProducerState>
   /** Compatibility alias for the original renderer; sources is authoritative. */
   machine: ProducerState
@@ -215,6 +223,7 @@ export const customerCounterLane = (customer: Pick<Customer, 'id'>): CounterLane
 export function helperInterval(state: GameState): number | null {
   const helper = state.skin.helper
   if (!helper) return null
+  if (state.rules.kind === 'campaign' && state.rules.level < 3) return null
   const upgrade = state.skin.upgrades.find(candidate => candidate.id === helper.upgradeId)
   const rate = upgrade?.levels[upgradeLevel(state.save, helper.upgradeId, upgrade.levels.length) - 1]?.effect ?? 0
   return rate > 0 ? 60 / rate : null
@@ -225,6 +234,19 @@ export function counterRunnerInterval(state: GameState): number | null {
   const upgrade = state.skin.upgrades.find(candidate => candidate.id === runner.upgradeId)
   const rate = upgrade?.levels[upgradeLevel(state.save, runner.upgradeId, upgrade.levels.length) - 1]?.effect ?? 0
   return rate > 0 ? 60 / rate : null
+}
+
+export function introActive(state: GameState): boolean {
+  return Boolean(state.rules.intro && state.shift.served < state.rules.intro.protectedServes)
+}
+
+export function guidedIntro(state: GameState): boolean {
+  return Boolean(state.rules.intro && state.shift.served < state.rules.intro.guidedServes)
+}
+
+export function directSourceForItem(state: GameState, item: string): string | undefined {
+  return state.rules.intro?.directSources
+    .find(source => source.item === item && source.unlockAfterServes <= state.shift.served)?.source
 }
 
 export function prepSeconds(state: GameState, item: string): number {
@@ -239,11 +261,17 @@ export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): Ga
   // SaveV1 already persists both currentDay and station history. Rebuild any
   // day-earned station here so older saves gain new content without SaveV2.
   backfillDayUnlocks(skin, saved)
+  const rules = activeShiftRules(skin, saved)
+  const introSources = new Map(rules.intro?.directSources.map(source => [source.source, source]) ?? [])
+  const directIntro = introSources.size > 0
   const sources = Object.fromEntries(Object.entries(skin.producers)
-    .filter(([source]) => saved.unlockedStations.includes(source))
+    .filter(([source]) => {
+      const direct = introSources.get(source)
+      return directIntro ? Boolean(direct && direct.unlockAfterServes <= 0) : saved.unlockedStations.includes(source)
+    })
     .map(([source, producer]) => {
       return [source, {
-        item: producer.item,
+        item: introSources.get(source)?.item ?? producer.item,
         stock: 0,
         timer: producer.interval,
       }]
@@ -254,7 +282,6 @@ export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): Ga
   }]))
   const machine = sources[skin.progression.startingStation]
   if (!machine) throw new Error(`unknown starting producer: ${skin.progression.startingStation}`)
-  const rules = activeShiftRules(skin, saved)
   const state: GameState = {
     skin,
     rules,
@@ -262,7 +289,10 @@ export function createGame(skin: GameSkin, save: SaveV1 = defaultSave(skin)): Ga
     shopReturnPhase: 'ready',
     shift: freshShift(rules),
     time: 0,
-    player: { x: 480, y: 880, facing: 1, moving: false, tray: 0, trayItems: emptyInventory(skin), trayWobble: 0 },
+    player: {
+      x: 480, y: 880, facing: 1, direction: 'down', moving: false, walkDistance: 0,
+      tray: 0, trayItems: emptyInventory(skin), trayWobble: 0,
+    },
     sources,
     machine,
     prepStations,
@@ -336,18 +366,31 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
   }
   state.time += dt
   state.pickupCooldown = Math.max(0, state.pickupCooldown - dt)
+  const pressureFrozen = introActive(state)
 
   const length = Math.hypot(input.x, input.y)
   const speed = walkSpeed(state)
   const nx = length > 1 ? input.x / length : input.x
   const ny = length > 1 ? input.y / length : input.y
-  state.player.moving = length > 0.05
-  if (state.player.moving) {
+  const previous = { x: state.player.x, y: state.player.y }
+  if (length > 0.05) {
     const annex = state.skin.room.annex
     const maxX = annex && !annexUnlocked(state) ? annex.boundaryX - 55 : WORLD.width - 55
     state.player.x = clamp(state.player.x + nx * speed * dt, 55, maxX)
     state.player.y = clamp(state.player.y + ny * speed * .72 * dt, 330, WORLD.height - 45)
-    if (Math.abs(nx) > .1) state.player.facing = Math.sign(nx)
+  }
+  const walked = distance(previous, state.player)
+  state.player.moving = walked > 1e-6
+  state.player.walkDistance += walked
+  const walkedX = state.player.x - previous.x
+  const walkedY = state.player.y - previous.y
+  if (state.player.moving) {
+    if (Math.abs(walkedX) > Math.abs(walkedY)) {
+      state.player.direction = walkedX < 0 ? 'left' : 'right'
+      state.player.facing = Math.sign(walkedX)
+    } else {
+      state.player.direction = walkedY < 0 ? 'up' : 'down'
+    }
   }
   state.player.trayWobble = clamp(
     state.player.trayWobble + dt * (state.player.moving ? 4 : -2.5),
@@ -436,13 +479,13 @@ export function step(state: GameState, seconds: number, input: Input = { x: 0, y
     }
   }
 
-  updateCustomers(state, dt)
+  updateCustomers(state, dt, pressureFrozen)
   updateHelper(state, dt)
   updateCounterRunner(state, dt)
   updateCoins(state, dt)
   state.events.forEach(event => { event.age += dt })
   state.events = state.events.filter(event => event.age < .9)
-  state.shift.remaining = Math.max(0, state.shift.remaining - dt)
+  if (!pressureFrozen) state.shift.remaining = Math.max(0, state.shift.remaining - dt)
   if (state.shift.remaining < 1e-9) finishShift(state)
 }
 
@@ -526,10 +569,10 @@ function updateCounterRunner(state: GameState, dt: number): void {
 function updatePrepStations(state: GameState, dt: number, capacity: number): void {
   for (const [stationId, prep] of Object.entries(state.prepStations)) {
     const point = prepPoint(state.skin, stationId)
-    if (!near(state.player, point)) continue
+    const playerNear = near(state.player, point)
 
     const output = maybeFirstStock(state.skin, prep.outputs)
-    if (state.pickupCooldown === 0 && output && inventoryTotal(state.player.trayItems) < capacity) {
+    if (playerNear && state.pickupCooldown === 0 && output && inventoryTotal(state.player.trayItems) < capacity) {
       addStock(prep.outputs, output, -1)
       addStock(state.player.trayItems, output, 1)
       state.player.tray = inventoryTotal(state.player.trayItems)
@@ -544,6 +587,7 @@ function updatePrepStations(state: GameState, dt: number, capacity: number): voi
     }
 
     if (prep.job) {
+      if (!playerNear && !prep.job.assisted) continue
       prep.job.remaining = Math.max(0, prep.job.remaining - dt)
       if (prep.job.remaining === 0) {
         const item = prep.job.item
@@ -554,6 +598,7 @@ function updatePrepStations(state: GameState, dt: number, capacity: number): voi
       return
     }
 
+    if (!playerNear) continue
     if (state.pickupCooldown > 0 || inventoryTotal(prep.outputs) >= state.skin.prepStations[stationId].capacity) return
     const item = matchingRecipe(state, stationId)
     if (!item) return
@@ -568,11 +613,13 @@ function updatePrepStations(state: GameState, dt: number, capacity: number): voi
   }
 }
 
-function updateCustomers(state: GameState, dt: number): void {
+function updateCustomers(state: GameState, dt: number, pressureFrozen: boolean): void {
   const register = stationPoint(state.skin, 'register')
   const expanded = secondCounterBuilt(state)
-  state.spawnTimer -= dt
-  if (state.spawnTimer <= 0 && state.customers.filter(item => !item.served && !item.missed).length < 4) {
+  const waitingLimit = guidedIntro(state) ? 1 : 4
+  const waitingCount = state.customers.filter(item => !item.served && !item.missed).length
+  if (!pressureFrozen || waitingCount === 0) state.spawnTimer -= dt
+  if (state.spawnTimer <= 0 && waitingCount < waitingLimit) {
     const id = state.nextOrder + 1
     state.customers.push(customer(state.skin, state.save, state.rules, id, state.nextOrder))
     state.nextOrder++
@@ -582,7 +629,7 @@ function updateCustomers(state: GameState, dt: number): void {
   const brokenStreak = state.shift.streak
   const walkedOut: Customer[] = []
   state.customers.filter(item => !item.served && !item.missed).forEach(item => {
-    item.patience = Math.max(0, item.patience - dt)
+    if (!pressureFrozen) item.patience = Math.max(0, item.patience - dt)
     if (item.patience > 0) return
     item.missed = true
     state.shift.missed++
@@ -605,8 +652,9 @@ function updateCustomers(state: GameState, dt: number): void {
   else {
     waiting.forEach((item, index) => {
       const targetX = 610 + index * 24
+      const targetY = 550 + index * 25
       item.x += (targetX - item.x) * Math.min(1, dt * 5)
-      item.y = 550 + index * 25
+      item.y += (targetY - item.y) * Math.min(1, dt * 5)
     })
   }
 
@@ -699,14 +747,17 @@ function positionCounterLanes(waiting: Customer[], dt: number): void {
     const lane = customerCounterLane(customer)
     const index = lane === 'primary' ? primary++ : secondary++
     const targetX = lane === 'primary' ? 610 + index * 24 : 900 - index * 24
+    const targetY = 550 + index * 25
     customer.x += (targetX - customer.x) * Math.min(1, dt * 5)
-    customer.y = 550 + index * 25
+    customer.y += (targetY - customer.y) * Math.min(1, dt * 5)
   }
 }
 
 function settleCustomer(state: GameState, target: Customer, point: Point): void {
   target.served = true
   state.shift.served++
+  if (state.rules.intro && state.shift.served <= state.rules.intro.guidedServes) state.spawnTimer = 0
+  activateDirectSources(state)
   state.shift.streak++
   state.shift.bestStreak = Math.max(state.shift.bestStreak, state.shift.streak)
   const tip = tipFor(target.patience, customerPatience(state))
@@ -724,6 +775,15 @@ function settleCustomer(state: GameState, target: Customer, point: Point): void 
       collected: false,
       value: Math.floor(payout / 4) + (i < payout % 4 ? 1 : 0),
     })
+  }
+}
+
+function activateDirectSources(state: GameState): void {
+  for (const direct of state.rules.intro?.directSources ?? []) {
+    if (direct.unlockAfterServes > state.shift.served || state.sources[direct.source]) continue
+    const producer = state.skin.producers[direct.source]
+    if (!producer) throw new Error(`unknown direct source: ${direct.source}`)
+    state.sources[direct.source] = { item: direct.item, stock: 0, timer: producer.interval }
   }
 }
 
@@ -969,8 +1029,14 @@ function activeShiftRules(skin: GameSkin, save: SaveV1): ActiveShiftRules {
   const dayIndex = clamp(Math.floor(save.currentDay), 0, skin.days.length - 1)
   const day = skin.days[dayIndex]
   if (!day) throw new Error('campaign has no days')
+  const mastered = (save.dayStars[dayIndex] ?? 0) > 0
+  const reachedNaturally = dayIndex === 0 || (save.dayStars[dayIndex - 1] ?? 0) > 0
+  const intro = dayIndex === 0 && mastered && day.intro
+    ? { ...day.intro, protectedServes: 0, guidedServes: 0 }
+    : reachedNaturally && !mastered ? day.intro : undefined
   return {
     ...day,
+    intro,
     kind: 'campaign',
     level: dayIndex + 1,
     activeOrderWindow: boundedOrderWindow(day.activeOrderWindow),

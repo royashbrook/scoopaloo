@@ -31,7 +31,7 @@ async function seedSave(page: Page, scoreChaseLevel = 0): Promise<void> {
       localStorage.setItem('scoopaloo_save_v1', JSON.stringify({
         version: 1,
         coins: 250,
-        currentDay: level ? 2 : 0,
+        currentDay: level ? 2 : 1,
         scoreChaseLevel: level,
         scoreChaseBest: level ? 190 : 0,
       }))
@@ -128,7 +128,7 @@ test('bottom menu actions work outside a shift and Store returns to ready or res
     await page.screenshot({ path: `test-results/mobile-shell-${size.name}-ready.png` })
 
     const shop = await openStore(page)
-    await expect(shop.locator('[data-field="shop-retry"]')).toHaveText('START DAY 1')
+    await expect(shop.locator('[data-field="shop-retry"]')).toHaveText('START DAY 2')
     if (index === 0) {
       const before = await page.evaluate(() => window.__scoopaloo.snapshot().save)
       const buy = shop.locator('button[data-upgrade]:not(:disabled)').first()
@@ -184,7 +184,7 @@ test('bottom menu actions work outside a shift and Store returns to ready or res
   await expectMenuContract(page)
 
   const resultsShop = await openStore(page)
-  await expect(resultsShop.locator('[data-field="shop-retry"]')).toHaveText('RETRY DAY 1')
+  await expect(resultsShop.locator('[data-field="shop-retry"]')).toHaveText('RETRY DAY 2')
   await closeStore(page, 'results')
   await expect(page.getByRole('heading', { name: 'GOAL MISSED' })).toBeVisible()
   await expectMenuContract(page)

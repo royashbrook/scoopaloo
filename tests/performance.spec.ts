@@ -1,9 +1,14 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { build } from 'vite'
 
 test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true })
 
+async function useDayTwo(page: Page): Promise<void> {
+  await page.addInitScript(() => localStorage.setItem('scoopaloo_save_v1', JSON.stringify({ version: 1, currentDay: 1 })))
+}
+
 test('keeps the loaded-walk frame-time regression canary below 25 ms at tablet size', async ({ page }) => {
+  await useDayTwo(page)
   await page.goto('/')
   expect(await page.evaluate(() => '__scoopaloo' in window)).toBe(true)
   await page.waitForFunction(() => window.__scoopaloo.atlasReady())

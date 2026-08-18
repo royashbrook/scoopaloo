@@ -2,6 +2,10 @@ import { expect, test, type Page } from '@playwright/test'
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion: 'no-preference' })
 
+async function useDayTwo(page: Page): Promise<void> {
+  await page.addInitScript(() => localStorage.setItem('scoopaloo_save_v1', JSON.stringify({ version: 1, currentDay: 1 })))
+}
+
 async function serveFront(page: Page): Promise<void> {
   await page.evaluate(() => {
     const game = window.__scoopaloo
@@ -71,6 +75,7 @@ async function layout(page: Page) {
 
 test('shows live maximum stakes, waiting clocks, and one accessible hurry cue', async ({ page }) => {
   test.setTimeout(30_000)
+  await useDayTwo(page)
   await page.addInitScript(() => {
     const frequencies: number[] = []
     Object.defineProperty(window, '__stakesFrequencies', { value: frequencies })
@@ -96,17 +101,17 @@ test('shows live maximum stakes, waiting clocks, and one accessible hurry cue', 
   await page.getByRole('button', { name: 'START SHIFT' }).click()
   await page.evaluate(() => {
     window.__scoopaloo.pause(true)
-    window.__scoopaloo.advance(10.05)
+    window.__scoopaloo.advance(5.05)
   })
 
   const ticket = page.getByLabel('Current order')
   const patience = page.getByRole('progressbar', { name: 'Customer patience' })
-  await expect(ticket).toContainText('MAX $13')
-  await expect(ticket).toContainText('40s')
+  await expect(ticket).toContainText('MAX $15')
+  await expect(ticket).toContainText('27s')
   await expect(ticket).toContainText('TIP +$3')
   await expect(ticket).toContainText('COMBO +$0')
-  await expect(patience).toHaveAttribute('aria-valuemax', '50')
-  await expect(patience).toHaveAttribute('aria-valuetext', '40 seconds remaining. Maximum payout $13 at current patience: $10 order, up to $3 tip, up to $0 combo.')
+  await expect(patience).toHaveAttribute('aria-valuemax', '32')
+  await expect(patience).toHaveAttribute('aria-valuetext', '27 seconds remaining. Maximum payout $15 at current patience: $12 order, up to $3 tip, up to $0 combo.')
   const nextSeconds = await page.evaluate(() => Math.ceil(window.__scoopaloo.snapshot().customers
     .filter(customer => !customer.served && !customer.missed)[1].patience))
   await expect(page.locator('.next-seconds:not([hidden])')).toHaveText(`${nextSeconds}s`)
@@ -140,10 +145,10 @@ test('shows live maximum stakes, waiting clocks, and one accessible hurry cue', 
   }
 
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.evaluate(() => window.__scoopaloo.advance(20.1))
-  await expect(ticket).toContainText('20s')
+  await page.evaluate(() => window.__scoopaloo.advance(10.1))
+  await expect(ticket).toContainText('17s')
   await expect(ticket).toContainText('TIP +$2')
-  await expect(ticket).toContainText('MAX $12')
+  await expect(ticket).toContainText('MAX $14')
 
   await serveFront(page)
   await expect(ticket).toContainText('COMBO +$2')
@@ -183,6 +188,7 @@ test('shows live maximum stakes, waiting clocks, and one accessible hurry cue', 
 })
 
 test('keeps the displayed maximum honest across the service-delay tip boundary', async ({ page }) => {
+  await useDayTwo(page)
   await page.goto('/')
   await page.getByRole('button', { name: 'START SHIFT' }).click()
   await page.evaluate(() => {
@@ -203,16 +209,22 @@ test('keeps the displayed maximum honest across the service-delay tip boundary',
 
     game.movePlayer({ x: 55, y: 1150 })
     const remaining = game.snapshot().customers.find(customer => !customer.served && !customer.missed)!.patience
-    game.advance(Math.max(0, remaining - 17.05))
+    game.advance(Math.max(0, remaining - (game.snapshot().rules.customerPatience / 3 + .05)))
+  })
+
+  const ticket = page.getByLabel('Current order')
+  await expect(ticket).toContainText('MAX $14')
+  await expect(ticket).toContainText('TIP +$2')
+  const displayedMaximum = Number((await ticket.locator('[data-field="order-payout"]').textContent())?.replace(/\D/g, ''))
+
+  await page.evaluate(() => {
+    const game = window.__scoopaloo
+    const point = (values: number[]) => ({ x: values[0], y: values[1] })
+    const front = game.snapshot().customers.find(customer => !customer.served && !customer.missed)!
     const carried = game.snapshot().player.trayItems[front.order.item] ?? 0
     game.movePlayer(point(game.snapshot().skin.stations.counter.interaction))
     for (let tick = 0; tick < 20 && (game.snapshot().player.trayItems[front.order.item] ?? 0) >= carried; tick++) game.advance(.05)
   })
-
-  const ticket = page.getByLabel('Current order')
-  await expect(ticket).toContainText('MAX $12')
-  await expect(ticket).toContainText('TIP +$2')
-  const displayedMaximum = Number((await ticket.locator('[data-field="order-payout"]').textContent())?.replace(/\D/g, ''))
 
   const paid = await page.evaluate(() => {
     window.__scoopaloo.advance(.7)
@@ -221,6 +233,6 @@ test('keeps the displayed maximum honest across the service-delay tip boundary',
     return { amount: event.amount, tip: event.tip, combo: event.combo }
   })
 
-  expect(paid).toEqual({ amount: 11, tip: 1, combo: 0 })
+  expect(paid).toEqual({ amount: 13, tip: 1, combo: 0 })
   expect(paid.amount).toBeLessThan(displayedMaximum)
 })

@@ -1,5 +1,16 @@
 import { byDepth, depthScale } from './depth'
-import { inventoryTotal, prepSeconds, secondCounterBuilt, WORLD, type Customer, type GameEvent, type GameState, type Point } from './engine'
+import {
+  directSourceForItem,
+  guidedIntro,
+  inventoryTotal,
+  prepSeconds,
+  secondCounterBuilt,
+  WORLD,
+  type Customer,
+  type GameEvent,
+  type GameState,
+  type Point,
+} from './engine'
 import type { GameSkin } from './skin'
 import { prepPoint, producerPoint } from './skin'
 import type { Viewport } from './viewport'
@@ -15,6 +26,21 @@ type CounterVisual = {
 
 const TAU = Math.PI * 2
 const REDUCED_MOTION_SCALE = .28
+const WALK_CYCLE_DISTANCE = 90
+const WALK_SHEET_CELL = 362
+const WALK_SHEET_COLUMNS = 4
+const WALK_SHEET_FRAME_DISTANCE = WALK_CYCLE_DISTANCE / WALK_SHEET_COLUMNS
+// Match the atlas idle sprite's rendered alpha bounds: 112.5×134, centered
+// 0.7px right of the player anchor with its lowest opaque pixel at y + 8.5.
+const WALK_SHEET_TARGET = { width: 112.5, height: 134, centerX: .7, baselineY: 8.5 } as const
+// Main alpha>32 bounds for the fixed down/right/up rows. Up uses a negative
+// local top because its hats begin in the gap after the side bodies; side
+// crops stop before those pixels, while up keeps the complete connected art.
+const WALK_SHEET_MAIN_BOUNDS = [
+  [[167, 11, 347, 352], [109, 12, 287, 351], [67, 10, 244, 352], [17, 10, 195, 352]],
+  [[164, 8, 336, 330], [104, 7, 278, 330], [66, 8, 241, 332], [13, 6, 187, 332]],
+  [[162, -18, 334, 317], [105, -16, 275, 315], [67, -16, 238, 321], [14, -16, 186, 317]],
+] as const
 
 export function roomPropAnchor(draw: number[]): Point {
   const [x, y, width, height] = draw
@@ -30,12 +56,8 @@ const CUSTOMER_EYES = [
 ] as const
 
 export const MOTION_TIMES = {
+  // Browser fixture interval; player gait itself is selected from walkDistance.
   WALK_CYCLE: .48,
-  WALK_PLANT_A: .12,
-  WALK_PASS: .24,
-  WALK_PLANT_B: .36,
-  CARRY_CYCLE: .54,
-  CARRY_SETTLED: .4,
   PICKUP_APEX: .14,
   PICKUP_LAND: .28,
   DROP_APEX: .12,
@@ -46,8 +68,14 @@ export const MOTION_TIMES = {
   BLINK_PERIOD: 4.6,
   MACHINE_APEX: .14,
   MACHINE_END: .28,
-  MACHINE_PERIOD: 3.2,
-  MACHINE_STAGGER: .67,
+} as const
+
+export const MOTION_DISTANCES = {
+  WALK_CYCLE: WALK_CYCLE_DISTANCE,
+  WALK_PLANT_A: 0,
+  WALK_PASS_A: WALK_CYCLE_DISTANCE / 4,
+  WALK_PLANT_B: WALK_CYCLE_DISTANCE / 2,
+  WALK_PASS_B: WALK_CYCLE_DISTANCE * 3 / 4,
 } as const
 
 export type WalkPose = {
@@ -55,6 +83,8 @@ export type WalkPose = {
   x: number
   y: number
   lean: number
+  scaleX: number
+  scaleY: number
   shadowX: number
   shadowY: number
 }
@@ -63,9 +93,91 @@ export type CarryPose = { x: number; y: number; rotation: number; amplitude: num
 export type TransferPose = Point & { scaleX: number; scaleY: number; rotation: number; progress: number }
 export type MachinePose = { x: number; y: number; rotation: number; scaleY: number; pulse: number }
 export type InteractionRingPose = { radiusX: number; radiusY: number; lineWidth: number; dashOffset: number }
+export type GaitFrame = { sprite: number[]; flipX: boolean; beat: 0 | 1 }
+export type WalkDirection = GameState['player']['direction']
+export type WalkSheetFrame = { column: 0 | 1 | 2 | 3; row: 0 | 1 | 2; flipX: boolean }
+export type WalkSheetPlacement = {
+  sourceX: number
+  sourceY: number
+  sourceWidth: number
+  sourceHeight: number
+  destinationX: number
+  destinationY: number
+  destinationWidth: number
+  destinationHeight: number
+}
+export type CustomerExitPose = { y: number; rotation: number; scaleX: number; scaleY: number }
 
 const motionScale = (reducedMotion: boolean): number => reducedMotion ? REDUCED_MOTION_SCALE : 1
 const limit = (value: number, min = 0, max = 1): number => Math.max(min, Math.min(max, value))
+const cycle = (value: number, period: number): number => ((value % period) + period) % period / period
+
+export function gaitFrame(
+  walkDistance: number,
+  facing: number,
+  sprites: GameSkin['sprites']['player'],
+): GaitFrame {
+  const beat = (Math.floor(cycle(walkDistance, WALK_CYCLE_DISTANCE) * 2) % 2) as 0 | 1
+  if (facing < 0) return beat === 0
+    ? { sprite: sprites.walkLeft, flipX: false, beat }
+    : { sprite: sprites.walkRight, flipX: true, beat }
+  return beat === 0
+    ? { sprite: sprites.walkRight, flipX: false, beat }
+    : { sprite: sprites.walkLeft, flipX: true, beat }
+}
+
+export function walkSheetFrame(walkDistance: number, direction: WalkDirection): WalkSheetFrame {
+  const column = ((Math.floor(walkDistance / WALK_SHEET_FRAME_DISTANCE) % WALK_SHEET_COLUMNS)
+    + WALK_SHEET_COLUMNS) % WALK_SHEET_COLUMNS as 0 | 1 | 2 | 3
+  if (direction === 'down') return { column, row: 0, flipX: false }
+  if (direction === 'up') return { column, row: 2, flipX: false }
+  return { column, row: 1, flipX: direction === 'left' }
+}
+
+export function walkSheetPlacement(frame: WalkSheetFrame, centerX: number, groundY: number): WalkSheetPlacement {
+  const [left, top, right, bottom] = WALK_SHEET_MAIN_BOUNDS[frame.row][frame.column]
+  return {
+    sourceX: frame.column * WALK_SHEET_CELL + left,
+    sourceY: frame.row * WALK_SHEET_CELL + top,
+    sourceWidth: right - left + 1,
+    sourceHeight: bottom - top + 1,
+    destinationX: centerX + WALK_SHEET_TARGET.centerX - WALK_SHEET_TARGET.width / 2,
+    destinationY: groundY + WALK_SHEET_TARGET.baselineY - WALK_SHEET_TARGET.height,
+    destinationWidth: WALK_SHEET_TARGET.width,
+    destinationHeight: WALK_SHEET_TARGET.height,
+  }
+}
+
+export function introStationAlpha(active: boolean, focused: boolean, prep = false): number {
+  if (!active || focused) return 1
+  return prep ? .12 : .16
+}
+
+export function sourceVisualItem(state: GameState, sourceId: string): string {
+  return state.sources[sourceId]?.item
+    ?? state.rules.intro?.directSources.find(source => source.source === sourceId)?.item
+    ?? state.skin.producers[sourceId].item
+}
+
+export function lockedProducerLabel(state: GameState, sourceId: string): string {
+  const introSource = state.rules.intro?.directSources.find(source => source.source === sourceId)
+  return introSource && introSource.unlockAfterServes > state.shift.served
+    ? `${introSource.unlockAfterServes - state.shift.served} MORE`
+    : 'DAY 2'
+}
+
+export function customerExitPose(exit: number, served: boolean, reducedMotion = false): CustomerExitPose {
+  const scale = motionScale(reducedMotion)
+  const progress = limit(exit / .52)
+  const hop = served ? Math.sin(Math.PI * progress) : 0
+  const settle = Math.sin(TAU * progress)
+  return {
+    y: (served ? -18 * hop : 4 * progress) * scale,
+    rotation: (served ? .045 * settle : .025 * progress) * scale,
+    scaleX: 1 + (served ? .04 * hop : -.015 * progress) * scale,
+    scaleY: 1 + (served ? -.035 * hop : -.02 * progress) * scale,
+  }
+}
 
 export function interactionRingPose(
   time: number,
@@ -140,28 +252,47 @@ export function visibleCounterRunner(state: GameState): GameSkin['counterRunner'
   return state.skin.counterRunner && secondCounterBuilt(state) ? state.skin.counterRunner : null
 }
 
-export function walkPose(time: number, moving: boolean, facing: number, reducedMotion = false): WalkPose {
-  if (!moving) return { stride: 0, x: 0, y: 0, lean: 0, shadowX: 43, shadowY: 13 }
+export function visibleHelper(state: GameState): GameSkin['helper'] | null {
+  const reachedHelperDay = state.rules.kind === 'score-chase' || state.rules.level >= 3
+  return reachedHelperDay && !guidedIntro(state) ? state.skin.helper ?? null : null
+}
+
+export function walkPose(walkDistance: number, moving: boolean, facing: number, reducedMotion = false): WalkPose {
+  if (!moving) return {
+    stride: 0,
+    x: 0,
+    y: 0,
+    lean: 0,
+    scaleX: 1,
+    scaleY: 1,
+    shadowX: 43,
+    shadowY: 13,
+  }
   const scale = motionScale(reducedMotion)
-  const stride = Math.sin(TAU * time / MOTION_TIMES.WALK_CYCLE)
-  const lift = Math.abs(stride)
+  const phase = cycle(walkDistance, WALK_CYCLE_DISTANCE)
+  const stride = Math.cos(TAU * phase)
+  const lift = 1 - Math.abs(stride)
+  const stretch = (2 * lift - 1) * .012 * scale
   return {
     stride,
-    x: 2 * stride * facing * scale,
-    y: -4 * lift * scale,
-    lean: .045 * stride * facing * scale,
-    shadowX: 43 + 4 * lift * scale,
+    x: 1.5 * stride * facing * scale,
+    y: lift === 0 ? 0 : -4 * lift * scale,
+    lean: .03 * stride * facing * scale,
+    scaleX: 1 - stretch,
+    scaleY: 1 + stretch,
+    shadowX: 43 + 3 * lift * scale,
     shadowY: 13 - 2 * lift * scale,
   }
 }
 
-export function carryPose(time: number, energy: number, load: number, facing: number, reducedMotion = false): CarryPose {
+export function carryPose(walkDistance: number, energy: number, load: number, facing: number, reducedMotion = false): CarryPose {
   const scale = motionScale(reducedMotion)
   const amplitude = limit(energy) * (1.2 + .9 * Math.min(Math.max(0, load), 5)) * scale
-  const wave = Math.sin(TAU * time / MOTION_TIMES.CARRY_CYCLE)
+  const phase = cycle(walkDistance, WALK_CYCLE_DISTANCE)
+  const wave = Math.sin(TAU * phase)
   return {
     x: -facing * wave * amplitude,
-    y: .35 * Math.abs(Math.cos(TAU * time / MOTION_TIMES.CARRY_CYCLE)) * amplitude,
+    y: .35 * Math.abs(Math.cos(TAU * phase)) * amplitude,
     rotation: -.012 * wave * amplitude,
     amplitude,
   }
@@ -198,13 +329,13 @@ export function blinkPose(time: number, phaseOffset = 0): number {
     / (MOTION_TIMES.BLINK_END - MOTION_TIMES.BLINK_START))
 }
 
-export function machinePose(time: number, index: number, reducedMotion = false): MachinePose {
-  const local = ((time + index * MOTION_TIMES.MACHINE_STAGGER) % MOTION_TIMES.MACHINE_PERIOD
-    + MOTION_TIMES.MACHINE_PERIOD) % MOTION_TIMES.MACHINE_PERIOD
+export function machinePose(eventAge?: number, reducedMotion = false): MachinePose {
+  if (eventAge === undefined || eventAge < 0 || eventAge > MOTION_TIMES.MACHINE_END) {
+    return { x: 0, y: 0, rotation: 0, scaleY: 1, pulse: 0 }
+  }
   const scale = motionScale(reducedMotion)
-  if (local > MOTION_TIMES.MACHINE_END) return { x: 0, y: 0, rotation: 0, scaleY: 1, pulse: 0 }
-  const pulse = Math.sin(Math.PI * local / MOTION_TIMES.MACHINE_END)
-  const wave = Math.sin(TAU * local / MOTION_TIMES.MACHINE_END)
+  const pulse = Math.sin(Math.PI * eventAge / MOTION_TIMES.MACHINE_END)
+  const wave = Math.sin(TAU * eventAge / MOTION_TIMES.MACHINE_END)
   return {
     x: 2.5 * wave * scale,
     y: -2 * pulse * scale,
@@ -214,6 +345,19 @@ export function machinePose(time: number, index: number, reducedMotion = false):
   }
 }
 
+export function latestMachineEventAge(
+  events: readonly GameEvent[],
+  sourceId: string,
+): number | undefined {
+  for (let index = events.length - 1; index >= 0; index--) {
+    const event = events[index]
+    if ((event.kind === 'pour' || event.kind === 'pickup') && event.source === sourceId) {
+      return event.age
+    }
+  }
+  return undefined
+}
+
 export class Renderer {
   readonly context: CanvasRenderingContext2D
   readonly atlas = new Image()
@@ -221,6 +365,7 @@ export class Renderer {
   readonly roomBackdrop = new Image()
   readonly roomFloorProp = new Image()
   readonly helperImage?: HTMLImageElement
+  readonly playerWalkImage?: HTMLImageElement
   reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 
   constructor(readonly canvas: HTMLCanvasElement, readonly skin: GameSkin) {
@@ -230,6 +375,10 @@ export class Renderer {
     this.atlas.src = skin.spriteSheet
     this.roomBackdrop.src = skin.room.backdrop.image
     this.roomFloorProp.src = skin.room.floorProp.image
+    if (skin.playerWalkSheet) {
+      this.playerWalkImage = new Image()
+      this.playerWalkImage.src = skin.playerWalkSheet
+    }
     if (skin.helper) {
       this.helperImage = new Image()
       this.helperImage.src = skin.helper.image
@@ -246,6 +395,7 @@ export class Renderer {
       && this.roomBackdrop.complete && this.roomBackdrop.naturalWidth > 0
       && this.roomFloorProp.complete && this.roomFloorProp.naturalWidth > 0
       && (!this.helperImage || this.helperImage.complete && this.helperImage.naturalWidth > 0)
+      && (!this.playerWalkImage || this.playerWalkImage.complete && this.playerWalkImage.naturalWidth > 0)
       && [...this.itemImages.values()].every(image => image.complete && image.naturalWidth > 0)
   }
 
@@ -265,6 +415,10 @@ export class Renderer {
     // ordering rule; ties keep this list's order (room prop, stations, creatures).
     const counters = visibleCounters(state)
     const counterRunner = visibleCounterRunner(state)
+    const helper = visibleHelper(state)
+    const intro = guidedIntro(state) && Boolean(state.rules.intro?.directSources.length)
+    const frontItem = state.customers.find(customer => !customer.served && !customer.missed)?.order.item
+    const directSource = frontItem ? directSourceForItem(state, frontItem) : undefined
     const things: (Drawable & { anchor: Point })[] = [
       {
         anchor: roomPropAnchor(this.skin.room.floorProp.draw),
@@ -272,18 +426,20 @@ export class Renderer {
       },
       ...Object.entries(this.skin.producers).map(([source, producer]) => ({
         anchor: { x: producerPoint(this.skin, source).x, y: producer.depth },
-        draw: () => this.drawProducer(state, source),
+        draw: () => this.drawProducer(state, source, introStationAlpha(intro, source === directSource)),
       })),
       ...Object.entries(this.skin.prepStations).map(([station, prep]) => ({
         anchor: { x: prepPoint(this.skin, station).x, y: prep.depth },
-        draw: () => this.drawPrepStation(state, station),
+        draw: () => this.drawPrepStation(state, station, introStationAlpha(intro, false, true)),
       })),
       ...counters.map(counter => ({
         anchor: { x: counter.station.interaction[0], y: counter.station.depth },
         draw: () => this.drawCounter(state, counter, counter.id === 'primary'),
       })),
-      ...(this.skin.helper ? [{ anchor: roomPropAnchor(this.skin.helper.draw), draw: () => this.drawHelper(state) }] : []),
-      ...(counterRunner ? [{ anchor: roomPropAnchor(counterRunner.draw), draw: () => this.drawCounterRunner(state) }] : []),
+      ...(helper
+        ? [{ anchor: roomPropAnchor(helper.draw), draw: () => this.drawHelper(state) }]
+        : []),
+      ...(counterRunner && !intro ? [{ anchor: roomPropAnchor(counterRunner.draw), draw: () => this.drawCounterRunner(state) }] : []),
       ...state.customers.map(customer => ({
         anchor: { x: customer.x, y: customer.y },
         draw: () => this.drawCustomer(customer, state.time),
@@ -435,9 +591,10 @@ export class Renderer {
     ctx.fillText(`${runner.name} · ${!enabled ? 'OFF' : wait ? `${wait}s` : 'READY'}`, pillX + pillWidth / 2, pillY + pillHeight / 2 + 1)
   }
 
-  private drawProducer(state: GameState, sourceId: string): void {
+  private drawProducer(state: GameState, sourceId: string, emphasis = 1): void {
     const producer = this.skin.producers[sourceId]
     const source = state.sources[sourceId]
+    const item = sourceVisualItem(state, sourceId)
     const [x, y, width, height] = producer.draw
     const [column, row] = producer.sprite
     const point = producerPoint(this.skin, sourceId)
@@ -445,18 +602,19 @@ export class Renderer {
     if (!source) {
       const ctx = this.context
       ctx.save()
-      ctx.globalAlpha = .35 * artAlpha
+      ctx.globalAlpha = .35 * artAlpha * emphasis
       this.shadow(point.x, point.y + 6, width * .42, 22)
       this.sprite(column, row, x, y, width, height)
       ctx.restore()
-      this.drawProducerPlaque(point, producer.item, true)
+      const label = lockedProducerLabel(state, sourceId)
+      this.drawProducerPlaque(point, item, true, label === 'DAY 2' ? emphasis : 1, label)
       return
     }
 
-    const pose = machinePose(state.time, Object.keys(this.skin.producers).indexOf(sourceId), this.reducedMotion)
+    const pose = machinePose(latestMachineEventAge(state.events, sourceId), this.reducedMotion)
     const ctx = this.context
     ctx.save()
-    ctx.globalAlpha = artAlpha
+    ctx.globalAlpha = artAlpha * emphasis
     this.shadow(point.x, point.y + 6, width * .42 * (1 + pose.pulse * .03), 22 * (1 - pose.pulse * .08))
     ctx.restore()
     ctx.save()
@@ -465,10 +623,11 @@ export class Renderer {
     ctx.scale(1, pose.scaleY)
     ctx.translate(-point.x, -point.y)
     ctx.save()
-    ctx.globalAlpha = artAlpha
+    ctx.globalAlpha = artAlpha * emphasis
     this.sprite(column, row, x, y, width, height)
     ctx.restore()
-    if (sourceId === this.skin.progression.startingStation) {
+    ctx.globalAlpha = emphasis
+    if (pose.pulse > 0) {
       ctx.strokeStyle = this.skin.palette.strawberry
       ctx.lineWidth = 6
       for (let i = 0; i < 3; i++) {
@@ -479,13 +638,13 @@ export class Renderer {
     }
     const { origin, step, size } = producer.stockDisplay
     for (let i = 0; i < source.stock; i++) {
-      this.drawItem(source.item, origin[0] + step[0] * i, origin[1] + step[1] * i, size[0], size[1])
+      this.drawItem(item, origin[0] + step[0] * i, origin[1] + step[1] * i, size[0], size[1])
     }
     ctx.restore()
-    this.drawProducerPlaque(point, source.item, false)
+    this.drawProducerPlaque(point, item, false, emphasis)
     // Keep the nearest row's full ring on short tablet canvases while leaving
     // its interaction point unchanged.
-    this.pickupRing(
+    if (emphasis === 1) this.pickupRing(
       point.x,
       Math.min(point.y + 35, WORLD.height - 40),
       state,
@@ -494,9 +653,10 @@ export class Renderer {
     )
   }
 
-  private drawProducerPlaque(point: Point, item: string, locked: boolean): void {
+  private drawProducerPlaque(point: Point, item: string, locked: boolean, alpha = 1, lockedLabel = 'DAY 2'): void {
     const ctx = this.context
     ctx.save()
+    ctx.globalAlpha = alpha
     const top = point.y - (locked ? 142 : 134)
     const height = locked ? 82 : 66
     ctx.fillStyle = this.skin.palette.cream
@@ -509,7 +669,7 @@ export class Renderer {
       ctx.font = '900 18px ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText('DAY 2', point.x, top + 65)
+      ctx.fillText(lockedLabel, point.x, top + 65)
       ctx.restore()
       return
     }
@@ -555,7 +715,7 @@ export class Renderer {
     )
   }
 
-  private drawPrepStation(state: GameState, stationId: string): void {
+  private drawPrepStation(state: GameState, stationId: string, emphasis = 1): void {
     const station = this.skin.prepStations[stationId]
     const prep = state.prepStations[stationId]
     const [x, y, width, height] = station.draw
@@ -564,10 +724,12 @@ export class Renderer {
     const artAlpha = stationOcclusionAlpha(state.player, station.draw, { x: point.x, y: station.depth })
     const ctx = this.context
     ctx.save()
-    ctx.globalAlpha = artAlpha
+    ctx.globalAlpha = artAlpha * emphasis
     this.shadow(point.x, point.y + 8, width * .42, 20)
     this.sprite(column, row, x, y, width, height)
     ctx.restore()
+    ctx.save()
+    ctx.globalAlpha = emphasis
     const { origin, step, size } = station.outputDisplay
     inventoryItems(prep.outputs).slice(0, station.capacity).forEach((item, index) =>
       this.drawItem(item, origin[0] + step[0] * index, origin[1] + step[1] * index, size[0], size[1]))
@@ -580,7 +742,7 @@ export class Renderer {
       ctx.stroke()
       this.drawItem(prep.job.item, point.x - 18, point.y - 115, 36, 45)
     }
-    this.pickupRing(
+    if (emphasis === 1) this.pickupRing(
       point.x,
       point.y + 34,
       state,
@@ -589,17 +751,17 @@ export class Renderer {
         (event.kind === 'pickup' || event.kind === 'prep-start')
         && event.station === stationId && event.source !== 'helper'),
     )
+    ctx.restore()
   }
 
   private drawPlayer(state: GameState): void {
     const player = state.player
-    const walk = walkPose(state.time, player.moving, player.facing, this.reducedMotion)
+    const walk = walkPose(player.walkDistance, player.moving, player.facing, this.reducedMotion)
     const airbornePickup = this.airborneTransfer(state, 'pickup')
     const airborneDrop = this.airborneTransfer(state, 'drop')
     const carried = withoutOne(inventoryItems(player.trayItems), airbornePickup?.item)
-    const [column, row] = player.moving
-      ? (player.facing < 0 ? this.skin.sprites.player.walkLeft : this.skin.sprites.player.walkRight)
-      : this.skin.sprites.player.idle
+    const gait = gaitFrame(player.walkDistance, player.facing, this.skin.sprites.player)
+    const [column, row] = player.moving ? gait.sprite : this.skin.sprites.player.idle
     this.shadow(player.x, player.y + 5, walk.shadowX, walk.shadowY)
     if (player.moving) this.drawFootPatter(player, walk.stride)
 
@@ -607,8 +769,17 @@ export class Renderer {
     ctx.save()
     ctx.translate(player.x, player.y)
     ctx.rotate(walk.lean)
+    ctx.scale(walk.scaleX, walk.scaleY)
     ctx.translate(-player.x, -player.y)
-    this.sprite(column, row, player.x - 66 + walk.x, player.y - 130 + walk.y, 132, 142)
+    if (player.moving && this.playerWalkImage?.complete && this.playerWalkImage.naturalWidth > 0) {
+      this.walkSheetSprite(
+        walkSheetFrame(player.walkDistance, player.direction),
+        player.x + walk.x,
+        player.y + walk.y,
+      )
+    } else {
+      this.sprite(column, row, player.x - 66 + walk.x, player.y - 130 + walk.y, 132, 142, player.moving && gait.flipX)
+    }
     const blink = player.moving ? 0 : blinkPose(state.time)
     if (blink > 0) this.drawEyelids(
       player.x + walk.x + PLAYER_EYES.x,
@@ -621,7 +792,7 @@ export class Renderer {
     const showTray = carried.length > 0 || Boolean(airbornePickup || airborneDrop)
     if (showTray) {
       const load = Math.max(1, player.tray + (airborneDrop ? 1 : 0))
-      const carry = carryPose(state.time, player.trayWobble, load, player.facing, this.reducedMotion)
+      const carry = carryPose(player.walkDistance, player.trayWobble, load, player.facing, this.reducedMotion)
       const dip = this.trayDip(state)
       const itemWidth = Math.min(34, 82 / carried.length)
       const trayWidth = Math.max(58, carried.length * itemWidth + 12)
@@ -643,18 +814,27 @@ export class Renderer {
   }
 
   private drawCustomer(customer: Customer, time: number): void {
-    const { look, x, y, served, missed } = customer
+    const { look, x, y: groundY, served, missed } = customer
     const bob = Math.sin(time * 4 + look) * (this.reducedMotion ? .84 : 3)
-    this.shadow(x, y + 4, 40, 12)
+    const exit = customerExitPose(customer.exit, served, this.reducedMotion)
+    const y = groundY + exit.y
+    this.shadow(x, groundY + 4, 40 * exit.scaleX, 12 / exit.scaleY)
     const [customerColumn, customerRow] = this.skin.sprites.customers[look % this.skin.sprites.customers.length]
     const [heartColumn, heartRow] = this.skin.sprites.heart
+    const ctx = this.context
+    ctx.save()
+    ctx.translate(x, groundY)
+    ctx.rotate(exit.rotation)
+    ctx.scale(exit.scaleX, exit.scaleY)
+    ctx.translate(-x, -groundY)
     this.sprite(customerColumn, customerRow, x - 58, y - 122 + bob, 116, 132)
     const blink = blinkPose(time, customer.id * .73)
     const eyes = CUSTOMER_EYES[look % CUSTOMER_EYES.length]
     if (blink > 0) this.drawEyelids(x + eyes.x, y + eyes.y + bob, blink, eyes.tone)
     if (served) this.sprite(heartColumn, heartRow, x - 18, y - 160 + bob, 36, 36)
+    ctx.restore()
     if (missed) {
-      const ctx = this.context
+      ctx.save()
       ctx.fillStyle = this.skin.palette.strawberry
       ctx.strokeStyle = this.skin.palette.cocoa
       ctx.lineWidth = 4
@@ -664,6 +844,7 @@ export class Renderer {
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText('!', x, y - 143 + bob)
+      ctx.restore()
     }
   }
 
@@ -741,7 +922,7 @@ export class Renderer {
       const target = prepPoint(this.skin, event.station ?? recipe?.station ?? this.skin.helper.prepStation)
       const inputs = Object.keys(recipe?.inputs ?? {})
       inputs.forEach((item, index) => {
-        const source = Object.keys(state.sources).find(id => this.skin.producers[id].item === item)
+        const source = Object.keys(state.sources).find(id => state.sources[id].item === item)
         if (!source) return
         const origin = producerPoint(this.skin, source)
         const offset = (index - (inputs.length - 1) / 2) * 24
@@ -765,8 +946,8 @@ export class Renderer {
       let to = { x, y: y - 52 }
       if (kind === 'pickup') {
         const player = state.player
-        const walk = walkPose(state.time, player.moving, player.facing, this.reducedMotion)
-        const carry = carryPose(state.time, player.trayWobble, Math.max(1, player.tray), player.facing, this.reducedMotion)
+        const walk = walkPose(player.walkDistance, player.moving, player.facing, this.reducedMotion)
+        const carry = carryPose(player.walkDistance, player.trayWobble, Math.max(1, player.tray), player.facing, this.reducedMotion)
         to = {
           x: player.x + walk.x + carry.x,
           y: player.y - 41 + walk.y + carry.y + this.trayDip(state),
@@ -902,15 +1083,40 @@ export class Renderer {
     ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill()
   }
 
-  private sprite(column: number, row: number, x: number, y: number, width: number, height: number): void {
+  private sprite(column: number, row: number, x: number, y: number, width: number, height: number, flipX = false): void {
     if (!this.atlas.complete || !this.atlas.naturalWidth) return
     const [rx, ry, rw, rh] = this.skin.spriteRects[row][column]
     const scaleX = this.atlas.naturalWidth / 1254
     const scaleY = this.atlas.naturalHeight / 1254
     const ctx = this.context
     ctx.save()
-    ctx.translate(x, y)
+    ctx.translate(flipX ? x + width : x, y)
+    ctx.scale(flipX ? -1 : 1, 1)
     ctx.drawImage(this.atlas, rx * scaleX, ry * scaleY, rw * scaleX, rh * scaleY, 0, 0, width, height)
+    ctx.restore()
+  }
+
+  private walkSheetSprite(frame: WalkSheetFrame, centerX: number, groundY: number): void {
+    if (!this.playerWalkImage?.complete || !this.playerWalkImage.naturalWidth) return
+    const placement = walkSheetPlacement(frame, centerX, groundY)
+    const ctx = this.context
+    ctx.save()
+    ctx.translate(
+      frame.flipX ? placement.destinationX + placement.destinationWidth : placement.destinationX,
+      placement.destinationY,
+    )
+    ctx.scale(frame.flipX ? -1 : 1, 1)
+    ctx.drawImage(
+      this.playerWalkImage,
+      placement.sourceX,
+      placement.sourceY,
+      placement.sourceWidth,
+      placement.sourceHeight,
+      0,
+      0,
+      placement.destinationWidth,
+      placement.destinationHeight,
+    )
     ctx.restore()
   }
 

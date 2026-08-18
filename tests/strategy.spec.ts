@@ -4,6 +4,10 @@ type OrderView = { label: string; icon: string; quantity: number }
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion: 'no-preference' })
 
+async function useDayTwo(page: Page): Promise<void> {
+  await page.addInitScript(() => localStorage.setItem('scoopaloo_save_v1', JSON.stringify({ version: 1, currentDay: 1 })))
+}
+
 async function expectedUpcoming(page: Page): Promise<OrderView[]> {
   return page.evaluate(() => {
     const state = window.__scoopaloo.snapshot()
@@ -145,6 +149,7 @@ async function layout(page: Page) {
 
 test('plans two orders ahead and makes combo money an audible mobile stake', async ({ page }) => {
   test.setTimeout(30_000)
+  await useDayTwo(page)
   await page.addInitScript(() => {
     const recorded: number[] = []
     Object.defineProperty(window, '__strategyFrequencies', { value: recorded })

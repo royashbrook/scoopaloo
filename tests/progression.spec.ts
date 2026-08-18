@@ -45,6 +45,23 @@ async function finishCurrentDay(page: Page): Promise<{ speed: number; revenue: n
       const state = game.snapshot()
       const front = state.customers.find(customer => !customer.served && !customer.missed)
       if (!front) { game.advance(.1); return }
+      const direct = state.rules.intro?.directSources.find(source =>
+        source.item === front.order.item && source.unlockAfterServes <= state.shift.served)
+      if (direct) {
+        for (let made = 0; made < front.order.quantity && game.snapshot().phase === 'playing'; made++) {
+          const source = state.skin.producers[direct.source]
+          const target = (game.snapshot().player.trayItems[front.order.item] ?? 0) + 1
+          moveTo(point(source.interaction))
+          for (let tick = 0; tick < 100 && game.snapshot().phase === 'playing'
+            && (game.snapshot().player.trayItems[front.order.item] ?? 0) < target; tick++) game.advance(.2)
+          const carried = game.snapshot().player.trayItems[front.order.item] ?? 0
+          moveTo(point(state.skin.stations.counter.interaction))
+          for (let tick = 0; tick < 20 && game.snapshot().phase === 'playing'
+            && (game.snapshot().player.trayItems[front.order.item] ?? 0) >= carried; tick++) game.advance(.1)
+        }
+        game.advance(1)
+        return
+      }
       const recipe = state.skin.items[front.order.item].recipe!
       for (let made = 0; made < front.order.quantity && game.snapshot().phase === 'playing'; made++) {
         for (const [input, quantity] of Object.entries(recipe.inputs)) {
@@ -149,7 +166,7 @@ test('finishes Day 1, buys a visible upgrade, and restores Day 2 with its real e
 
   const shop = page.getByRole('dialog', { name: 'UPGRADE SHOP' })
   await expect(shop).toBeVisible()
-  await expect(page.locator('[data-upgrade-card]')).toHaveCount(7)
+  await expect(page.locator('[data-upgrade-card]')).toHaveCount(2)
   expect(await page.locator('[data-upgrade-card][data-affordable="true"]').count()).toBeGreaterThanOrEqual(2)
   await expect(page.locator('#shop-title')).toBeFocused()
 
@@ -179,7 +196,7 @@ test('finishes Day 1, buys a visible upgrade, and restores Day 2 with its real e
   const dayTwoGoal = await page.evaluate(() => window.__scoopaloo.snapshot().skin.days[1].cashGoal)
   await expect(page.getByRole('heading', { name: `$${dayTwoGoal} GOAL` })).toBeVisible()
   await expect(page.getByText('CHOCOLATE RUSH', { exact: true })).toBeVisible()
-  await expect(page.getByText('CHOCOLATE MACHINE UNLOCKED', { exact: true })).toBeVisible()
+  await expect(page.getByText('FIRST ORDER · NO TIMER · FOLLOW THE RECIPE', { exact: true })).toBeVisible()
   expect((await page.evaluate(() => window.__scoopaloo.snapshot().save.currentDay))).toBe(1)
   expect(await page.evaluate(() => ({
     active: 'chocolate-scoop' in window.__scoopaloo.snapshot().sources,
@@ -193,7 +210,7 @@ test('finishes Day 1, buys a visible upgrade, and restores Day 2 with its real e
   await page.reload()
   await page.evaluate(() => window.__scoopaloo.pause(true))
   await expect(page.getByRole('heading', { name: `$${dayTwoGoal} GOAL` })).toBeVisible()
-  await expect(page.getByText('CHOCOLATE MACHINE UNLOCKED', { exact: true })).toBeVisible()
+  await expect(page.getByText('FIRST ORDER · NO TIMER · FOLLOW THE RECIPE', { exact: true })).toBeVisible()
   expect((await page.evaluate(() => window.__scoopaloo.snapshot().save.upgrades.shoes))).toBe(1)
   expect(await page.evaluate(() => ({
     active: 'chocolate-scoop' in window.__scoopaloo.snapshot().sources,

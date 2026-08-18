@@ -941,6 +941,86 @@ canvas {
   .inventory-readout b { margin-right: 0; font-size: 13px; line-height: 1; }
 }
 
+.shift-ui[data-complexity="simple"] .shift-hud {
+  grid-template-columns: 1fr;
+  width: min(210px, calc(100vw - 84px));
+}
+.shift-ui[data-complexity="simple"] .shift-hud .hud-stat {
+  display: none !important;
+  border: 0 !important;
+}
+.shift-ui[data-complexity="simple"] .shift-hud .hud-money { display: block !important; }
+.shift-ui[data-complexity="simple"] .order-panel {
+  grid-template-columns: minmax(0, 1fr);
+  width: min(300px, calc(100vw - 24px));
+  max-height: 126px;
+}
+.shift-ui[data-complexity="simple"] .next-orders,
+.shift-ui[data-complexity="simple"] .patience-track,
+.shift-ui[data-complexity="simple"] .inventory-readout,
+.shift-ui[data-complexity="simple"] .needed-marker { display: none !important; }
+.shift-ui[data-complexity="simple"] .order-ticket {
+  grid-column: 1;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 20px 40px 28px 32px;
+  width: 100%;
+  height: 126px;
+  max-height: 126px;
+  animation: none;
+}
+.shift-ui[data-complexity="simple"] .ticket-heading {
+  grid-column: 1;
+  grid-row: 1;
+  grid-template-columns: 1fr auto;
+  min-height: 0;
+  padding: 0 .4rem;
+}
+.shift-ui[data-complexity="simple"] .ticket-heading > b,
+.shift-ui[data-complexity="simple"] .ticket-body > b { display: none; }
+.shift-ui[data-complexity="simple"] .ticket-body {
+  grid-column: 1;
+  grid-row: 2;
+  grid-template-columns: 38px minmax(0, 1fr);
+  min-height: 0;
+  padding: 0 .5rem;
+}
+.shift-ui[data-complexity="simple"] .ticket-body > strong {
+  max-width: none;
+  font-size: 16px;
+}
+.shift-ui[data-complexity="simple"] .ticket-icon { width: 36px; height: 40px; }
+.shift-ui[data-complexity="simple"] .ticket-guidance {
+  grid-column: 1;
+  grid-row: 3;
+  min-height: 0;
+  padding: .2rem .4rem;
+  font-size: 15px;
+}
+.shift-ui[data-complexity="simple"] .recipe-list {
+  grid-column: 1;
+  grid-row: 4;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  padding: 2px 8px;
+  border-right: 0;
+}
+.shift-ui[data-complexity="simple"] .recipe-list li {
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  grid-template-rows: 1fr;
+  min-height: 28px;
+  padding: 1px 6px;
+}
+.shift-ui[data-complexity="simple"] .recipe-list img,
+.shift-ui[data-complexity="simple"] .recipe-list span,
+.shift-ui[data-complexity="simple"] .recipe-list b { grid-column: auto; grid-row: 1; }
+.shift-ui[data-complexity="simple"] .recipe-list span {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shift-ui[data-complexity="simple"] .recipe-list img { width: 22px; height: 24px; }
+
 button, a {
   border: 0;
   color: #4a3b45;

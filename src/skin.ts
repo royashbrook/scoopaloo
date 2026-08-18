@@ -31,6 +31,11 @@ export type SkinDay = {
   spawnInterval: number
   activeOrderWindow?: number
   orderDeck: SkinOrder[]
+  intro?: {
+    directSources: Array<{ source: string; item: string; unlockAfterServes: number }>
+    protectedServes: number
+    guidedServes: number
+  }
 }
 export type SkinScoreChase = {
   id: string
@@ -118,6 +123,7 @@ export type SkinRoom = {
 export type GameSkin = {
   id: string
   spriteSheet: string
+  playerWalkSheet?: string
   room: SkinRoom
   comboTiers: ComboTier[]
   days: SkinDay[]

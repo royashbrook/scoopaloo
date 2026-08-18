@@ -2,6 +2,10 @@ import { expect, test, type Page } from '@playwright/test'
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion: 'reduce' })
 
+async function useDayTwo(page: Page): Promise<void> {
+  await page.addInitScript(() => localStorage.setItem('scoopaloo_save_v1', JSON.stringify({ version: 1, currentDay: 1 })))
+}
+
 type Point = { x: number; y: number }
 
 async function dragTo(page: Page, target: Point): Promise<void> {
@@ -50,6 +54,7 @@ async function collectFrom(page: Page, item: string): Promise<void> {
 }
 
 test('one thumb builds two components, rejects raw stock, then recovers and serves', async ({ page }) => {
+  await useDayTwo(page)
   test.setTimeout(60_000)
   await page.addInitScript(() => {
     const frequencies: number[] = []
@@ -105,6 +110,7 @@ test('one thumb builds two components, rejects raw stock, then recovers and serv
   await expect(page.locator('.recipe-list')).toContainText('1/1')
   await expect(page.locator('.recipe-list [aria-current="step"]')).toHaveCount(1)
 
+  await dragTo(page, { x: 480, y: 1070 })
   await dragTo(page, route.counter)
   await expect.poll(() => page.evaluate(() =>
     window.__scoopaloo.snapshot().events.some(event => event.kind === 'reject' && event.reason === 'needs-prep'),
@@ -117,8 +123,17 @@ test('one thumb builds two components, rejects raw stock, then recovers and serv
   await expect(page.locator('.order-ticket')).toHaveClass(/is-wrong/)
   await expect(page.locator('[data-field="ticket-guidance"]')).toContainText(/PREP|BUILD|FINISH/)
 
-  await collectFrom(page, first)
+  await page.evaluate(item => {
+    const game = window.__scoopaloo
+    game.pause(true)
+    game.movePlayer({ x: 480, y: 880 })
+    game.advance(1)
+    const producer = Object.values(game.snapshot().skin.producers).find(candidate => candidate.item === item)!
+    game.movePlayer({ x: producer.interaction[0], y: producer.interaction[1] })
+    for (let tick = 0; tick < 100 && (game.snapshot().player.trayItems[item] ?? 0) < 2; tick++) game.advance(.1)
+  }, first)
   await expect.poll(() => page.evaluate(item => window.__scoopaloo.snapshot().player.trayItems[item] ?? 0, first)).toBe(2)
+  await page.evaluate(() => window.__scoopaloo.pause(false))
   await dragTo(page, route.counter)
   await expect.poll(() => page.evaluate(() =>
     window.__scoopaloo.snapshot().events.some(event => event.kind === 'reject' && event.reason === 'returned-raw'),

@@ -5,6 +5,12 @@ test.use({ viewport: { width: 390, height: 844 }, hasTouch: true })
 
 type WorldBox = { left: number; top: number; right: number; bottom: number }
 type ItemDraw = { args: number[]; transform: number[] }
+type WalkSheetDraw = { args: number[]; transform: number[] }
+
+function transformedPoint(transform: number[], x: number, y: number): { x: number; y: number } {
+  const [a, b, c, d, e, f] = transform
+  return { x: a * x + c * y + e, y: b * x + d * y + f }
+}
 
 async function paintAt(page: Page, time: number): Promise<void> {
   await page.evaluate(value => window.__scoopaloo.setTime(value), time)
@@ -14,6 +20,17 @@ async function paintAt(page: Page, time: number): Promise<void> {
 async function repaint(page: Page): Promise<void> {
   await page.evaluate(() => new Promise<void>(resolve =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+}
+
+async function advanceWalk(page: Page, seconds: number, input: { x: number; y: number }): Promise<void> {
+  await page.evaluate(({ duration, vector }) => {
+    const game = window.__scoopaloo
+    game.advance(duration, vector)
+    // Preserve the visual anchor while retaining authoritative walkDistance,
+    // direction, and moving state from the real step.
+    game.movePlayer({ x: 480, y: 880 })
+  }, { duration: seconds, vector: input })
+  await repaint(page)
 }
 
 async function startPaused(page: Page): Promise<void> {
@@ -102,6 +119,43 @@ async function itemDraws(page: Page, item: string): Promise<ItemDraw[]> {
   })
 }
 
+async function walkSheetDraws(page: Page): Promise<WalkSheetDraw[]> {
+  await page.evaluate(() => {
+    type Trace = { draws: WalkSheetDraw[] }
+    const target = window as Window & { __walkSheetTrace?: Trace }
+    const context = document.querySelector('canvas')!.getContext('2d')!
+    if (!target.__walkSheetTrace) {
+      const trace: Trace = { draws: [] }
+      target.__walkSheetTrace = trace
+      const originalDraw = context.drawImage.bind(context) as (...args: unknown[]) => void
+      const originalClear = context.clearRect.bind(context)
+      Object.defineProperty(context, 'drawImage', {
+        configurable: true,
+        value: (...args: unknown[]) => {
+          const source = args[0] as { src?: string }
+          if (source.src?.includes('/assets/player-walk.png')) {
+            const { a, b, c, d, e, f } = context.getTransform()
+            trace.draws.push({ args: args.slice(1).map(Number), transform: [a, b, c, d, e, f] })
+          }
+          originalDraw(...args)
+        },
+      })
+      Object.defineProperty(context, 'clearRect', {
+        configurable: true,
+        value: (x: number, y: number, width: number, height: number) => {
+          trace.draws.length = 0
+          originalClear(x, y, width, height)
+        },
+      })
+    }
+  })
+  await repaint(page)
+  return page.evaluate(() => {
+    const target = window as Window & { __walkSheetTrace?: { draws: WalkSheetDraw[] } }
+    return target.__walkSheetTrace?.draws ?? []
+  })
+}
+
 async function pointerOriginAt(page: Page, [x, y]: number[]) {
   const client = await page.evaluate(([worldX, worldY]) => {
     const view = window.__scoopaloo.viewport()
@@ -124,7 +178,7 @@ async function createPickup(page: Page, requestedSourceId?: string) {
     const state = game.snapshot()
     const sourceId = sourceIdFromTest ?? Object.keys(state.sources)[0]
     const source = state.skin.producers[sourceId]
-    const item = source.item
+    const item = state.sources[sourceId].item
     const before = state.player.trayItems[item] ?? 0
     // Stand at the ring edge so the real pickup happens without hiding the
     // player directly behind the producer art in the fixed capture.
@@ -180,16 +234,13 @@ async function createDrop(page: Page) {
   })
 }
 
-test('captures fixed phone phases, blink, machine hum, and reduced feedback', async ({ page }) => {
+test('captures distance-local phone gait, blink, source action, and reduced feedback', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await startPaused(page)
-  await page.evaluate(() => {
-    const game = window.__scoopaloo
-    game.movePlayer({ x: 480, y: 880 })
-    game.advance(.01, { x: 1, y: 0 })
-  })
+  await page.evaluate(() => window.__scoopaloo.movePlayer({ x: 480, y: 880 }))
+  await advanceWalk(page, .01, { x: 1, y: 0 })
 
-  await paintAt(page, MOTION_TIMES.WALK_PLANT_A)
+  await paintAt(page, 1)
   const normalGeometry = await geometry(page)
   const playerBody = { left: 420, top: 795, right: 545, bottom: 910 }
   const plantA = await worldHash(page, playerBody)
@@ -197,7 +248,7 @@ test('captures fixed phone phases, blink, machine hum, and reduced feedback', as
   const originA = await pointerOriginAt(page, anchor)
   await page.screenshot({ path: 'test-results/animation-phone-walk-a.png' })
 
-  await paintAt(page, MOTION_TIMES.WALK_PLANT_B)
+  await advanceWalk(page, .24, { x: 1, y: 0 })
   const plantB = await worldHash(page, playerBody)
   expect(plantB).not.toBe(plantA)
   expect(await geometry(page)).toEqual(normalGeometry)
@@ -207,7 +258,7 @@ test('captures fixed phone phases, blink, machine hum, and reduced feedback', as
   expect(originB!.y).toBeCloseTo(anchor[1], 0)
   await page.screenshot({ path: 'test-results/animation-phone-walk-b.png' })
 
-  await paintAt(page, MOTION_TIMES.WALK_PASS)
+  await advanceWalk(page, .12, { x: 1, y: 0 })
   const pass = await worldHash(page, playerBody)
   expect(pass).not.toBe(plantA)
   expect(pass).not.toBe(plantB)
@@ -223,25 +274,73 @@ test('captures fixed phone phases, blink, machine hum, and reduced feedback', as
   expect(eyesClosed).not.toBe(eyesOpen)
   await page.screenshot({ path: 'test-results/animation-phone-blink.png' })
 
-  await paintAt(page, MOTION_TIMES.MACHINE_APEX)
+  await page.evaluate(apex => {
+    const game = window.__scoopaloo
+    const sourceId = 'soft-scoop'
+    const source = game.snapshot().skin.producers[sourceId]
+    game.movePlayer({ x: source.interaction[0], y: source.interaction[1] })
+    for (let tick = 0; tick < 200; tick++) {
+      game.advance(.01)
+      const event = [...game.snapshot().events].reverse()
+        .find(candidate => candidate.kind === 'pickup' && candidate.source === sourceId)
+      if (!event) continue
+      game.advance(Math.max(0, apex - event.age))
+      game.movePlayer({ x: 480, y: 880 })
+      return
+    }
+    throw new Error('source pickup event missing')
+  }, MOTION_TIMES.MACHINE_APEX)
+  await repaint(page)
   const vanillaMachine = { left: 300, top: 930, right: 430, bottom: 1_040 }
   const machineActive = await worldHash(page, vanillaMachine)
   await page.screenshot({ path: 'test-results/animation-phone-machine.png' })
-  await paintAt(page, .5)
+  await page.evaluate(seconds => window.__scoopaloo.advance(seconds), MOTION_TIMES.MACHINE_END)
+  await repaint(page)
   expect(await worldHash(page, vanillaMachine)).not.toBe(machineActive)
 
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await startPaused(page)
-  await page.evaluate(() => {
-    const game = window.__scoopaloo
-    game.movePlayer({ x: 480, y: 880 })
-    game.advance(.01, { x: 1, y: 0 })
-  })
-  await paintAt(page, MOTION_TIMES.WALK_PLANT_A)
+  await page.evaluate(() => window.__scoopaloo.movePlayer({ x: 480, y: 880 }))
+  await advanceWalk(page, .01, { x: 1, y: 0 })
+  await paintAt(page, 1)
   const reduced = await worldHash(page, playerBody)
   expect(reduced).not.toBe(plantA)
   expect((await geometry(page)).anchors).toEqual(normalGeometry.anchors)
   await page.screenshot({ path: 'test-results/animation-phone-reduced.png' })
+})
+
+test('keeps the normalized walk sheet continuous from idle in all four phone directions', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  const cases = [
+    { direction: 'down', seconds: .17, input: { x: 0, y: 1 } },
+    { direction: 'right', seconds: .13, input: { x: 1, y: 0 } },
+    { direction: 'up', seconds: .17, input: { x: 0, y: -1 } },
+    { direction: 'left', seconds: .13, input: { x: -1, y: 0 } },
+  ] as const
+  const centers: { x: number; y: number }[] = []
+  const baselines: { x: number; y: number }[] = []
+
+  for (const [index, entry] of cases.entries()) {
+    await startPaused(page)
+    await page.evaluate(() => window.__scoopaloo.movePlayer({ x: 480, y: 880 }))
+    if (index === 0) await page.screenshot({ path: 'test-results/animation-phone-walk-idle.png' })
+    await advanceWalk(page, entry.seconds, entry.input)
+    const player = await page.evaluate(() => window.__scoopaloo.snapshot().player)
+    expect(player).toMatchObject({ x: 480, y: 880, direction: entry.direction, moving: true })
+    const draws = await walkSheetDraws(page)
+    expect(draws).toHaveLength(1)
+    const [, , , , x, y, width, height] = draws[0].args
+    expect(width).toBe(112.5)
+    expect(height).toBe(134)
+    centers.push(transformedPoint(draws[0].transform, x + width / 2, y + height / 2))
+    baselines.push(transformedPoint(draws[0].transform, x + width / 2, y + height))
+    await page.screenshot({ path: `test-results/animation-phone-walk-${entry.direction}.png` })
+  }
+
+  for (const points of [centers, baselines]) {
+    expect(Math.max(...points.map(point => point.x)) - Math.min(...points.map(point => point.x))).toBeLessThan(5)
+    expect(Math.max(...points.map(point => point.y)) - Math.min(...points.map(point => point.y))).toBeLessThan(5)
+  }
 })
 
 test('uses real inventory ticks for transfer captures and keeps responsive geometry fixed', async ({ page }) => {
@@ -311,19 +410,19 @@ test('focuses interaction rings and keeps the player readable behind foreground 
   await page.setViewportSize({ width: 420, height: 912 })
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await startPaused(page)
-  const cone = await page.evaluate(() => {
+  const producer = await page.evaluate(() => {
     const state = window.__scoopaloo.snapshot()
-    const producer = state.skin.producers['cone-shell']
+    const source = state.skin.producers['soft-scoop']
     return {
-      interaction: producer.interaction,
-      visualY: Math.min(producer.interaction[1] + 35, 1_120 - 40),
+      interaction: source.interaction,
+      visualY: Math.min(source.interaction[1] + 35, 1_120 - 40),
     }
   })
   const ringBox = {
-    left: cone.interaction[0] - 75,
-    top: cone.visualY + 10,
-    right: cone.interaction[0] + 75,
-    bottom: cone.visualY + 40,
+    left: producer.interaction[0] - 75,
+    top: producer.visualY + 10,
+    right: producer.interaction[0] + 75,
+    bottom: producer.visualY + 40,
   }
   await paintAt(page, 1)
   const original = await geometry(page)
@@ -336,12 +435,12 @@ test('focuses interaction rings and keeps the player readable behind foreground 
     dpr: 1,
   })
 
-  await page.evaluate(point => window.__scoopaloo.movePlayer({ x: point[0] + 130, y: point[1] }), cone.interaction)
+  await page.evaluate(point => window.__scoopaloo.movePlayer({ x: point[0] + 130, y: point[1] }), producer.interaction)
   await paintAt(page, 1)
   const far = await worldHash(page, ringBox)
   await page.screenshot({ path: 'test-results/animation-air-ring-far.png' })
 
-  await page.evaluate(point => window.__scoopaloo.movePlayer({ x: point[0] + 90, y: point[1] }), cone.interaction)
+  await page.evaluate(point => window.__scoopaloo.movePlayer({ x: point[0] + 90, y: point[1] }), producer.interaction)
   await paintAt(page, 1)
   const focus = await worldHash(page, ringBox)
   expect(focus).not.toBe(far)
@@ -355,10 +454,10 @@ test('focuses interaction rings and keeps the player readable behind foreground 
     originY: original.viewport.originY,
     dpr: original.viewport.dpr,
   })
-  expect(focusedGeometry.viewport.originX).toBeLessThan(original.viewport.originX)
+  expect(focusedGeometry.viewport.originX).toBeLessThanOrEqual(original.viewport.originX)
   await page.screenshot({ path: 'test-results/animation-air-ring-focus.png' })
 
-  const pickup = await createPickup(page, 'cone-shell')
+  const pickup = await createPickup(page, 'soft-scoop')
   await paintAt(page, pickup.createdAt + MOTION_TIMES.DROP_APEX)
   const contact = await worldHash(page, ringBox)
   expect(contact).not.toBe(focus)
@@ -378,15 +477,15 @@ test('focuses interaction rings and keeps the player readable behind foreground 
 
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await startPaused(page)
-  await page.evaluate(point => window.__scoopaloo.movePlayer({ x: point[0] + 130, y: point[1] }), cone.interaction)
+  await page.evaluate(point => window.__scoopaloo.movePlayer({ x: point[0] + 130, y: point[1] }), producer.interaction)
   await paintAt(page, 1)
   const reducedFar = await worldHash(page, ringBox)
   await paintAt(page, 2)
   expect(await worldHash(page, ringBox)).toBe(reducedFar)
-  await page.evaluate(point => window.__scoopaloo.movePlayer({ x: point[0] + 90, y: point[1] }), cone.interaction)
+  await page.evaluate(point => window.__scoopaloo.movePlayer({ x: point[0] + 90, y: point[1] }), producer.interaction)
   await paintAt(page, 1)
   expect(await worldHash(page, ringBox)).not.toBe(reducedFar)
-  const reducedPickup = await createPickup(page, 'cone-shell')
+  const reducedPickup = await createPickup(page, 'soft-scoop')
   await paintAt(page, reducedPickup.createdAt + MOTION_TIMES.DROP_APEX)
   const reducedContact = await worldHash(page, ringBox)
   expect(reducedContact).not.toBe(contact)

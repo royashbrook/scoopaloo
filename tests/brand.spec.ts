@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
 
 const pngs = [
-  { src: '/apple-touch-icon.png', size: 180 },
-  { src: '/icon-192.png', size: 192 },
-  { src: '/icon-512.png', size: 512 },
-  { src: '/icon-maskable-512.png', size: 512 },
+  { src: '/apple-touch-icon-v2.png', size: 180, corner: [89, 211, 190, 255] },
+  { src: '/icon-v2-192.png', size: 192, corner: [89, 211, 190, 255] },
+  { src: '/icon-v2-512.png', size: 512, corner: [89, 211, 190, 255] },
+  { src: '/icon-maskable-v2-512.png', size: 512, corner: [97, 207, 191, 255] },
 ]
 
 test('ships decoded brand assets, exact manifest icons, and offline copies', async ({ context, page }) => {
@@ -56,9 +56,9 @@ test('ships decoded brand assets, exact manifest icons, and offline copies', asy
   expect(result.manifestOk).toBe(true)
   expect(result.manifest.orientation).toBe('portrait-primary')
   expect(result.manifest.icons).toEqual([
-    { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-    { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-    { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    { src: '/icon-v2-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+    { src: '/icon-v2-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+    { src: '/icon-maskable-v2-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
   ])
   expect(JSON.stringify(result.manifest)).not.toContain('atlas')
   for (const [index, decoded] of result.decoded.entries()) {
@@ -69,7 +69,7 @@ test('ships decoded brand assets, exact manifest icons, and offline copies', asy
       width: pngs[index].size,
       height: pngs[index].size,
       opaque: true,
-      corner: [99, 205, 180, 255],
+      corner: pngs[index].corner,
     })
   }
   for (const asset of result.svgResponses) {
@@ -112,15 +112,15 @@ test('ships decoded brand assets, exact manifest icons, and offline copies', asy
     document.body.innerHTML = `
       <main class="sheet">
         <h1>Scoopaloo brand QA</h1>
-        <h2>mark size ladder</h2>
-        <section class="ladder">${sizes.map(size => `<figure><img src="/assets/brand/scoopaloo-mark.svg" width="${size}" height="${size}"><figcaption>${size}px</figcaption></figure>`).join('')}</section>
+        <h2>launcher icon size ladder</h2>
+        <section class="ladder">${sizes.map(size => `<figure><img src="/icon-v2-512.png" width="${size}" height="${size}"><figcaption>${size}px</figcaption></figure>`).join('')}</section>
         <h2>wordmark at 160px</h2>
         <img class="wordmark" src="/assets/brand/scoopaloo-logo.svg">
         <h2>maskable previews</h2>
         <section class="masks">
-          <figure><div class="mask circle"><img src="/icon-maskable-512.png"></div><figcaption>circle</figcaption></figure>
-          <figure><div class="mask squircle"><img src="/icon-maskable-512.png"></div><figcaption>squircle</figcaption></figure>
-          <figure><div class="mask rounded"><img src="/icon-maskable-512.png"></div><figcaption>rounded square</figcaption></figure>
+          <figure><div class="mask circle"><img src="/icon-maskable-v2-512.png"></div><figcaption>circle</figcaption></figure>
+          <figure><div class="mask squircle"><img src="/icon-maskable-v2-512.png"></div><figcaption>squircle</figcaption></figure>
+          <figure><div class="mask rounded"><img src="/icon-maskable-v2-512.png"></div><figcaption>rounded square</figcaption></figure>
         </section>
       </main>`
     const style = document.createElement('style')

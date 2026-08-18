@@ -2,6 +2,7 @@ import type { ShiftPhase } from './engine'
 
 export type ShiftUiState = {
   phase: ShiftPhase
+  simple?: boolean
   day: string
   challenge?: string
   readyBanner?: string
@@ -310,17 +311,20 @@ export class ShiftUi {
     const dayNumber = state.day.replace(/\D/g, '') || state.day
     const rush = state.rush
     this.root.dataset.mode = rush ? 'rush' : 'campaign'
+    this.root.dataset.complexity = state.simple ? 'simple' : 'standard'
     this.set('hud-mode', rush ? 'RUSH/BEST' : 'DAY')
     this.set('hud-time-label', rush ? 'TIME/ARR' : 'TIME')
-    this.set('hud-earned-label', rush ? 'EARN/GOAL' : 'EARNED')
+    this.set('hud-earned-label', state.simple || rush ? 'EARN/GOAL' : 'EARNED')
     this.set('hud-served-label', rush ? 'SERVED/PAT' : 'SERVED')
     this.set('hud-day', dayNumber)
     this.setOptional('hud-best', rush ? ` · $${rush.best}` : '')
     this.setOptional('hud-arrival', rush ? ` · ${metric(rush.arrivalSeconds)}s` : '')
     this.setOptional('hud-patience', rush ? ` · ${metric(rush.patienceSeconds)}s` : '')
-    this.root.querySelector('.shift-hud')?.setAttribute('aria-label', rush
-      ? `Rush ${rush.level} status. Goal $${state.goal}. Best $${rush.best}. Arrivals every ${metric(rush.arrivalSeconds)} seconds. Patience ${metric(rush.patienceSeconds)} seconds.`
-      : `Shift status. ${state.day}. ${clock(state.secondsRemaining)} remaining. Earned $${state.revenue} of $${state.goal}. Served ${state.served}. Missed ${state.missed}. Combo ${state.streak}.`)
+    this.root.querySelector('.shift-hud')?.setAttribute('aria-label', state.simple
+      ? `Earned $${state.revenue} of $${state.goal}.`
+      : rush
+        ? `Rush ${rush.level} status. Goal $${state.goal}. Best $${rush.best}. Arrivals every ${metric(rush.arrivalSeconds)} seconds. Patience ${metric(rush.patienceSeconds)} seconds.`
+        : `Shift status. ${state.day}. ${clock(state.secondsRemaining)} remaining. Earned $${state.revenue} of $${state.goal}. Served ${state.served}. Missed ${state.missed}. Combo ${state.streak}.`)
     this.set('ready-day', state.day)
     this.set('results-day', `${state.day} RESULTS`)
     this.set('shop-day', `GEAR FOR ${state.day}`)
@@ -436,7 +440,7 @@ export class ShiftUi {
     markerElement.hidden = !marker || state.phase !== 'playing'
     if (marker) {
       markerElement.dataset.direction = marker.direction
-      markerElement.setAttribute('aria-label', `${marker.label} ingredient is offscreen to the ${marker.direction}`)
+      markerElement.setAttribute('aria-label', `${marker.label} is offscreen to the ${marker.direction}`)
       this.set('needed-direction', marker.direction === 'left' ? '‹' : '›')
       const markerIcon = this.fields['needed-icon'] as HTMLImageElement
       if (markerIcon.getAttribute('src') !== marker.icon) markerIcon.src = marker.icon

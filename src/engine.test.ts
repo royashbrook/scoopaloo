@@ -9,10 +9,13 @@ import {
   customerPatience,
   createGame,
   defaultSave,
+  directSourceForItem,
   enterShop,
   goalMet,
+  guidedIntro,
   helperInterval,
   inventoryTotal,
+  introActive,
   leaveShop,
   machineInterval,
   nextDay,
@@ -43,6 +46,7 @@ const skin = skinData as GameSkin
 const firstDay = skin.days[0]
 const finishAt = (game: GameState, revenue: number) => {
   if (game.phase === 'ready') startShift(game)
+  if (game.rules.intro) game.shift.served = Math.max(game.shift.served, game.rules.intro.protectedServes)
   game.shift.revenue = revenue
   game.shift.remaining = .01
   step(game, .01)
@@ -58,8 +62,10 @@ describe('ice cream stand loop', () => {
     expect(producerPoint(skin, 'sundae-cup')).toEqual({ x: 690, y: 920 })
   })
 
-  it('collects components, prepares a product, serves, and pays', () => {
-    const game = createGame(skin)
+  it('keeps the advanced component, prep, serve, and pay loop on Day 2', () => {
+    const save = defaultSave(skin)
+    save.currentDay = 1
+    const game = createGame(skin, save)
     startShift(game)
     runFor(game, 2)
     Object.assign(game.player, producerPoint(skin, 'soft-scoop'))
@@ -83,9 +89,178 @@ describe('ice cream stand loop', () => {
   })
 })
 
-describe('kinetic service state (#16)', () => {
+describe('kid-first Day 1 intro (#63)', () => {
   const started = () => {
     const game = createGame(skin)
+    startShift(game)
+    return game
+  }
+  const waiting = (game: GameState) => game.customers.filter(customer => !customer.served && !customer.missed)
+  const serveFront = (game: GameState) => {
+    const front = waiting(game)[0]
+    if (!front) throw new Error('no guided customer')
+    game.counter.items[front.order.item] = front.order.quantity
+    game.counter.stock = front.order.quantity
+    game.counter.servingCustomerId = front.id
+    game.counter.serveTimer = .66
+    step(game, .05)
+  }
+
+  it('freezes guided pressure while movement, production, and direct service stay live', () => {
+    const game = started()
+    const first = game.customers[0]
+    const pressure = [game.shift.remaining, game.spawnTimer, first.patience]
+
+    expect(game.rules.intro).toEqual({
+      directSources: [
+        { source: 'soft-scoop', item: 'vanilla-cone', unlockAfterServes: 0 },
+        { source: 'sundae-cup', item: 'sundae', unlockAfterServes: 3 },
+      ],
+      protectedServes: 3,
+      guidedServes: 3,
+    })
+    expect(introActive(game)).toBe(true)
+    expect(guidedIntro(game)).toBe(true)
+    expect(Object.keys(game.sources)).toEqual(['soft-scoop'])
+    expect(game.sources['soft-scoop'].item).toBe('vanilla-cone')
+    expect(directSourceForItem(game, 'vanilla-cone')).toBe('soft-scoop')
+    expect(directSourceForItem(game, 'sundae')).toBeUndefined()
+
+    runFor(game, 2, { x: -1, y: 0 })
+    expect([game.shift.remaining, game.spawnTimer, first.patience]).toEqual(pressure)
+    expect(waiting(game)).toHaveLength(1)
+    expect(game.player.walkDistance).toBeGreaterThan(0)
+    expect(game.sources['soft-scoop'].stock).toBeGreaterThan(0)
+
+    Object.assign(game.player, producerPoint(skin, 'cone-shell'))
+    runFor(game, .7)
+    expect(game.sources['cone-shell']).toBeUndefined()
+    expect(game.player.trayItems['cone-shell']).toBe(0)
+
+    game.sources['soft-scoop'].stock = 1
+    Object.assign(game.player, producerPoint(skin, 'soft-scoop'))
+    step(game, .05)
+    expect(game.player.trayItems['vanilla-cone']).toBe(1)
+    expect(game.events).toContainEqual(expect.objectContaining({
+      kind: 'pickup', source: 'soft-scoop', item: 'vanilla-cone',
+    }))
+
+    game.pickupCooldown = 0
+    Object.assign(game.player, stationPoint(skin, 'counter'))
+    step(game, .05)
+    expect(game.counter.items['vanilla-cone']).toBe(1)
+    runFor(game, .7)
+    expect(game.shift.served).toBe(1)
+    expect(game.events).toContainEqual(expect.objectContaining({ kind: 'pay', item: 'vanilla-cone' }))
+    expect(introActive(game)).toBe(true)
+    expect(guidedIntro(game)).toBe(true)
+  })
+
+  it('keeps one customer through three vanilla serves and reveals sundae exactly on the third', () => {
+    const game = started()
+    const protectedTime = game.shift.remaining
+    expect(game.rules.orderDeck.slice(0, 4)).toEqual([
+      { item: 'vanilla-cone', quantity: 1 },
+      { item: 'vanilla-cone', quantity: 1 },
+      { item: 'vanilla-cone', quantity: 1 },
+      { item: 'sundae', quantity: 1 },
+    ])
+
+    for (let served = 1; served <= 3; served++) {
+      expect(waiting(game)).toHaveLength(1)
+      expect(waiting(game)[0].order.item).toBe('vanilla-cone')
+      serveFront(game)
+      expect(game.shift.served).toBe(served)
+      expect(game.shift.remaining).toBe(protectedTime)
+      expect(game.spawnTimer).toBe(0)
+      if (served < 3) {
+        expect(game.sources['sundae-cup']).toBeUndefined()
+        step(game, .05)
+        expect(waiting(game)).toHaveLength(1)
+      }
+    }
+
+    expect(game.sources['sundae-cup']).toMatchObject({ item: 'sundae', stock: 0 })
+    expect(directSourceForItem(game, 'sundae')).toBe('sundae-cup')
+    expect(introActive(game)).toBe(false)
+    expect(guidedIntro(game)).toBe(false)
+    step(game, .05)
+    expect(waiting(game)[0].order.item).toBe('sundae')
+    expect(game.shift.remaining).toBeCloseTo(protectedTime - .05)
+  })
+
+  it('keeps Day 2 and Rush on the full advanced raw/prep source model', () => {
+    const dayTwoSave = defaultSave(skin)
+    dayTwoSave.currentDay = 1
+    dayTwoSave.dayStars[0] = 1
+    const dayTwo = createGame(skin, dayTwoSave)
+    const rushSave = defaultSave(skin)
+    Object.assign(rushSave, { currentDay: 2, scoreChaseLevel: 1 })
+    const rush = createGame(skin, rushSave)
+
+    for (const game of [dayTwo, rush]) {
+      expect(game.sources).toMatchObject({
+        'soft-scoop': { item: 'soft-scoop' },
+        'cone-shell': { item: 'cone-shell' },
+        'sundae-cup': { item: 'sundae-cup' },
+        'chocolate-scoop': { item: 'chocolate-scoop' },
+      })
+      expect(itemFor(game.skin, game.customers[0].order.item).recipe).toBeDefined()
+    }
+    expect(dayTwo.rules.intro).toEqual({ directSources: [], protectedServes: 1, guidedServes: 1 })
+    expect(rush.rules.intro).toBeUndefined()
+  })
+
+  it('protects the first naturally reached Day 2 craft, then starts normal pressure', () => {
+    const save = defaultSave(skin)
+    save.currentDay = 1
+    save.dayStars[0] = 1
+    const game = createGame(skin, save)
+    startShift(game)
+    const first = waiting(game)[0]
+    const protectedPressure = [game.shift.remaining, first.patience]
+
+    runFor(game, 10)
+    expect(waiting(game)).toHaveLength(1)
+    expect([game.shift.remaining, first.patience]).toEqual(protectedPressure)
+    expect(directSourceForItem(game, first.order.item)).toBeUndefined()
+
+    serveFront(game)
+    expect(game.shift.remaining).toBe(protectedPressure[0])
+    expect(game.spawnTimer).toBe(0)
+    step(game, .05)
+    expect(waiting(game)).toHaveLength(1)
+    expect(game.shift.remaining).toBeCloseTo(protectedPressure[0] - .05)
+
+    save.dayStars[1] = 1
+    expect(createGame(skin, save).rules.intro).toBeUndefined()
+  })
+
+  it('keeps mastered Day 1 on finished-product sources without replaying its protection', () => {
+    const save = defaultSave(skin)
+    save.dayStars[0] = 1
+    const game = createGame(skin, save)
+
+    expect(game.rules.intro).toMatchObject({ protectedServes: 0, guidedServes: 0 })
+    expect(game.sources['soft-scoop']).toMatchObject({ item: 'vanilla-cone' })
+    expect(game.sources['cone-shell']).toBeUndefined()
+    startShift(game)
+    game.shift.remaining = .01
+    step(game, .01)
+    expect(retryShift(game)).toBe(true)
+    expect(game.sources['soft-scoop']).toMatchObject({ item: 'vanilla-cone' })
+    expect(game.sources['cone-shell']).toBeUndefined()
+    const remaining = game.shift.remaining
+    step(game, .05)
+    expect(game.shift.remaining).toBeCloseTo(remaining - .05)
+  })
+})
+
+describe('kinetic service state (#16)', () => {
+  const started = (day = 0) => {
+    const save = defaultSave(skin)
+    save.currentDay = day
+    const game = createGame(skin, save)
     startShift(game)
     return game
   }
@@ -108,8 +283,32 @@ describe('kinetic service state (#16)', () => {
     expect(game.player).toMatchObject(stopped)
   })
 
+  it('derives gait only from actual displacement and accumulates transient distance', () => {
+    const game = started()
+    Object.assign(game.player, { x: 725, y: 800 })
+    expect(game.player.direction).toBe('down')
+
+    step(game, .05, { x: 1, y: 0 })
+    expect(game.player).toMatchObject({ x: 725, direction: 'down', moving: false, walkDistance: 0 })
+
+    step(game, .05, { x: -1, y: 0 })
+    expect(game.player).toMatchObject({ direction: 'left', facing: -1, moving: true })
+    expect(game.player.walkDistance).toBeCloseTo(walkSpeed(game) * .05)
+    const walked = game.player.walkDistance
+
+    step(game, .05)
+    expect(game.player).toMatchObject({ moving: false, walkDistance: walked })
+
+    step(game, .05, { x: 0, y: -1 })
+    expect(game.player.direction).toBe('up')
+    step(game, .05, { x: 0, y: 1 })
+    expect(game.player.direction).toBe('down')
+    step(game, .05, { x: 1, y: 0 })
+    expect(game.player).toMatchObject({ direction: 'right', facing: 1 })
+  })
+
   it('timestamps source and prep pickups with cloned interaction origins', () => {
-    const sourceGame = started()
+    const sourceGame = started(1)
     const source = producerPoint(skin, 'soft-scoop')
     sourceGame.sources['soft-scoop'].stock = 1
     Object.assign(sourceGame.player, { x: source.x + 40, y: source.y })
@@ -465,7 +664,7 @@ describe('Chocolate Corner annex (#50)', () => {
 })
 
 describe('manual typed preparation', () => {
-  const started = (day = 0) => {
+  const started = (day = 1) => {
     const save = defaultSave(skin)
     save.currentDay = day
     const game = createGame(skin, save)
@@ -474,10 +673,10 @@ describe('manual typed preparation', () => {
   }
 
   it('locks chocolate on Day 1 and backfills it into an existing Day 2 SaveV1', () => {
-    const game = started()
-    expect(Object.keys(game.sources)).toEqual(['soft-scoop', 'cone-shell', 'sundae-cup'])
+    const game = started(0)
+    expect(Object.keys(game.sources)).toEqual(['soft-scoop'])
     expect(Object.fromEntries(Object.entries(game.sources).map(([id, source]) => [id, source.item])))
-      .toEqual({ 'soft-scoop': 'soft-scoop', 'cone-shell': 'cone-shell', 'sundae-cup': 'sundae-cup' })
+      .toEqual({ 'soft-scoop': 'vanilla-cone' })
     Object.assign(game.player, producerPoint(skin, 'chocolate-scoop'))
     runFor(game, 2.5)
     expect(game.player.trayItems['chocolate-scoop']).toBe(0)
@@ -720,6 +919,11 @@ describe('manual typed preparation', () => {
 
   it('returns an excess recipe component before the useful set', () => {
     const game = started()
+    const product = itemFor(skin, 'vanilla-cone')
+    game.customers[0].order = {
+      item: 'vanilla-cone', quantity: 1, label: product.label, price: product.price,
+      icon: product.icon, color: product.color,
+    }
     game.save.upgrades.tray = 1
     Object.assign(game.player.trayItems, { 'soft-scoop': 1, 'cone-shell': 3 })
     game.player.tray = 4
@@ -793,7 +997,7 @@ describe('Pip source-to-prep helper (#34)', () => {
       prepStation: 'build-station', upgradeId: 'helper',
     })
     expect(skin.upgrades.find(upgrade => upgrade.id === 'helper')).toEqual({
-      id: 'helper', name: 'PIP HELPER', kind: 'helperRate', unit: 'STAGES / MIN',
+      id: 'helper', name: 'PIP HELPER', kind: 'helperRate', unit: 'ORDERS / MIN',
       levels: [
         { price: 180, effect: 2 },
         { price: 360, effect: 3 },
@@ -802,9 +1006,26 @@ describe('Pip source-to-prep helper (#34)', () => {
     })
     expect([0, 1, 2, 3].map(level => {
       const save = defaultSave(skin)
+      save.currentDay = 2
       save.upgrades.helper = level
       return helperInterval(createGame(skin, save))
     })).toEqual([null, 30, 20, 15])
+  })
+
+  it('keeps a saved helper dormant until its Day 3 reveal', () => {
+    const save = defaultSave(skin)
+    save.currentDay = 1
+    save.upgrades.helper = 3
+    const dayTwo = createGame(skin, save)
+
+    expect(helperInterval(dayTwo)).toBeNull()
+    startShift(dayTwo)
+    runFor(dayTwo, 16)
+    expect(dayTwo.events.some(event => event.source === 'helper')).toBe(false)
+    expect(dayTwo.prepStations['build-station'].job).toBeNull()
+
+    save.currentDay = 2
+    expect(helperInterval(createGame(skin, save))).toBe(15)
   })
 
   it('stays inert when the selected skin has no helper', () => {
@@ -832,8 +1053,10 @@ describe('Pip source-to-prep helper (#34)', () => {
     custom.prepStations['other-station'] = structuredClone(custom.prepStations['build-station'])
     custom.items['vanilla-cone'].recipe!.station = 'other-station'
     const save = defaultSave(custom)
+    save.currentDay = 2
     save.upgrades.helper = 3
     const game = createGame(custom, save)
+    setFront(game, 'vanilla-cone')
     for (const source of Object.values(game.sources)) source.timer = 999
     game.sources['soft-scoop'].stock = 1
     game.sources['cone-shell'].stock = 1
@@ -861,7 +1084,7 @@ describe('Pip source-to-prep helper (#34)', () => {
     expect(game.helper).toEqual({ targetCustomerId: second.id, remaining: 30 })
   })
 
-  it('atomically moves source stock into one paused assisted prep job', () => {
+  it('atomically moves source stock into an assisted job that finishes away from the player', () => {
     const game = started(3)
     setFront(game, 'vanilla-cone')
     stockRecipe(game, 'vanilla-cone')
@@ -880,11 +1103,18 @@ describe('Pip source-to-prep helper (#34)', () => {
     }))
 
     const remaining = game.prepStations['build-station'].job!.remaining
-    runFor(game, .5)
-    expect(game.prepStations['build-station'].job?.remaining).toBe(remaining)
+    runFor(game, remaining)
+    expect(game.prepStations['build-station']).toMatchObject({
+      job: null,
+      outputs: { 'vanilla-cone': 1 },
+    })
+    expect(game.player.trayItems['vanilla-cone']).toBe(0)
+    expect(game.events).toContainEqual(expect.objectContaining({
+      kind: 'prep-ready', item: 'vanilla-cone', station: 'build-station',
+    }))
     Object.assign(game.player, prepPoint(skin, 'build-station'))
-    runFor(game, remaining + .7)
-    expect(game.prepStations['build-station'].job).toBeNull()
+    step(game, .05)
+    expect(game.prepStations['build-station'].outputs['vanilla-cone']).toBe(0)
     expect(game.player.trayItems['vanilla-cone']).toBe(1)
   })
 
@@ -963,7 +1193,7 @@ describe('Pip source-to-prep helper (#34)', () => {
     front.patience = .05
     step(game, .05)
     expect(front.missed).toBe(true)
-    expect(game.prepStations['build-station'].job).toEqual(staged)
+    expect(game.prepStations['build-station'].job).toEqual({ ...staged!, remaining: staged!.remaining - .05 })
     expect(game.helper).toEqual({ targetCustomerId: 99, remaining: 15 })
 
     finishAt(game, game.rules.cashGoal)
@@ -1008,11 +1238,10 @@ describe('Pip source-to-prep helper (#34)', () => {
 
     const locked = started(3, 0)
     setFront(locked, 'chocolate-cone')
-    locked.sources['cone-shell'].stock = 1
     locked.helper.remaining = 0
     step(locked, .05)
     expect(locked.sources['chocolate-scoop']).toBeUndefined()
-    expect(locked.sources['cone-shell'].stock).toBe(1)
+    expect(locked.sources['cone-shell']).toBeUndefined()
     expect(locked.prepStations['build-station'].job).toBeNull()
   })
 
@@ -1032,14 +1261,16 @@ describe('Pip source-to-prep helper (#34)', () => {
     }
     expect(dispatches).toBe(8)
 
-    const manual = started(0, 0)
+    const manual = started(0, 2)
+    setFront(manual, 'vanilla-cone')
     const item = manual.customers[0].order.item
     manual.counter.items[item] = manual.customers[0].order.quantity
     manual.counter.stock = manual.customers[0].order.quantity
     runFor(manual, .75)
     const manualTip = manual.events.find(event => event.kind === 'pay')?.tip
 
-    const waiting = started(1, 0)
+    const waiting = started(1, 2)
+    setFront(waiting, 'vanilla-cone')
     stockRecipe(waiting, waiting.customers[0].order.item)
     runFor(waiting, 30.1)
     expect(waiting.prepStations['build-station'].job?.assisted).toBe(true)
@@ -1325,6 +1556,20 @@ describe('second service counter (#53)', () => {
     expect([primary.served, secondary.served]).toEqual([false, true])
     expect(game.counter.servingCustomerId).toBeNull()
     expect(game.secondaryCounter).toEqual({ serveTimer: 0, servingCustomerId: null })
+  })
+
+  it('eases authoritative customer y positions in both queue layouts', () => {
+    const normal = servicePair(false)
+    const expanded = servicePair(true)
+    normal.primary.y = 700
+    expanded.primary.y = 700
+    expanded.secondary.y = 700
+
+    step(normal.game, .05)
+    step(expanded.game, .05)
+
+    expect(normal.primary.y).toBeCloseTo(662.5)
+    expect([expanded.primary.y, expanded.secondary.y]).toEqual([662.5, 662.5])
   })
 
   it('settles both lanes concurrently at 0.7 seconds in primary-then-secondary order', () => {
@@ -1622,19 +1867,20 @@ describe('counter runner (#54)', () => {
     expect(rebuilt.helper).toEqual({ targetCustomerId: null, remaining: 15 })
   })
 
-  it('earns nothing when every staff upgrade is maxed but the player stays idle', () => {
+  it('lets maxed Pip and Mel serve while uncollected coins earn nothing', () => {
     const game = started(3)
     game.save.upgrades.helper = 3
     const idle = createGame(skin, game.save)
     startShift(idle)
     runFor(idle, idle.rules.duration)
-    expect([idle.shift.revenue, idle.shift.served, idle.save.lifetimeCash]).toEqual([0, 0, 0])
+    expect([idle.shift.revenue, idle.shift.served, idle.save.lifetimeCash]).toEqual([0, 2, 0])
   })
 })
 
 describe('timed Day 1 shift (#22)', () => {
   const started = () => {
     const game = createGame(skin)
+    delete game.rules.intro
     startShift(game)
     return game
   }
@@ -1961,6 +2207,25 @@ describe('timed Day 1 shift (#22)', () => {
           runFor(game, .1)
           continue
         }
+        const directSource = directSourceForItem(game, work.order.item)
+        if (directSource) {
+          while (game.phase === 'playing' && !work.served && !work.missed) {
+            const staged = (game.player.trayItems[work.order.item] ?? 0)
+              + (game.counter.items[work.order.item] ?? 0)
+            if (staged < work.order.quantity) {
+              const source = producerPoint(skin, directSource)
+              routeTo(source)
+              runFor(game, .1)
+              if ((game.player.trayItems[work.order.item] ?? 0) + (game.counter.items[work.order.item] ?? 0)
+                < work.order.quantity) moveTo({ x: source.x + (source.x < 480 ? 90 : -90), y: source.y })
+              continue
+            }
+            routeTo(stationPoint(skin, 'counter'))
+            runFor(game, work.order.quantity * .7 + .4)
+          }
+          runFor(game, .8)
+          continue
+        }
         if (!previewPlanned || triageLater || game.skin.room.annex) {
           const recipe = itemFor(skin, work.order.item).recipe
           if (!recipe) throw new Error(`order has no recipe: ${work.order.item}`)
@@ -2086,12 +2351,12 @@ describe('timed Day 1 shift (#22)', () => {
     const campaign = play(0, {}, 3)
     const dayOne = [campaign.shift.revenue, campaign.shift.served, campaign.shift.missed, campaign.shift.stars]
     expect(goalMet(campaign), `Day 1 route: ${dayOne.join(',')}`).toBe(true)
-    expect(campaign.shift.missed).toBeGreaterThan(0)
+    expect(campaign.shift.missed).toBe(0)
     expect(campaign.shift.stars).toBeGreaterThanOrEqual(1)
-    expect(campaign.shift.stars).toBeLessThanOrEqual(2)
+    expect(campaign.shift.stars).toBe(3)
     expect(enterShop(campaign)).toBe(true)
     expect([purchaseUpgrade(campaign, 'shoes'), purchaseUpgrade(campaign, 'patience')]).toEqual([true, true])
-    expect(campaign.save.coins).toBe(9)
+    expect(campaign.save.coins).toBe(178)
     expect(nextDay(campaign)).toBe(true)
     playGame(campaign)
     const dayTwoUpgraded = [campaign.shift.revenue, campaign.shift.served, campaign.shift.missed, campaign.shift.stars]
@@ -2103,7 +2368,7 @@ describe('timed Day 1 shift (#22)', () => {
     expect(campaign.shift.missed).toBeLessThan(dayTwoBase.shift.missed)
     expect(enterShop(campaign)).toBe(true)
     expect([purchaseUpgrade(campaign, 'tray'), purchaseUpgrade(campaign, 'patience')]).toEqual([true, true])
-    expect(campaign.save.coins).toBe(5)
+    expect(campaign.save.coins).toBe(176)
     expect(nextDay(campaign)).toBe(true)
     playGame(campaign)
     const dayThreeUpgraded = [campaign.shift.revenue, campaign.shift.served, campaign.shift.missed, campaign.shift.stars]
@@ -2126,17 +2391,17 @@ describe('timed Day 1 shift (#22)', () => {
       [dayThreeReactive.shift.revenue, dayThreeReactive.shift.served, dayThreeReactive.shift.missed, dayThreeReactive.shift.stars],
       dayThreeUpgraded,
     ]).toEqual([
-      [54, 4, 2, 1],
+      [223, 11, 0, 3],
       [27, 2, 5, 0],
-      [66, 4, 3, 1],
+      [68, 5, 3, 1],
       [87, 3, 6, 1],
       [158, 6, 2, 2],
       [227, 8, 0, 3],
     ])
-    expect(campaign.save.coins).toBe(232)
+    expect(campaign.save.coins).toBe(403)
     expect(enterShop(campaign)).toBe(true)
     expect(purchaseUpgrade(campaign, 'helper')).toBe(true)
-    expect(campaign.save).toMatchObject({ coins: 52, upgrades: { helper: 1 } })
+    expect(campaign.save).toMatchObject({ coins: 223, upgrades: { helper: 1 } })
 
     const playRush = (
       level: number,
@@ -2173,7 +2438,7 @@ describe('timed Day 1 shift (#22)', () => {
       const game = playRush(1, true, { ...entryBuild, helper }, true)
       return [game.shift.revenue, game.shift.served, game.shift.missed, game.shift.stars]
     })
-    expect(helperEntryRoutes).toEqual([[175, 7, 2, 2], [184, 8, 1, 3]])
+    expect(helperEntryRoutes).toEqual([[175, 7, 2, 2], [190, 9, 1, 3]])
 
     const lastPlannedPass = playRush(11, true)
     const firstPlannedFail = playRush(12, true)
@@ -2190,7 +2455,7 @@ describe('timed Day 1 shift (#22)', () => {
     const helperFirstFail = playRush(15, true, helperMax, true)
     expect([helperLastPass, helperFirstFail].map(game => [
       game.rules.cashGoal, game.shift.revenue, game.shift.served, game.shift.missed, game.shift.stars,
-    ])).toEqual([[270, 291, 13, 1, 2], [280, 232, 10, 1, 0]])
+    ])).toEqual([[270, 297, 14, 1, 2], [280, 225, 10, 1, 0]])
     expect(helperLastPass.rules).toMatchObject({ customerPatience: 34, spawnInterval: 5.5 })
     expect(helperFirstFail.rules).toMatchObject({ customerPatience: 34, spawnInterval: 5.5 })
     expect(goalMet(helperLastPass)).toBe(true)
@@ -2205,12 +2470,11 @@ describe('timed Day 1 shift (#22)', () => {
       game.rules.cashGoal, game.shift.revenue, game.shift.served, game.shift.missed, game.shift.stars,
     ])).toEqual([
       [280, 314, 13, 1, 2],
-      [290, 343, 14, 0, 3],
-      [300, 320, 13, 0, 2],
-      [310, 300, 13, 0, 0],
+      [290, 363, 14, 0, 3],
+      [300, 330, 13, 0, 2],
+      [310, 347, 14, 0, 2],
     ])
-    expect(fullStaffGames.slice(0, 3).every(goalMet)).toBe(true)
-    expect(goalMet(fullStaffGames[3])).toBe(false)
+    expect(fullStaffGames.every(goalMet)).toBe(true)
 
     const camped = Object.keys(skin.producers).map(source => {
       const game = createGame(skin)
