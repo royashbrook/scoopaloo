@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { defaultSave } from '../src/engine'
+import { LOCKED_PRODUCER_PLAQUE } from '../src/render'
 import { SAVE_KEY } from '../src/save'
 import type { GameSkin } from '../src/skin'
 import skinData from '../src/skins/ice-cream.json' with { type: 'json' }
@@ -132,6 +133,13 @@ test('first three orders are a protected, readable pointer tutorial on every pho
     await expect(page.locator('[data-field="ready-unlock"]'), phone.name).toHaveText('FIRST 3 ORDERS · NO TIMER')
     if (phone.name === '390') await page.screenshot({ path: 'test-results/kid-first-390-ready.png' })
     await page.getByRole('button', { name: 'START SHIFT' }).click()
+    const lockedLabelHeadroom = await page.evaluate(({ font, maxWidth }) => {
+      const context = document.createElement('canvas').getContext('2d')!
+      context.font = font
+      return maxWidth - Math.max(...['1 MORE', '3 MORE', '9 MORE', 'DAY 2']
+        .map(label => context.measureText(label).width))
+    }, { font: LOCKED_PRODUCER_PLAQUE.labelFont, maxWidth: LOCKED_PRODUCER_PLAQUE.labelMaxWidth })
+    expect(lockedLabelHeadroom, `${phone.name} locked label has real headroom`).toBeGreaterThanOrEqual(6)
     await expect(page.locator('.shift-ui'), phone.name).toHaveAttribute('data-complexity', 'simple')
     await expect(page.locator('.hud-money'), phone.name).toBeVisible()
     await expect(page.locator('.hud-time'), phone.name).toBeHidden()
