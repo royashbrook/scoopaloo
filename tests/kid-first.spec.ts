@@ -173,7 +173,7 @@ test('first three orders are a protected, readable pointer tutorial on every pho
     await expect.poll(() => page.evaluate(item =>
       window.__scoopaloo.snapshot().player.trayItems[item] ?? 0, firstItem)).toBeGreaterThan(0)
     await expect(page.locator('[data-field="ticket-guidance"]'), phone.name).toHaveText('TAKE IT TO THE CUSTOMER')
-    if (phone.name === '390' || phone.name === '420') {
+    if (phone.name === '375' || phone.name === '390' || phone.name === '420') {
       await page.screenshot({ path: `test-results/kid-first-${phone.name}-carrying.png` })
     }
     expect(await page.evaluate(() => {
