@@ -80,9 +80,22 @@ export const MOTION_DISTANCES = {
 
 export const LOCKED_PRODUCER_PLAQUE = {
   width: 90,
-  labelFont: '900 18px ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif',
   labelMaxWidth: 80,
+  labelHeadroom: 6,
+  labelFontSizes: [18, 17, 16, 15, 14, 13],
+  labelFontFamily: 'ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif',
 } as const
+
+export function lockedProducerLabelFont(
+  label: string,
+  measure: (font: string, label: string) => number,
+): string {
+  for (const size of LOCKED_PRODUCER_PLAQUE.labelFontSizes) {
+    const font = `900 ${size}px ${LOCKED_PRODUCER_PLAQUE.labelFontFamily}`
+    if (measure(font, label) <= LOCKED_PRODUCER_PLAQUE.labelMaxWidth - LOCKED_PRODUCER_PLAQUE.labelHeadroom) return font
+  }
+  return `900 13px ${LOCKED_PRODUCER_PLAQUE.labelFontFamily}`
+}
 
 export type WalkPose = {
   stride: number
@@ -673,7 +686,10 @@ export class Renderer {
     if (locked) {
       this.drawItem(item, point.x - 20, top + 3, 40, 44)
       ctx.fillStyle = this.skin.palette.cocoa
-      ctx.font = LOCKED_PRODUCER_PLAQUE.labelFont
+      ctx.font = lockedProducerLabelFont(lockedLabel, (font, label) => {
+        ctx.font = font
+        return ctx.measureText(label).width
+      })
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(lockedLabel, point.x, top + 65, LOCKED_PRODUCER_PLAQUE.labelMaxWidth)
