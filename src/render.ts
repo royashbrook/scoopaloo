@@ -385,6 +385,10 @@ export class Renderer {
   readonly roomFloorProp = new Image()
   readonly helperImage?: HTMLImageElement
   readonly playerWalkImage?: HTMLImageElement
+  // resolves once the world's sprites are decoded, so a shift never starts in an
+  // empty room (#70). settles on failure too: a broken asset degrades the art,
+  // it must never lock a kid out of playing. capped so a hung request cannot either.
+  readonly ready: Promise<void>
   reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 
   constructor(readonly canvas: HTMLCanvasElement, readonly skin: GameSkin) {
@@ -398,6 +402,11 @@ export class Renderer {
       this.playerWalkImage = new Image()
       this.playerWalkImage.src = skin.playerWalkSheet
     }
+    const critical = [this.atlas, this.roomBackdrop, this.playerWalkImage].filter(Boolean) as HTMLImageElement[]
+    this.ready = Promise.race([
+      Promise.allSettled(critical.map(image => image.decode?.() ?? Promise.resolve())).then(() => undefined),
+      new Promise<void>(resolve => setTimeout(resolve, 15000)),
+    ])
     if (skin.helper) {
       this.helperImage = new Image()
       this.helperImage.src = skin.helper.image

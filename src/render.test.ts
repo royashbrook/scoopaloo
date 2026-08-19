@@ -202,7 +202,7 @@ describe('kid-first render guidance (#63)', () => {
       const skin = skinData as GameSkin
       const canvas = { getContext: () => ({}) } as unknown as HTMLCanvasElement
       const renderer = new Renderer(canvas, skin)
-      expect(skin.playerWalkSheet).toBe('/assets/player-walk.png?v=1')
+      expect(skin.playerWalkSheet).toBe('/assets/player-walk.webp?v=2')
       expect(renderer.playerWalkImage?.src).toBe(skin.playerWalkSheet)
       expect(renderer.assetsReady()).toBe(true)
     } finally {
