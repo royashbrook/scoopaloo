@@ -329,7 +329,9 @@ export class ShiftUi {
     this.set('results-day', `${state.day} RESULTS`)
     this.set('shop-day', `GEAR FOR ${state.day}`)
     this.set('ready-challenge', state.challenge ?? 'SERVE FAST. COLLECT EVERY COIN.')
-    this.set('start', rush ? 'START RUSH' : 'START SHIFT')
+    // data-pending is set by main while the world's sprites are still decoding
+    // (#70), so the label survives this per-frame repaint until play begins.
+    this.set('start', this.root.dataset.pending ? 'OPENING THE SHOP…' : rush ? 'START RUSH' : 'START SHIFT')
     for (const card of ['ready', 'result', 'shop']) {
       this.fields[`${card}-rush-rules`].hidden = !rush
       if (!rush) continue

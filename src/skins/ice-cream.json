@@ -1,7 +1,7 @@
 {
   "id": "ice-cream",
-  "spriteSheet": "/assets/scoopaloo-atlas.png?v=2",
-  "playerWalkSheet": "/assets/player-walk.png?v=1",
+  "spriteSheet": "/assets/scoopaloo-atlas.webp?v=3",
+  "playerWalkSheet": "/assets/player-walk.webp?v=2",
   "room": {
     "horizon": 320,
     "wall": "#FFE7CA",

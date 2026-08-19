@@ -131,12 +131,25 @@ function setPlayerPaused(on: boolean): void {
   playerPaused = on && state.phase === 'playing'
 }
 
+// entering the shift waits for the world's sprites (#70): pressing play during a
+// slow first load used to drop the kid into an empty room with no player, no
+// machines, and no customer, which reads as broken. the renderer's ready promise
+// settles on failure or after 15s, so this can delay play, never deny it.
+let shiftPending = false
 const beginShift = (): void => {
+  if (shiftPending) return
   setPlayerPaused(false)
   sound.unlock()
-  previousScoreChaseBest = state.save.scoreChaseBest
-  startShift(state)
-  sound.play('start')
+  shiftPending = true
+  shiftRoot.dataset.pending = '1'
+  void renderer.ready.then(() => {
+    shiftPending = false
+    delete shiftRoot.dataset.pending
+    if (state.phase !== 'ready') return
+    previousScoreChaseBest = state.save.scoreChaseBest
+    startShift(state)
+    sound.play('start')
+  })
 }
 const replayShift = (): void => {
   setPlayerPaused(false)

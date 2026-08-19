@@ -133,7 +133,7 @@ async function walkSheetDraws(page: Page): Promise<WalkSheetDraw[]> {
         configurable: true,
         value: (...args: unknown[]) => {
           const source = args[0] as { src?: string }
-          if (source.src?.includes('/assets/player-walk.png')) {
+          if (source.src?.includes('/assets/player-walk.webp')) {
             const { a, b, c, d, e, f } = context.getTransform()
             trace.draws.push({ args: args.slice(1).map(Number), transform: [a, b, c, d, e, f] })
           }
