@@ -4,10 +4,14 @@ import type { GameSkin } from './skin'
 
 export { SAVE_KEY } from './save-code'
 
+let browserSnapshot: string | null | undefined
+
 export function loadSave(skin: GameSkin, storage?: Pick<Storage, 'getItem'>): SaveV1 {
   const fallback = defaultSave(skin)
   try {
-    const parsed = JSON.parse((storage ?? localStorage).getItem(SAVE_KEY) || '') as Partial<SaveV1>
+    const serialized = (storage ?? localStorage).getItem(SAVE_KEY)
+    if (!storage) browserSnapshot = serialized
+    const parsed = JSON.parse(serialized || '') as Partial<SaveV1>
     if (parsed.version !== 1) return fallback
     return migrateSave(skin, parsed)
   } catch {
@@ -18,7 +22,10 @@ export function loadSave(skin: GameSkin, storage?: Pick<Storage, 'getItem'>): Sa
 export function storeSave(save: SaveV1, storage?: Pick<Storage, 'setItem'>): boolean {
   try {
     const target = storage ?? localStorage
-    target.setItem(SAVE_KEY, JSON.stringify({ ...save, text: true }))
+    const serialized = JSON.stringify({ ...save, text: true })
+    if (!storage && localStorage.getItem(SAVE_KEY) !== browserSnapshot) return false
+    target.setItem(SAVE_KEY, serialized)
+    if (!storage) browserSnapshot = serialized
     return true
   } catch {
     return false

@@ -53,6 +53,26 @@ test('requires a second matching confirmation before replacing richer progress',
   expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}'), SAVE_KEY)).toEqual({ ...incoming, text: true })
 })
 
+test('a stale game tab cannot undo a confirmed rescue replacement', async ({ context, page }) => {
+  const current = { ...defaultSave(skin), coins: 70, lifetimeCash: 400 }
+  const incoming = { ...defaultSave(skin), coins: 5, lifetimeCash: 20 }
+  await seedSave(page, current)
+  await page.goto('/')
+
+  const rescue = await context.newPage()
+  await rescue.goto(`/rescue.html#${await encodeSave(incoming)}`)
+  await rescue.getByRole('button', { name: 'RESTORE SAVE' }).click()
+  await rescue.getByRole('button', { name: 'REPLACE CURRENT SAVE' }).click()
+  await expect(rescue.getByText('SAVE RESTORED')).toBeVisible()
+
+  await page.evaluate(() => addEventListener('pagehide', () => localStorage.setItem('scoopaloo-rescue-pagehide-proof', '1'), { once: true }))
+  await page.close({ runBeforeUnload: true })
+  await expect.poll(() => page.isClosed()).toBe(true)
+  expect(await rescue.evaluate(() => localStorage.getItem('scoopaloo-rescue-pagehide-proof'))).toBe('1')
+  expect(await rescue.evaluate(key => JSON.parse(localStorage.getItem(key)!), SAVE_KEY))
+    .toEqual({ ...incoming, text: true })
+})
+
 test('does not treat simultaneous taps as the richer-save confirmation', async ({ page }) => {
   const current = { ...defaultSave(skin), coins: 70, lifetimeCash: 400 }
   const incoming = { ...defaultSave(skin), coins: 5, lifetimeCash: 20 }
