@@ -125,7 +125,7 @@ async function expectDockFits(page: Page, safeBottom: number): Promise<void> {
       targets: boxes.every(box => box.width >= 44 && box.height >= 44),
     }
   }, safeBottom)
-  expect(report).toEqual({ count: 4, inside: true, targets: true })
+  expect(report).toEqual({ count: 5, inside: true, targets: true })
 }
 
 async function expectShopFits(page: Page, card: Locator, safeTop: number, safeBottom: number): Promise<void> {

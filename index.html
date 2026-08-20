@@ -18,6 +18,7 @@
         <button id="play-button" class="nav-button" type="button" aria-current="page"><span aria-hidden="true">▶</span><b>PLAY</b></button>
         <button id="store-button" class="nav-button" type="button"><span aria-hidden="true">▦</span><b>STORE</b></button>
         <button id="save-button" class="nav-button" type="button" aria-label="Open save card"><span aria-hidden="true">◆</span><b>SAVE</b></button>
+        <button id="about-button" class="nav-button" type="button"><span aria-hidden="true">ⓘ</span><b>ABOUT</b></button>
         <button id="sound-button" class="nav-button sound-button" type="button" aria-label="Sound" aria-pressed="true"><span aria-hidden="true">♪</span><b>SOUND</b></button>
       </nav>
       <button id="update-toast" class="round-button update-toast" hidden aria-label="Update ready, tap to refresh">↻</button>
@@ -28,6 +29,13 @@
         <p class="save-copy">SCAN THE CODE OR OPEN THE RESCUE LINK ON YOUR OTHER DEVICE.</p>
         <img id="save-qr" alt="QR code for this save" />
         <a id="rescue-link" target="_blank" rel="noopener">OPEN RESCUE LINK ↗</a>
+      </dialog>
+      <dialog id="about-dialog" class="about-dialog" aria-labelledby="about-title">
+        <form method="dialog"><button class="close" aria-label="Close about">×</button></form>
+        <h2 id="about-title">ABOUT</h2>
+        <p class="about-copy">made with love by roy and ai.</p>
+        <p class="about-copy">no ads, no lives, no timers, nothing to buy, no accounts, no cookies, nothing sold or shared. that is the whole point.</p>
+        <p class="about-copy">want to say thanks? find us at <a class="about-link" aria-label="github.com/royashbrook" href="https://github.com/royashbrook" target="_blank" rel="noopener">github.com/royashbrook.</a></p>
       </dialog>
     </main>
     <script type="module" src="/src/main.ts"></script>
