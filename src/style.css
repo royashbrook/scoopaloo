@@ -1036,7 +1036,7 @@ button, a {
   left: 0;
   z-index: 30;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   padding: 0 max(.4rem, var(--safe-right)) var(--safe-bottom) max(.4rem, var(--safe-left));
   border-top: 3px solid #4a3b45;
   background: rgb(255 243 230 / .98);
@@ -1117,7 +1117,9 @@ dialog::backdrop { background: rgb(74 59 69 / .45); backdrop-filter: blur(.25rem
 dialog form { position: absolute; right: .7rem; top: .5rem; }
 .close { min-width: 44px; min-height: 44px; background: transparent; font-size: 2rem; cursor: pointer; }
 .save-mark { font-size: 2rem; color: #ff8fab; }
-#save-title { margin: .1rem 2rem .35rem; font-size: 1.25rem; }
+#save-title, #about-title { margin: .1rem 2rem .35rem; font-size: 1.25rem; }
 .save-copy { margin: 0 auto .6rem; max-width: 17rem; font-size: 13px; font-weight: 900; line-height: 1.25; }
 #save-qr { display: block; width: min(15rem, 100%); margin: .4rem auto .7rem; border-radius: 1rem; }
 #rescue-link { display: grid; place-items: center; min-height: 44px; margin: auto; padding: .55rem .8rem; border: .2rem solid #4a3b45; border-radius: 1rem; color: #4a3b45; font-size: 13px; font-weight: 900; text-decoration: none; }
+.about-copy { margin: .75rem auto; max-width: 18rem; font-size: 14px; font-weight: 800; line-height: 1.4; }
+.about-link { display: grid; min-height: 44px; margin: .35rem auto 0; place-items: center; border: 2px solid #4a3b45; border-radius: .8rem; color: #0c6a58; font-weight: 900; text-decoration: underline; }

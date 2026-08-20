@@ -121,6 +121,7 @@ const bottomNav = document.querySelector<HTMLElement>('#bottom-nav')
 const playButton = document.querySelector<HTMLButtonElement>('#play-button')
 const storeButton = document.querySelector<HTMLButtonElement>('#store-button')
 const saveButton = document.querySelector<HTMLButtonElement>('#save-button')
+const aboutButton = document.querySelector<HTMLButtonElement>('#about-button')
 const soundButton = document.querySelector<HTMLButtonElement>('#sound-button')
 
 // Player pause owns the visible dialog. Debug pause stays separate so evidence
@@ -514,6 +515,7 @@ document.addEventListener('visibilitychange', () => {
 })
 
 const dialog = document.querySelector<HTMLDialogElement>('#save-dialog')
+const aboutDialog = document.querySelector<HTMLDialogElement>('#about-dialog')
 const qr = document.querySelector<HTMLImageElement>('#save-qr')
 const link = document.querySelector<HTMLAnchorElement>('#rescue-link')
 
@@ -522,6 +524,7 @@ playButton?.addEventListener('click', () => {
   else if (state.phase === 'results') replayShift()
 })
 storeButton?.addEventListener('click', openShop)
+aboutButton?.addEventListener('click', () => aboutDialog?.showModal())
 
 if (dialog && saveButton && qr && link) {
   saveButton.addEventListener('click', async () => {

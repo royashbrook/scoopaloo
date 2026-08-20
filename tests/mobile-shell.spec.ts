@@ -15,11 +15,12 @@ function gameMenu(page: Page): Locator {
   return page.getByRole('navigation', { name: 'Game menu' })
 }
 
-function menuAction(page: Page, name: 'PLAY' | 'STORE' | 'SAVE' | 'SOUND'): Locator {
+function menuAction(page: Page, name: 'PLAY' | 'STORE' | 'SAVE' | 'ABOUT' | 'SOUND'): Locator {
   const ids = {
     PLAY: '#play-button',
     STORE: '#store-button',
     SAVE: '#save-button',
+    ABOUT: '#about-button',
     SOUND: '#sound-button',
   } as const
   return gameMenu(page).locator(ids[name])
@@ -70,7 +71,7 @@ async function expectNoDocumentScroll(page: Page): Promise<void> {
 async function expectMenuContract(page: Page): Promise<void> {
   const menu = gameMenu(page)
   await expect(menu).toBeVisible()
-  const actions = ['PLAY', 'STORE', 'SAVE', 'SOUND'] as const
+  const actions = ['PLAY', 'STORE', 'SAVE', 'ABOUT', 'SOUND'] as const
   for (const name of actions) {
     const button = menuAction(page, name)
     await expect(button).toBeVisible()
@@ -141,6 +142,51 @@ test('bottom menu actions work outside a shift and Store returns to ready or res
     await page.screenshot({ path: `test-results/mobile-shell-${size.name}-store.png` })
     await closeStore(page, 'ready')
     await expectMenuContract(page)
+
+    const about = menuAction(page, 'ABOUT')
+    await about.click()
+    const aboutDialog = page.getByRole('dialog', { name: 'ABOUT', exact: true })
+    await expect(aboutDialog).toBeVisible()
+    await expect(aboutDialog.locator('p')).toHaveText([
+      'made with love by roy and ai.',
+      'no ads, no lives, no timers, nothing to buy, no accounts, no cookies, nothing sold or shared. that is the whole point.',
+      'want to say thanks? find us at github.com/royashbrook.',
+    ])
+    const github = aboutDialog.getByRole('link', { name: 'github.com/royashbrook', exact: true })
+    await expect(aboutDialog.getByRole('link')).toHaveCount(1)
+    await expect(github).toHaveCount(1)
+    await expect(github).toHaveAttribute('href', 'https://github.com/royashbrook')
+    await expect(github).toHaveAttribute('target', '_blank')
+    await expect(github).toHaveAttribute('rel', 'noopener')
+    const aboutLayout = await aboutDialog.evaluate((element, { safeTop, safeBottom }) => {
+      const box = element.getBoundingClientRect()
+      const link = element.querySelector<HTMLAnchorElement>('a')!.getBoundingClientRect()
+      return {
+        insideSafeArea: box.left >= 0 && box.top >= safeTop
+          && box.right <= innerWidth && box.bottom <= innerHeight - safeBottom,
+        fits: element.scrollWidth <= element.clientWidth + 1
+          && element.scrollHeight <= element.clientHeight + 1,
+        link: { width: link.width, height: link.height },
+      }
+    }, { safeTop: SAFE_TOP, safeBottom: SAFE_BOTTOM })
+    expect(aboutLayout.insideSafeArea, size.name).toBe(true)
+    expect(aboutLayout.fits, size.name).toBe(true)
+    expect(aboutLayout.link.width, size.name).toBeGreaterThanOrEqual(44)
+    expect(aboutLayout.link.height, size.name).toBeGreaterThanOrEqual(44)
+    await expectNoDocumentScroll(page)
+    if (index === 0) {
+      await page.keyboard.press('Escape')
+      await expect(aboutDialog).not.toBeVisible()
+      await expect(about).toBeFocused()
+      await expectNoDocumentScroll(page)
+      await about.click()
+      await expect(aboutDialog).toBeVisible()
+    }
+    if (index !== 1) await page.screenshot({ path: `test-results/mobile-shell-${size.name}-about.png` })
+    await aboutDialog.getByRole('button', { name: 'Close about' }).click()
+    await expect(aboutDialog).not.toBeVisible()
+    await expect(about).toBeFocused()
+    await expectNoDocumentScroll(page)
   }
 
   await setPhoneViewport(page, PHONE_SIZES[0])
