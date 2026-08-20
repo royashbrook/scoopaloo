@@ -25,5 +25,15 @@ test('reloads offline after the first visit', async ({ context, page }) => {
   expect(room).toMatchObject({ ok: true, corner: true })
   expect(room.type).toContain('image/svg+xml')
   expect(await page.evaluate(async () => Boolean(await caches.match('/assets/player-walk.webp?v=2')))).toBe(true)
+  await page.getByRole('button', { name: /about/i }).click()
+  const about = page.getByRole('dialog', { name: 'ABOUT', exact: true })
+  await expect(about.locator('.maker-mark')).toHaveText('made with love by roy + ai · sponsor me')
+  expect(await about.locator('a').evaluateAll(links => links.map(link => link.getAttribute('href')))).toEqual([
+    'https://royashbrook.com',
+    'https://royashbrook.com/agents',
+    'https://github.com/sponsors/royashbrook',
+  ])
+  expect(await about.locator('.mark-heart').evaluate(element => getComputedStyle(element).fill))
+    .toBe('rgb(224, 116, 106)')
   await context.setOffline(false)
 })

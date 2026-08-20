@@ -1122,4 +1122,8 @@ dialog form { position: absolute; right: .7rem; top: .5rem; }
 #save-qr { display: block; width: min(15rem, 100%); margin: .4rem auto .7rem; border-radius: 1rem; }
 #rescue-link { display: grid; place-items: center; min-height: 44px; margin: auto; padding: .55rem .8rem; border: .2rem solid #4a3b45; border-radius: 1rem; color: #4a3b45; font-size: 13px; font-weight: 900; text-decoration: none; }
 .about-copy { margin: .75rem auto; max-width: 18rem; font-size: 14px; font-weight: 800; line-height: 1.4; }
-.about-link { display: grid; min-height: 44px; margin: .35rem auto 0; place-items: center; border: 2px solid #4a3b45; border-radius: .8rem; color: #0c6a58; font-weight: 900; text-decoration: underline; }
+.maker-mark { margin: 1rem 0 .2rem; color: var(--soft, #8b8f99); font-family: var(--font-mono, ui-monospace, monospace); font-size: .8rem; text-align: center; }
+.maker-mark a { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; color: var(--ink, #4a3b45); text-decoration: underline; }
+.maker-mark a.mark-sponsor { color: #d9a441; }
+.mark-heart { width: .85em; height: .85em; fill: #e0746a; vertical-align: -.1em; }
+.mark-dot { opacity: .45; }
