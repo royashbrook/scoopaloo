@@ -148,33 +148,66 @@ test('bottom menu actions work outside a shift and Store returns to ready or res
     const aboutDialog = page.getByRole('dialog', { name: 'ABOUT', exact: true })
     await expect(aboutDialog).toBeVisible()
     await expect(aboutDialog.locator('p')).toHaveText([
-      'made with love by roy and ai.',
       'no ads, no lives, no timers, nothing to buy, no accounts, no cookies, nothing sold or shared. that is the whole point.',
-      'want to say thanks? find us at github.com/royashbrook.',
+      'made with love by roy + ai · sponsor me',
     ])
-    const github = aboutDialog.getByRole('link', { name: 'github.com/royashbrook', exact: true })
-    await expect(aboutDialog.getByRole('link')).toHaveCount(1)
-    await expect(github).toHaveCount(1)
-    await expect(github).toHaveAttribute('href', 'https://github.com/royashbrook')
-    await expect(github).toHaveAttribute('target', '_blank')
-    await expect(github).toHaveAttribute('rel', 'noopener')
+    const makerMark = aboutDialog.locator('.maker-mark')
+    await expect(makerMark.locator('.sr-only')).toHaveText('love')
+    const heart = makerMark.locator('svg.mark-heart')
+    await expect(heart).toHaveAttribute('aria-hidden', 'true')
+    await expect(heart).toHaveAttribute('viewBox', '0 0 24 24')
+    expect(await makerMark.evaluate(element => getComputedStyle(element).fontFamily)).toMatch(/mono/i)
+    expect(await heart.evaluate(element => getComputedStyle(element).fill)).toBe('rgb(224, 116, 106)')
+    const links = [
+      ['roy', 'https://royashbrook.com'],
+      ['ai', 'https://royashbrook.com/agents'],
+      ['sponsor me', 'https://github.com/sponsors/royashbrook'],
+    ] as const
+    await expect(aboutDialog.getByRole('link')).toHaveCount(links.length)
+    for (const [name, href] of links) {
+      const link = aboutDialog.getByRole('link', { name, exact: true })
+      await expect(link).toHaveAttribute('href', href)
+      await expect(link).toHaveAttribute('target', '_blank')
+      await expect(link).toHaveAttribute('rel', 'noreferrer')
+    }
     const aboutLayout = await aboutDialog.evaluate((element, { safeTop, safeBottom }) => {
       const box = element.getBoundingClientRect()
-      const link = element.querySelector<HTMLAnchorElement>('a')!.getBoundingClientRect()
+      const targets = [...element.querySelectorAll<HTMLElement>('button, a[href]')]
+        .map(target => {
+          const rect = target.getBoundingClientRect()
+          return {
+            width: rect.width,
+            height: rect.height,
+            oneRect: target.getClientRects().length === 1,
+            inside: rect.left >= box.left && rect.top >= box.top
+              && rect.right <= box.right && rect.bottom <= box.bottom,
+          }
+        })
       return {
-        insideSafeArea: box.left >= 0 && box.top >= safeTop
-          && box.right <= innerWidth && box.bottom <= innerHeight - safeBottom,
+        insideSafeArea: box.left >= 8 && box.top >= safeTop
+          && box.right <= innerWidth - 8 && box.bottom <= innerHeight - safeBottom,
         fits: element.scrollWidth <= element.clientWidth + 1
           && element.scrollHeight <= element.clientHeight + 1,
-        link: { width: link.width, height: link.height },
+        targets,
       }
     }, { safeTop: SAFE_TOP, safeBottom: SAFE_BOTTOM })
     expect(aboutLayout.insideSafeArea, size.name).toBe(true)
     expect(aboutLayout.fits, size.name).toBe(true)
-    expect(aboutLayout.link.width, size.name).toBeGreaterThanOrEqual(44)
-    expect(aboutLayout.link.height, size.name).toBeGreaterThanOrEqual(44)
+    expect(aboutLayout.targets, size.name).toHaveLength(4)
+    for (const target of aboutLayout.targets) {
+      expect(target.width, size.name).toBeGreaterThanOrEqual(44)
+      expect(target.height, size.name).toBeGreaterThanOrEqual(44)
+      expect(target.oneRect, size.name).toBe(true)
+      expect(target.inside, size.name).toBe(true)
+    }
     await expectNoDocumentScroll(page)
+    const closeAbout = aboutDialog.getByRole('button', { name: 'Close about' })
     if (index === 0) {
+      await expect(closeAbout).toBeFocused()
+      for (const [name] of links) {
+        await page.keyboard.press('Tab')
+        await expect(aboutDialog.getByRole('link', { name, exact: true })).toBeFocused()
+      }
       await page.keyboard.press('Escape')
       await expect(aboutDialog).not.toBeVisible()
       await expect(about).toBeFocused()
@@ -183,7 +216,7 @@ test('bottom menu actions work outside a shift and Store returns to ready or res
       await expect(aboutDialog).toBeVisible()
     }
     if (index !== 1) await page.screenshot({ path: `test-results/mobile-shell-${size.name}-about.png` })
-    await aboutDialog.getByRole('button', { name: 'Close about' }).click()
+    await closeAbout.click()
     await expect(aboutDialog).not.toBeVisible()
     await expect(about).toBeFocused()
     await expectNoDocumentScroll(page)
