@@ -102,6 +102,9 @@ type ShiftActions = {
   next: () => void
   buy: (id: string) => void
   pause?: (on: boolean) => void
+  end?: () => void
+  save?: () => void
+  sound?: () => void
 }
 
 export class ShiftUi {
@@ -178,6 +181,10 @@ export class ShiftUi {
         <h2 id="pause-title">SHIFT PAUSED</h2>
         <p>Timer and customer patience are stopped.</p>
         <button id="resume-button" type="button" data-action="resume">RESUME</button>
+        <button type="button" data-action="save">MOVE YOUR SAVE</button>
+        <button type="button" data-action="sound">TOGGLE SOUND</button>
+        <p>End this shift to return to the menu. Keep all earned cash; unfinished orders are cancelled.</p>
+        <button type="button" data-action="end">END SHIFT</button>
       </dialog>
 
       <section class="shift-card ready-card" aria-labelledby="ready-title">
@@ -255,6 +262,9 @@ export class ShiftUi {
     on('next', actions.next)
     on('pause', () => actions.pause?.(true))
     on('resume', () => actions.pause?.(false))
+    on('end', () => actions.end?.())
+    on('save', () => actions.save?.())
+    on('sound', () => actions.sound?.())
     root.querySelector<HTMLDialogElement>('#pause-dialog')?.addEventListener('cancel', event => {
       event.preventDefault()
       actions.pause?.(false)

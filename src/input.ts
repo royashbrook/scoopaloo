@@ -36,11 +36,20 @@ export class Controls {
       event.preventDefault()
     })
     addEventListener('keyup', event => { this.keys.delete(event.key.toLowerCase()); this.readKeys() })
-    addEventListener('blur', () => { this.keys.clear(); this.readKeys() })
+    addEventListener('blur', () => this.reset())
     canvas.addEventListener('pointerdown', event => this.down(event))
     canvas.addEventListener('pointermove', event => this.move(event))
     canvas.addEventListener('pointerup', event => this.up(event))
     canvas.addEventListener('pointercancel', event => this.up(event))
+  }
+
+  reset(): void {
+    if (this.pointer !== null && this.canvas.hasPointerCapture(this.pointer)) this.canvas.releasePointerCapture(this.pointer)
+    this.pointer = null
+    this.keys.clear()
+    this.joystickCss.active = false
+    this.vector.x = 0
+    this.vector.y = 0
   }
 
   private down(event: PointerEvent): void {

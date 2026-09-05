@@ -910,6 +910,18 @@ export function startShift(state: GameState): void {
   if (state.phase === 'ready') state.phase = 'playing'
 }
 
+export function endShift(state: GameState): boolean {
+  if (state.phase !== 'playing') return false
+  // A paid order belongs to the player even if its last coin is still in flight.
+  const paid = state.flyingCoins.reduce((sum, coin) => sum + (coin.collected ? 0 : coin.value), 0)
+  state.save.coins += paid
+  state.save.lifetimeCash += paid
+  state.shift.revenue += paid
+  state.flyingCoins = []
+  finishShift(state)
+  return true
+}
+
 function resetShift(state: GameState, phase: 'ready' | 'playing'): void {
   const fresh = createGame(state.skin, state.save)
   Object.assign(state, fresh)
