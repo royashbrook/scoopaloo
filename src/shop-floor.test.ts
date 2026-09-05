@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createFloor, stepFloor, FLOOR, floorStorage, FLOOR_KEY, validFloorSave, type FloorState } from './shop-floor'
+import { createFloor, stepFloor, FLOOR, floorCheckpoint, floorComplete, floorStorage, FLOOR_KEY, nextFloorPurchase, validFloorSave, type FloorState } from './shop-floor'
 import { createGame, endShift, startShift } from './engine'
 import skinData from './skins/ice-cream.json'
 import type { GameSkin } from './skin'
@@ -40,6 +40,8 @@ describe('continuous shop opening, without teleporting or seeding money', () => 
     serve(state, 2); walk(state, FLOOR.patio); wait(state, .7)
     serve(state, 5); walk(state, FLOOR.hire); wait(state, .7)
     expect(state.save.helper).toBe(true)
+    expect(Math.hypot(state.helper.x - FLOOR.staffDoor.x, state.helper.y - FLOOR.staffDoor.y)).toBeLessThan(150)
+    expect(state.helper.x).toBeGreaterThan(350)
     const start = state.helper.distance, earned = state.save.cash
     wait(state, 12)
     expect(state.helper.distance).toBeGreaterThan(start + 500)
@@ -47,6 +49,31 @@ describe('continuous shop opening, without teleporting or seeding money', () => 
     expect(state.save.cash).toBeGreaterThan(earned)
     expect(state.events.some(e => e.helper)).toBe(true)
     expect(state.save.cash).toBe(state.save.served * 20 - 100)
+  })
+  it('turns helper earnings into a real party job and a finite, earned ending', () => {
+    const state = createFloor()
+    serve(state, 2); walk(state, FLOOR.patio); wait(state, .7)
+    serve(state, 5); walk(state, FLOOR.hire); wait(state, .7)
+    expect(nextFloorPurchase(state)?.kind).toBe('party')
+    wait(state, 40)
+    expect(state.save.cash).toBeGreaterThanOrEqual(FLOOR.party.price)
+    walk(state, FLOOR.party); wait(state, .7)
+    expect(state.save.party).toBe(true)
+    const before = state.save.cash
+    wait(state, 12)
+    expect(state.save.cash).toBeGreaterThan(before)
+    expect(state.save.partyServed ?? 0).toBe(0) // Pip cannot finish the player's party for them.
+    for (const target of [3, 6]) {
+      walk(state, FLOOR.scoop); wait(state, .65)
+      walk(state, FLOOR.counters[2])
+      for (let ticks = 0; (state.save.partyServed ?? 0) < target && ticks < 1200; ticks++) stepFloor(state, 1 / 60)
+      expect(state.save.partyServed).toBe(target)
+    }
+    expect(floorComplete(state)).toBe(true)
+    expect(state.save.cash).toBe(state.save.served * FLOOR.price - 40 - 60 - 160)
+    wait(state, 3)
+    expect(state.customers.some(c => c.lane === 2)).toBe(false)
+    expect(state.save.partyServed).toBe(6)
   })
   it('does not buy while merely passing through, overspend, or run while paused', () => {
     const state = createFloor()
@@ -85,6 +112,21 @@ describe('isolated preview save', () => {
     expect(validFloorSave({ ...save, helper: true, patio: false })).toBe(false)
     expect(FLOOR_KEY).not.toBe('scoopaloo_save_v1')
   })
+  it('restores feet and carried cones without resetting the work or breaking old preview saves', () => {
+    const state = createFloor()
+    walk(state, FLOOR.scoop); wait(state, .65)
+    walk(state, { x: 320, y: 550 })
+    const saved = floorCheckpoint(state)
+    expect(validFloorSave(saved)).toBe(true)
+    const restored = createFloor(saved)
+    expect(restored.player.x).toBe(state.player.x)
+    expect(restored.player.y).toBe(state.player.y)
+    expect(restored.player.cones).toBe(3)
+    expect(restored.save).toEqual(state.save)
+    expect(validFloorSave({ ...saved, player: { x: -100, y: 400, cones: 3 } })).toBe(false)
+    expect(validFloorSave({ ...saved, party: true })).toBe(false)
+    expect(validFloorSave({ version: 1, cash: 40, served: 2, patio: true, helper: false })).toBe(true)
+  })
 })
 
 it('ending a campaign shift keeps paid coins, awards the actual result once, and makes the menu reachable', () => {
@@ -93,6 +135,7 @@ it('ending a campaign shift keeps paid coins, awards the actual result once, and
   state.flyingCoins = [false, false, true].map(collected => ({ x: 0, y: 0, vx: 0, vy: 0, age: .1, collected, value: 5 }))
   expect(endShift(state)).toBe(true)
   expect(state.phase).toBe('results')
+  expect(state.shift.endedByPlayer).toBe(true)
   expect(state.save.coins).toBe(10)
   expect(state.save.lifetimeCash).toBe(10)
   expect(state.shift.revenue).toBe(10)

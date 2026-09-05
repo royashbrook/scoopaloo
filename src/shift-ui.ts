@@ -27,6 +27,7 @@ export type ShiftUiState = {
   bestStreak: number
   stars: number
   success: boolean
+  endedByPlayer?: boolean
   cash?: number
   canAdvance?: boolean
   finalDay?: boolean
@@ -373,7 +374,7 @@ export class ShiftUi {
       : `Combo ${state.streak}.`)
     this.flashCombo(state.comboEvent)
     this.set('ready-goal', `$${state.goal}`)
-    this.set('result-title', rush
+    this.set('result-title', state.endedByPlayer ? 'SHIFT ENDED' : rush
       ? state.success ? 'RUSH CLEARED' : 'RUSH ENDED'
       : state.success ? 'SHIFT COMPLETE' : 'GOAL MISSED')
     this.set('result-revenue', `$${state.revenue}`)

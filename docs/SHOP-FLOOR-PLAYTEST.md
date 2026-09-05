@@ -6,7 +6,9 @@ Status: the continuous-shop preview is a design experiment, not a replacement fo
 
 Can a child understand the action from the scene, enjoy repeating it, and see why growing the shop and hiring help are useful? The change is a continuous floor with finished cones, direct service, visible cash, a patio purchase and a worker who takes over a demonstrated job. It is not a recipe puzzle with a shorter tutorial.
 
-The current slice stops adding content after the patio/helper. Do not disguise that ceiling as a finished progression system. More machines, areas, skins or engine work wait until the basic interaction is worth repeating.
+The slice is one small complete arc: patio, helper, then a party table and six friends personally served by the player. The helper keeps the original counter earning while the player hosts the party. A clear celebration marks completion; continuing or starting a new preview shop is a choice, not an unannounced cash-only dead end. More shops, machines, skins or engine work wait until this interaction is worth repeating.
+
+At six friends, watch the floor as well as the words: the guests now stay at their bench, briefly cheer with a small star burst, and a separate two-choice panel leaves the room undimmed. The simulation stays paused. Reduced motion keeps the earned group and hearts but removes the burst and hops. KEEP SERVING is free play with the same completed shop, not a promise of more unlocks. NEW SHOP asks for confirmation with CANCEL and starts immediately after confirmation. Later manual pauses are ordinary pauses, not another win.
 
 ## before inviting anyone to test
 
@@ -29,7 +31,8 @@ Watch:
 | First customer | Paid service within 10 seconds | Could they find cones and the customer without reading a recipe? |
 | First growth | Patio within 60 seconds | Did earning cash visibly change the place? Did they understand what spending would do? |
 | First helper | Complete-job role understood | Ask “What is Pip doing?” after they watch. Accept their own explanation. |
-| After two minutes | A real choice to continue | Offer continuing this game, the old one, or stopping. Record the choice without praise or pressure. |
+| Party | The next purchase and personal job are understood | Did they use the party table and notice the six-friend goal? Pip must not silently finish it for them. |
+| After two minutes or the completed party | A real choice to continue | Offer continuing, building a new shop, trying the old game, or stopping. Record the choice without praise or pressure. |
 
 Four out of five moving/serving uncoached and explaining the helper is the provisional comprehension gate. It is not a retention study or proof of commercial success. A fast scripted route passing in CI is not this gate. If comprehension passes but children still stop voluntarily, change the loop/feedback rather than adding a longer tutorial.
 
@@ -42,8 +45,10 @@ Capture short clips on the phone and tablet for: starting/stopping, turning thro
 - Cones travel between the visible source, tray and customer. Cash is credited once and the payment is readable.
 - Building changes the world in frame; the second counter is usable, not decoration.
 - The helper visibly collects and delivers. No remote invisible production masquerading as help.
+- Customers use the visible doorway; Pip enters from the staff door. Idle breathing keeps feet planted and disappears with reduced motion.
 - Decorative effects may be reduced, but item motion and state changes remain understandable.
 - Opening pause, changing apps and returning do not advance the shop or leave the thumbstick held.
+- Reopening preserves position and carried cones. Starting a new shop takes confirmation and resets only the preview, never the campaign.
 
 ## decision
 

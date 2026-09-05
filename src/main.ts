@@ -239,7 +239,7 @@ function frame(now: number): void {
 
 function updateSound(): void {
   if (state.phase !== previousSoundPhase) {
-    if (state.phase === 'results') sound.play(goalMet(state) ? 'success' : 'fail')
+    if (state.phase === 'results' && (goalMet(state) || !state.shift.endedByPlayer)) sound.play(goalMet(state) ? 'success' : 'fail')
     previousSoundPhase = state.phase
   }
   for (const event of state.events) {
@@ -411,6 +411,7 @@ function updateShiftUi(): void {
     bestStreak: state.shift.bestStreak,
     stars: state.shift.stars,
     success: goalMet(state),
+    endedByPlayer: state.shift.endedByPlayer,
     cash: state.save.coins,
     canAdvance: goalMet(state),
     finalDay: rules.kind === 'campaign' && rules.level === state.skin.days.length,

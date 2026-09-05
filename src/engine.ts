@@ -34,6 +34,7 @@ export type ActiveShiftRules = Pick<SkinDay,
 
 export type ShiftPhase = 'ready' | 'playing' | 'results' | 'shop'
 export type ShiftState = {
+  endedByPlayer?: boolean
   remaining: number
   revenue: number
   served: number
@@ -912,6 +913,7 @@ export function startShift(state: GameState): void {
 
 export function endShift(state: GameState): boolean {
   if (state.phase !== 'playing') return false
+  state.shift.endedByPlayer = true
   // A paid order belongs to the player even if its last coin is still in flight.
   const paid = state.flyingCoins.reduce((sum, coin) => sum + (coin.collected ? 0 : coin.value), 0)
   state.save.coins += paid
