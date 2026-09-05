@@ -1,6 +1,6 @@
 import './shop-floor.css'
 import { Controls } from './input'
-import { createFloor, floorHint, floorStorage, FLOOR, stepFloor } from './shop-floor'
+import { createFloor, floorCheckpoint, floorComplete, floorHint, floorStorage, FLOOR, stepFloor } from './shop-floor'
 import { FloorRenderer } from './shop-floor-render'
 import { GameSound } from './sound'
 import skinData from './skins/ice-cream.json'
@@ -19,6 +19,8 @@ const cash = document.querySelector<HTMLElement>('#cash')!
 const milestone = document.querySelector<HTMLElement>('#milestone')!
 const warning = document.querySelector<HTMLElement>('#storage-warning')!
 const resume = document.querySelector<HTMLButtonElement>('#resume')!
+const restart = document.querySelector<HTMLButtonElement>('#restart-preview')!
+let completionShown = floorComplete(state), completedAt = 0, restartArmed = false
 let ready = false
 let view: Viewport
 
@@ -41,11 +43,15 @@ addEventListener('resize', resize)
 new ResizeObserver(resize).observe(canvas)
 const controls = new Controls(canvas, () => view)
 const heard = new WeakSet<object>()
-function persist() { warning.hidden = storage.store(state.save) }
+function persist() { warning.hidden = storage.store(floorCheckpoint(state)) }
 function pauseShop() {
   state.paused = true
+  if (floorComplete(state)) completionShown = true
   controls.reset()
   persist()
+  document.querySelector('#pause-title')!.textContent = floorComplete(state) ? 'PARTY COMPLETE!' : 'SHOP PAUSED'
+  document.querySelector('#pause-copy')!.textContent = floorComplete(state)
+    ? 'Six happy friends! Your little shop is open. Keep serving, or build a new one.' : 'Your shop waits for you.'
   if (!pause.open) pause.showModal()
 }
 document.querySelector('#pause')!.addEventListener('click', pauseShop)
@@ -54,6 +60,14 @@ resume.addEventListener('click', () => {
   controls.reset(); pause.close(); state.paused = false; sound.unlock(); canvas.focus()
 })
 pause.addEventListener('cancel', event => { event.preventDefault(); resume.click() })
+pause.addEventListener('close', () => { restartArmed = false; restart.textContent = 'START A NEW SHOP' })
+restart.addEventListener('click', () => {
+  if (!restartArmed) { restartArmed = true; restart.textContent = 'NEW SHOP? TAP AGAIN'; return }
+  Object.assign(state, createFloor())
+  completionShown = false; completedAt = 0; restartArmed = false
+  restart.textContent = 'START A NEW SHOP'
+  pauseShop()
+})
 document.querySelector('#about')!.addEventListener('click', () => about.showModal())
 document.querySelector('#close-about')!.addEventListener('click', () => about.close())
 const soundButton = document.querySelector<HTMLButtonElement>('#sound')!
@@ -78,14 +92,21 @@ function frame(now: number) {
   if (ready && !document.hidden) stepFloor(state, dt, controls.vector)
   for (const event of state.events) if (!heard.has(event)) {
     heard.add(event)
-    sound.play(event.kind === 'build' || event.kind === 'hire' ? 'buy' : event.kind)
+    sound.play(event.kind === 'build' || event.kind === 'hire' || event.kind === 'party' ? 'buy' : event.kind)
     if (event.kind !== 'pickup') persist()
+  }
+  if (floorComplete(state) && !completionShown) {
+    completedAt ||= state.time
+    // Let the last cone and payment land before celebrating the finished little arc.
+    if (state.time - completedAt >= .8) { completionShown = true; pauseShop(); sound.play('success') }
   }
   renderer.draw(state, view, controls.joystick)
   const message = ready ? floorHint(state) : 'Loading your shop…'
   if (hint.textContent !== message) hint.textContent = message
   cash.textContent = String(state.save.cash)
-  milestone.textContent = state.save.helper ? 'A TEAM OF TWO' : state.save.patio ? 'PATIO OPEN!' : 'YOUR LITTLE SHOP'
+  milestone.textContent = floorComplete(state) ? 'PARTY COMPLETE!'
+    : state.save.party ? `PARTY ${state.save.partyServed ?? 0}/${FLOOR.party.guests}`
+    : state.save.helper ? 'A TEAM OF TWO' : state.save.patio ? 'PATIO OPEN!' : 'YOUR LITTLE SHOP'
   saveClock += dt
   if (saveClock >= 1) { saveClock = 0; persist() }
   requestAnimationFrame(frame)

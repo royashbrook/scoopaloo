@@ -65,22 +65,27 @@ export class FloorRenderer {
     this.text('PICK UP', 150, 492, 22)
     const actors: { y: number; draw: () => void }[] = state.customers.map(customer => ({
       y: customer.y, draw: () => {
+        c.save()
+        c.globalAlpha = Math.min(1, Math.max(0, (FLOOR.entranceX + 10 - customer.x) / 25))
         this.shadow(customer.x, customer.y)
-        this.sprite(customer.id % 4, 1, customer.x - 36, customer.y - 85, 72, 89)
+        // Breathe around a planted footprint; idle life is not walking in place.
+        const breath = this.art.reducedMotion ? 0 : Math.sin(state.time * 2.4 + customer.id) * 1.2
+        this.sprite(customer.id % 4, 1, customer.x - 36, customer.y - 85 - breath, 72, 89 + breath)
         if (customer.leaving) {
           this.sprite(1, 3, customer.x - 16, customer.y - 120, 32, 28)
           this.cone(customer.x + 18, customer.y - 22, 26)
         }
+        c.restore()
       },
     }))
-    for (let lane = 0; lane < (state.save.patio ? 2 : 1); lane++) {
+    for (let lane = 0; lane < (state.save.party ? 3 : state.save.patio ? 2 : 1); lane++) {
       const pos = FLOOR.counters[lane]
-      actors.push({ y: pos.y - 25, draw: () => this.counter(pos.x, pos.y, state.player.cones > 0) })
+      actors.push({ y: pos.y - 25, draw: () => lane === 2 ? this.partyTable(state) : this.counter(pos.x, pos.y, state.player.cones > 0) })
     }
     actors.push({ y: state.player.y, draw: () => this.actor(state.player, false, state.time) })
     if (state.save.helper) actors.push({ y: state.helper.y, draw: () => this.actor(state.helper, true, state.time) })
     actors.sort((a, b) => a.y - b.y).forEach(actor => actor.draw())
-    for (const customer of state.customers.filter(c => !c.leaving && c.x <= 481)) {
+    for (const customer of state.customers.filter(c => !c.leaving && c.x <= FLOOR.counters[c.lane].x + 6)) {
       this.box(customer.x - 40, customer.y - 165, 80, 67, '#fffcf5', 20)
       this.cone(customer.x - 8, customer.y - 131, 28)
       this.text('1', customer.x + 20, customer.y - 129, 24)
@@ -101,7 +106,7 @@ export class FloorRenderer {
         this.box(event.x - 51, y - 24, 102, 46, '#fff5b7', 18)
         this.text('+$20', event.x, y, 30, '#12664e')
       }
-      if (event.kind === 'build' || event.kind === 'hire') {
+      if (event.kind === 'build' || event.kind === 'hire' || event.kind === 'party') {
         c.globalAlpha = Math.min(1, (1.2 - event.age) * 3)
         for (let n = 0; n < 8; n++) {
           const angle = n * Math.PI / 4
@@ -137,7 +142,8 @@ export class FloorRenderer {
     const p = walkSheetPlacement(frame, 0, 0)
     if (this.art.playerWalkImage?.naturalWidth) {
       c.save(); c.translate(actor.x, actor.y)
-      c.scale(frame.flipX ? -.66 : .66, .66)
+      const breath = !actor.moving && !this.art.reducedMotion ? Math.sin(time * 2.4 + (helper ? 1 : 0)) * .008 : 0
+      c.scale(frame.flipX ? -.66 : .66, .66 * (1 + breath))
       c.drawImage(this.art.playerWalkImage, p.sourceX, p.sourceY, p.sourceWidth, p.sourceHeight,
         p.destinationX, p.destinationY - 8.5, p.destinationWidth, p.destinationHeight)
       c.restore()
@@ -149,9 +155,33 @@ export class FloorRenderer {
     if (actor.cones) {
       const sway = actor.moving && !this.art.reducedMotion ? Math.sin(actor.distance / 16) * 2 : 0
       const x = actor.x, y = actor.y - 28 + sway
-      this.box(x - 34, y + 3, 68, 7, ink, 3)
+      this.box(x - 37, y, 74, 12, '#ffe1a5', 6, '#9c765c')
+      this.box(x - 42, y + 1, 9, 10, '#fff3dc', 3, '#9c765c')
+      this.box(x + 33, y + 1, 9, 10, '#fff3dc', 3, '#9c765c')
       for (let n = 0; n < actor.cones; n++) this.cone(x - (actor.cones - 1) * 10 + n * 20, y - n * 3, 28)
     }
+  }
+
+  private partyTable(state: FloorState) {
+    const { x, y } = FLOOR.counters[2]
+    this.shadow(x, y - 26, 82)
+    this.box(x - 55, y - 44, 16, 32, '#aa765d', 4)
+    this.box(x + 39, y - 44, 16, 32, '#aa765d', 4)
+    this.box(x - 85, y - 76, 170, 35, '#ef9eb0', 12)
+    const served = state.save.partyServed ?? 0
+    for (let n = 0; n < FLOOR.party.guests; n++) {
+      const spot = x - 62 + n * 25
+      this.box(spot - 9, y - 66, 18, 8, '#fff9e9', 4, '#d58da0')
+      if (n < served) this.sprite(1, 3, spot - 10, y - 82, 20, 18)
+    }
+    this.ring(x, y, 60, state.player.cones > 0 && served < FLOOR.party.guests)
+    this.text(`PARTY ${served}/${FLOOR.party.guests}`, x, y + 43, 22)
+  }
+
+  private doorway(x: number, y: number, open = true) {
+    this.box(x - 28, y - 102, 56, 106, '#b98768', 18)
+    this.box(x - 21, y - 94, 42, 97, open ? '#d8efcf' : '#ecd0a4', 13, '#986e55')
+    this.box(x - 34, y - 2, 68, 12, '#fff2d5', 4, '#b69a79')
   }
 
   private room(state: FloorState) {
@@ -175,20 +205,32 @@ export class FloorRenderer {
       c.fillRect(32 + i * 48, 185, 48, 28)
       c.beginPath(); c.arc(56 + i * 48, 213, 24, 0, Math.PI); c.fill()
     }
+    this.doorway(FLOOR.entranceX, 315)
+    this.doorway(FLOOR.staffDoor.x, FLOOR.staffDoor.y, state.save.helper)
     if (this.art.roomFloorProp.naturalWidth) {
       c.drawImage(this.art.roomFloorProp, 45, 504, 46, 64)
-      c.drawImage(this.art.roomFloorProp, 550, 504, 46, 64)
     }
     if (state.save.patio) {
       const build = state.events.find(e => e.kind === 'build')
       const reveal = build && !this.art.reducedMotion ? Math.min(1, build.age / .5) : 1
       c.save(); c.globalAlpha = reveal
       this.box(38, 675, 564, 12, '#9c765c', 3)
-      this.text('THE PATIO', 320, 723, 25, '#466957')
-      for (const x of [265, 340]) {
+      this.doorway(FLOOR.entranceX, 730)
+      if (!state.save.party) this.text('THE PATIO', 320, 723, 25, '#466957')
+      for (const x of state.save.party ? [] : [265, 340]) {
         this.box(x - 12, 849, 24, 34, '#b98768', 6)
         this.shadow(x, 850, 32)
         this.box(x - 30, 820, 60, 30, '#ffe1a5', 16)
+      }
+      if (state.save.party) {
+        // A real new service spot, not a multiplier: the player supplies six guests.
+        c.strokeStyle = '#9c765c'; c.lineWidth = 2
+        c.beginPath(); c.moveTo(200, 700); c.quadraticCurveTo(285, 740, 375, 700); c.stroke()
+        for (let n = 0; n < 6; n++) {
+          const x = 210 + n * 30, y = 707 + Math.sin(n / 5 * Math.PI) * 15
+          c.fillStyle = n % 2 ? '#f7cf68' : '#eb92a9'
+          c.beginPath(); c.moveTo(x, y); c.lineTo(x + 19, y); c.lineTo(x + 9, y + 22); c.fill()
+        }
       }
       c.restore()
     } else {
