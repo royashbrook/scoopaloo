@@ -900,10 +900,10 @@ canvas {
     grid-template-rows: repeat(2, minmax(0, 1fr));
     min-height: 0;
   }
-  .inventory-readout.is-empty { min-height: 0; }
+  .inventory-readout.is-empty { min-height: 0; grid-template-rows: minmax(0, 1fr); }
   .inventory-readout.is-empty::after {
     content: "TRAY + COUNTER\A EMPTY";
-    padding: .25rem;
+    padding: 0;
     font-size: 13px;
     line-height: 1;
     text-align: center;

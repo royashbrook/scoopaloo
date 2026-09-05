@@ -3,6 +3,7 @@ import ts from 'typescript'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  build: { rollupOptions: { input: { main: 'index.html', shopFloor: 'shop-floor.html' } } },
   plugins: [{
     name: 'inline-rescue-save-code',
     apply: 'build',

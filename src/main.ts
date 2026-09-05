@@ -8,6 +8,7 @@ import {
   customerPatience,
   directSourceForItem,
   enterShop,
+  endShift,
   goalMet,
   guidedIntro,
   helperInterval,
@@ -130,6 +131,7 @@ let debugPaused = false
 let playerPaused = false
 function setPlayerPaused(on: boolean): void {
   playerPaused = on && state.phase === 'playing'
+  controls.reset()
 }
 
 // entering the shift waits for the world's sprites (#70): pressing play during a
@@ -185,6 +187,14 @@ const shiftUi = new ShiftUi(shiftRoot, {
     }
   },
   pause: setPlayerPaused,
+  end: () => {
+    if (playerPaused && endShift(state)) {
+      setPlayerPaused(false)
+      storeSave(state.save)
+    }
+  },
+  save: () => saveButton?.click(),
+  sound: () => soundButton?.click(),
 })
 canvas.setAttribute('aria-label', 'Scoopaloo ice cream stand game. Drag anywhere to move, or use W A S D or arrow keys. Walk into dashed rings to pick up and use stations automatically. Stay at prep until an order is finished.')
 let previous = performance.now()
