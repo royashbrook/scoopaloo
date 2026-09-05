@@ -20,7 +20,8 @@ dialog p { font-family: system-ui, sans-serif; font-size: 16px; line-height: 1.4
 dialog button, dialog .button { display: block; width: 100%; margin: 10px 0; }
 #resume { background: #63cdb4; }
 .preview-note { font-size: 13px; }
-.maker-mark a { display: inline-flex; min-height: 44px; align-items: center; color: #12664e; }
+.maker-mark { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; justify-content: center; }
+.maker-mark a { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; color: #12664e; }
 [hidden] { display: none !important; }
 @media (max-width: 370px) { #milestone { font-size: 12px; padding: 7px; } .floor-guidance p { font-size: 15px; } }
 @media (prefers-reduced-motion: reduce) { button:active, .button:active { transform: none; } }
