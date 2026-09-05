@@ -10,6 +10,8 @@ import { backingSize, type Viewport } from './viewport'
 const canvas = document.querySelector<HTMLCanvasElement>('#floor')!
 const pause = document.querySelector<HTMLDialogElement>('#pause-dialog')!
 const about = document.querySelector<HTMLDialogElement>('#about-dialog')!
+const party = document.querySelector<HTMLDialogElement>('#party-dialog')!
+const newShop = document.querySelector<HTMLDialogElement>('#new-shop-dialog')!
 const storage = floorStorage()
 const state = createFloor(storage.load())
 const sound = new GameSound()
@@ -20,7 +22,7 @@ const milestone = document.querySelector<HTMLElement>('#milestone')!
 const warning = document.querySelector<HTMLElement>('#storage-warning')!
 const resume = document.querySelector<HTMLButtonElement>('#resume')!
 const restart = document.querySelector<HTMLButtonElement>('#restart-preview')!
-let completionShown = floorComplete(state), completedAt = 0, restartArmed = false
+let completionShown = floorComplete(state), completedAt = 0, celebrationAge = 0
 let ready = false
 let view: Viewport
 
@@ -46,27 +48,29 @@ const heard = new WeakSet<object>()
 function persist() { warning.hidden = storage.store(floorCheckpoint(state)) }
 function pauseShop() {
   state.paused = true
-  if (floorComplete(state)) completionShown = true
   controls.reset()
   persist()
-  document.querySelector('#pause-title')!.textContent = floorComplete(state) ? 'PARTY COMPLETE!' : 'SHOP PAUSED'
-  document.querySelector('#pause-copy')!.textContent = floorComplete(state)
-    ? 'Six happy friends! Your little shop is open. Keep serving, or build a new one.' : 'Your shop waits for you.'
+  // A hidden/blurred celebration is already safely paused. Do not cover its
+  // choice with a second pause sheet or relabel every later pause as a win.
+  if (party.open || newShop.open) return
   if (!pause.open) pause.showModal()
 }
 document.querySelector('#pause')!.addEventListener('click', pauseShop)
-resume.addEventListener('click', () => {
+function resumeShop() {
   if (document.hidden) return
-  controls.reset(); pause.close(); state.paused = false; sound.unlock(); canvas.focus()
-})
+  controls.reset(); pause.close(); party.close(); state.paused = false; sound.unlock(); canvas.focus()
+}
+resume.addEventListener('click', resumeShop)
+document.querySelector('#keep-serving')!.addEventListener('click', resumeShop)
 pause.addEventListener('cancel', event => { event.preventDefault(); resume.click() })
-pause.addEventListener('close', () => { restartArmed = false; restart.textContent = 'START A NEW SHOP' })
-restart.addEventListener('click', () => {
-  if (!restartArmed) { restartArmed = true; restart.textContent = 'NEW SHOP? TAP AGAIN'; return }
+party.addEventListener('cancel', event => { event.preventDefault(); resumeShop() })
+restart.addEventListener('click', () => newShop.showModal())
+document.querySelector('#party-new-shop')!.addEventListener('click', () => newShop.showModal())
+document.querySelector('#cancel-new-shop')!.addEventListener('click', () => newShop.close())
+document.querySelector('#confirm-new-shop')!.addEventListener('click', () => {
   Object.assign(state, createFloor())
-  completionShown = false; completedAt = 0; restartArmed = false
-  restart.textContent = 'START A NEW SHOP'
-  pauseShop()
+  completionShown = false; completedAt = 0; celebrationAge = 0
+  newShop.close(); persist(); resumeShop()
 })
 document.querySelector('#about')!.addEventListener('click', () => about.showModal())
 document.querySelector('#close-about')!.addEventListener('click', () => about.close())
@@ -98,9 +102,15 @@ function frame(now: number) {
   if (floorComplete(state) && !completionShown) {
     completedAt ||= state.time
     // Let the last cone and payment land before celebrating the finished little arc.
-    if (state.time - completedAt >= .8) { completionShown = true; pauseShop(); sound.play('success') }
+    if (!state.paused && state.time - completedAt >= .8) {
+      completionShown = true; state.paused = true; controls.reset(); persist()
+      celebrationAge = 0; party.showModal(); sound.play('success')
+    }
   }
-  renderer.draw(state, view, controls.joystick)
+  // Only the brief celebration moves while the shop is paused. Its clock
+  // stops while hidden or confirming reset; it never advances money or time.
+  if (party.open && !newShop.open && !document.hidden && document.hasFocus()) celebrationAge = Math.min(2.4, celebrationAge + dt)
+  renderer.draw(state, view, controls.joystick, party.open ? celebrationAge : null)
   const message = ready ? floorHint(state) : 'Loading your shop…'
   if (hint.textContent !== message) hint.textContent = message
   cash.textContent = String(state.save.cash)

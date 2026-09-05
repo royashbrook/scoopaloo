@@ -19,6 +19,13 @@ dialog h1, dialog h2 { font-size: 28px; margin: 0 0 12px; }
 dialog p { font-family: system-ui, sans-serif; font-size: 16px; line-height: 1.45; }
 dialog button, dialog .button { display: block; width: 100%; margin: 10px 0; }
 #resume { background: #63cdb4; }
+#party-dialog { margin: max(76px, calc(env(safe-area-inset-top) + 64px)) auto auto; padding: 16px; border-color: #137b64; background: #fff3b4; }
+#party-dialog::backdrop { background: transparent; }
+#party-dialog h1 { font-size: 25px; margin-bottom: 6px; }
+#party-dialog p { margin: 6px 0 12px; }
+.party-actions { display: flex; gap: 10px; }
+.party-actions button { flex: 1; margin: 0; padding: 10px 8px; font-size: 16px; }
+#keep-serving { background: #63cdb4; }
 .preview-note { font-size: 13px; }
 .maker-mark { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; justify-content: center; }
 .maker-mark a { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; color: #12664e; }

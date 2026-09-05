@@ -1,5 +1,5 @@
 import { Renderer, walkSheetFrame, walkSheetPlacement } from './render'
-import { FLOOR, nextFloorPurchase, type FloorState, type Walker } from './shop-floor'
+import { FLOOR, floorComplete, nextFloorPurchase, type FloorState, type Walker } from './shop-floor'
 import type { GameSkin } from './skin'
 import type { Viewport } from './viewport'
 
@@ -42,7 +42,7 @@ export class FloorRenderer {
     c.setLineDash([9, 8]); c.beginPath(); c.ellipse(x, y, width, width * .4, 0, 0, Math.PI * 2); c.stroke(); c.restore()
   }
 
-  draw(state: FloorState, view: Viewport, joystick: { active: boolean; origin: { x: number; y: number }; current: { x: number; y: number } }) {
+  draw(state: FloorState, view: Viewport, joystick: { active: boolean; origin: { x: number; y: number }; current: { x: number; y: number } }, celebrationAge: number | null = null) {
     const c = this.ctx, k = view.scale * view.dpr
     c.setTransform(1, 0, 0, 1, 0, 0)
     c.fillStyle = '#cce8d3'; c.fillRect(0, 0, this.canvas.width, this.canvas.height)
@@ -80,11 +80,22 @@ export class FloorRenderer {
     }))
     for (let lane = 0; lane < (state.save.party ? 3 : state.save.patio ? 2 : 1); lane++) {
       const pos = FLOOR.counters[lane]
-      actors.push({ y: pos.y - 25, draw: () => lane === 2 ? this.partyTable(state) : this.counter(pos.x, pos.y, state.player.cones > 0) })
+      actors.push({ y: pos.y - 25, draw: () => lane === 2 ? this.partyTable(state, celebrationAge) : this.counter(pos.x, pos.y, state.player.cones > 0) })
     }
     actors.push({ y: state.player.y, draw: () => this.actor(state.player, false, state.time) })
     if (state.save.helper) actors.push({ y: state.helper.y, draw: () => this.actor(state.helper, true, state.time) })
     actors.sort((a, b) => a.y - b.y).forEach(actor => actor.draw())
+    if (celebrationAge !== null && !this.art.reducedMotion && celebrationAge < 2.4) {
+      const { x, y } = FLOOR.counters[2]
+      c.save(); c.globalAlpha = Math.min(1, (2.4 - celebrationAge) * 2)
+      for (let n = 0; n < 12; n++) {
+        const angle = n * Math.PI / 6
+        const radius = 25 + celebrationAge * 48
+        this.sprite(2, 3, x + Math.cos(angle) * radius - 12,
+          y - 65 + Math.sin(angle) * radius * .45 - celebrationAge * 25, 24, 24)
+      }
+      c.restore()
+    }
     for (const customer of state.customers.filter(c => !c.leaving && c.x <= FLOOR.counters[c.lane].x + 6)) {
       this.box(customer.x - 40, customer.y - 165, 80, 67, '#fffcf5', 20)
       this.cone(customer.x - 8, customer.y - 131, 28)
@@ -162,20 +173,31 @@ export class FloorRenderer {
     }
   }
 
-  private partyTable(state: FloorState) {
+  private partyTable(state: FloorState, celebrationAge: number | null) {
     const { x, y } = FLOOR.counters[2]
+    const served = state.save.partyServed ?? 0
     this.shadow(x, y - 26, 82)
+    this.box(x - 125, y - 58, 250, 19, '#ffe1a5', 8, '#9c765c')
+    // Each served friend joins the bench. The completed room stays populated
+    // after KEEP SERVING or a reload, not just during the win panel.
+    for (let n = 0; n < served; n++) {
+      const spot = x - 105 + n * 42
+      const cheer = celebrationAge !== null && celebrationAge < 2.4 && !this.art.reducedMotion
+        ? Math.max(0, Math.sin(celebrationAge * 9 - n * .7)) * 9 : 0
+      this.sprite(n % 4, 1, spot - 24, y - 119 - cheer, 48, 63)
+      this.cone(spot + 12, y - 75 - cheer, 22)
+      if (floorComplete(state)) this.sprite(1, 3, spot - 10, y - 146 - cheer, 20, 18)
+    }
     this.box(x - 55, y - 44, 16, 32, '#aa765d', 4)
     this.box(x + 39, y - 44, 16, 32, '#aa765d', 4)
     this.box(x - 85, y - 76, 170, 35, '#ef9eb0', 12)
-    const served = state.save.partyServed ?? 0
     for (let n = 0; n < FLOOR.party.guests; n++) {
       const spot = x - 62 + n * 25
       this.box(spot - 9, y - 66, 18, 8, '#fff9e9', 4, '#d58da0')
       if (n < served) this.sprite(1, 3, spot - 10, y - 82, 20, 18)
     }
     this.ring(x, y, 60, state.player.cones > 0 && served < FLOOR.party.guests)
-    this.text(`PARTY ${served}/${FLOOR.party.guests}`, x, y + 43, 22)
+    this.text(floorComplete(state) ? 'THANK YOU!' : `PARTY ${served}/${FLOOR.party.guests}`, x, y + 43, 22)
   }
 
   private doorway(x: number, y: number, open = true) {

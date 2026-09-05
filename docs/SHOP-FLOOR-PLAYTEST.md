@@ -8,6 +8,8 @@ Can a child understand the action from the scene, enjoy repeating it, and see wh
 
 The slice is one small complete arc: patio, helper, then a party table and six friends personally served by the player. The helper keeps the original counter earning while the player hosts the party. A clear celebration marks completion; continuing or starting a new preview shop is a choice, not an unannounced cash-only dead end. More shops, machines, skins or engine work wait until this interaction is worth repeating.
 
+At six friends, watch the floor as well as the words: the guests now stay at their bench, briefly cheer with a small star burst, and a separate two-choice panel leaves the room undimmed. The simulation stays paused. Reduced motion keeps the earned group and hearts but removes the burst and hops. KEEP SERVING is free play with the same completed shop, not a promise of more unlocks. NEW SHOP asks for confirmation with CANCEL and starts immediately after confirmation. Later manual pauses are ordinary pauses, not another win.
+
 ## before inviting anyone to test
 
 - Record the exact build and hosted preview URL. Check it on the actual phone/tablet viewport, with browser controls/safe areas present. Do not test a stale installed shortcut.

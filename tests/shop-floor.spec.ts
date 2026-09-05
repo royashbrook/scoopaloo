@@ -61,6 +61,8 @@ test('real controls: earn the patio, hire Pip, buy a party table and serve all s
     await expect.poll(async () => (await snapshot(page)).save.partyServed, { timeout: 10000 }).toBe(count)
   }
   await expect(page.getByRole('dialog', { name: 'PARTY COMPLETE!' })).toBeVisible()
+  await expect(page.locator('#pause-dialog')).not.toBeVisible()
+  expect(await page.locator('#party-dialog button').count()).toBe(2)
   await page.screenshot({ path: 'test-results/shop-floor-party-complete-iphone.png' })
   const complete = await snapshot(page)
   expect(complete.paused).toBe(true)
@@ -143,9 +145,76 @@ test('idle life respects reduced motion and a new-shop reset touches only the pr
   await page.getByRole('button', { name: 'Pause shop' }).click()
   await page.getByRole('button', { name: 'START A NEW SHOP', exact: true }).click()
   expect((await snapshot(page)).player.cones).toBe(3)
-  await page.getByRole('button', { name: 'NEW SHOP? TAP AGAIN', exact: true }).click()
+  await page.getByRole('button', { name: 'CANCEL', exact: true }).click()
+  expect((await snapshot(page)).player.cones).toBe(3)
+  await page.getByRole('button', { name: 'START A NEW SHOP', exact: true }).click()
+  await page.getByRole('button', { name: 'YES, NEW SHOP', exact: true }).click()
   expect((await snapshot(page)).player.cones).toBe(0)
+  await expect(page.locator('#pause-dialog')).not.toBeVisible()
+  expect((await snapshot(page)).paused).toBe(false)
   expect(await page.evaluate(() => localStorage.getItem('scoopaloo_save_v1'))).toBe('keep this campaign')
+})
+
+test('party payoff moves on the floor, not the simulation, and later pauses are ordinary', async ({ page }) => {
+  // Focused presentation fixture only. The full earned-money route above still
+  // proves the sixth friend is reachable through real controls from zero.
+  await page.addInitScript(() => localStorage.setItem('scoopaloo.shop-floor.v1', JSON.stringify({
+    version: 1, cash: 0, served: 10, patio: true, helper: true, party: true, partyServed: 5,
+    player: { x: 285, y: 835, cones: 1 },
+  })))
+  await page.goto('/shop-floor.html')
+  const party = page.getByRole('dialog', { name: 'PARTY COMPLETE!' })
+  await expect(party).toBeVisible()
+  const complete = await snapshot(page)
+  const picture = () => page.locator('canvas').evaluate(el => (el as HTMLCanvasElement).toDataURL())
+  const before = await picture()
+  await page.waitForTimeout(250)
+  expect(await picture()).not.toBe(before)
+  expect(await snapshot(page)).toEqual(complete)
+  expect(await party.evaluate(el => getComputedStyle(el, '::backdrop').backgroundColor)).toBe('rgba(0, 0, 0, 0)')
+  await page.screenshot({ path: 'test-results/shop-floor-celebration-iphone.png' })
+  await page.getByRole('button', { name: 'NEW SHOP', exact: true }).click()
+  await page.getByRole('button', { name: 'CANCEL', exact: true }).click()
+  await expect(party).toBeVisible()
+  expect(await snapshot(page)).toEqual(complete)
+  await page.getByRole('button', { name: 'KEEP SERVING', exact: true }).click()
+  await page.getByRole('button', { name: 'Pause shop' }).click()
+  await expect(page.getByRole('dialog', { name: 'SHOP PAUSED' })).toBeVisible()
+  await expect(party).not.toBeVisible()
+})
+
+test('reduced-motion party stays still, survives hiding, and offers a safe fresh start', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.addInitScript(() => {
+    localStorage.setItem('scoopaloo_save_v1', 'campaign protected')
+    localStorage.setItem('scoopaloo.shop-floor.v1', JSON.stringify({
+      version: 1, cash: 0, served: 10, patio: true, helper: true, party: true, partyServed: 5,
+      player: { x: 285, y: 835, cones: 1 },
+    }))
+  })
+  await page.goto('/shop-floor.html')
+  const party = page.getByRole('dialog', { name: 'PARTY COMPLETE!' })
+  await expect(party).toBeVisible()
+  const complete = await snapshot(page)
+  const picture = () => page.locator('canvas').evaluate(el => (el as HTMLCanvasElement).toDataURL())
+  const before = await picture()
+  await page.waitForTimeout(300)
+  expect(await picture()).toBe(before)
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await page.waitForTimeout(200)
+  expect(await snapshot(page)).toEqual(complete)
+  await expect(page.locator('#pause-dialog')).not.toBeVisible()
+  await page.evaluate(() => Object.defineProperty(document, 'hidden', { value: false, configurable: true }))
+  await page.getByRole('button', { name: 'NEW SHOP', exact: true }).click()
+  await page.getByRole('button', { name: 'YES, NEW SHOP', exact: true }).click()
+  await expect(page.locator('dialog[open]')).toHaveCount(0)
+  await expect(page.locator('#hint')).toContainText('Drag to the cones')
+  expect((await snapshot(page)).save.partyServed ?? 0).toBe(0)
+  expect((await snapshot(page)).paused).toBe(false)
+  expect(await page.evaluate(() => localStorage.getItem('scoopaloo_save_v1'))).toBe('campaign protected')
 })
 
 test('phone and tablet HUD is legible with no viewport overflow', async ({ page }) => {
