@@ -22,7 +22,7 @@ const milestone = document.querySelector<HTMLElement>('#milestone')!
 const warning = document.querySelector<HTMLElement>('#storage-warning')!
 const resume = document.querySelector<HTMLButtonElement>('#resume')!
 const restart = document.querySelector<HTMLButtonElement>('#restart-preview')!
-let completionShown = floorComplete(state), completedAt = 0, celebrationAge = 0
+let completionShown = floorComplete(state), celebrationAge = 0
 let ready = false
 let view: Viewport
 
@@ -69,7 +69,7 @@ document.querySelector('#party-new-shop')!.addEventListener('click', () => newSh
 document.querySelector('#cancel-new-shop')!.addEventListener('click', () => newShop.close())
 document.querySelector('#confirm-new-shop')!.addEventListener('click', () => {
   Object.assign(state, createFloor())
-  completionShown = false; completedAt = 0; celebrationAge = 0
+  completionShown = false; celebrationAge = 0
   newShop.close(); persist(); resumeShop()
 })
 document.querySelector('#about')!.addEventListener('click', () => about.showModal())
@@ -99,13 +99,10 @@ function frame(now: number) {
     sound.play(event.kind === 'build' || event.kind === 'hire' || event.kind === 'party' ? 'buy' : event.kind)
     if (event.kind !== 'pickup') persist()
   }
-  if (floorComplete(state) && !completionShown) {
-    completedAt ||= state.time
-    // Let the last cone and payment land before celebrating the finished little arc.
-    if (!state.paused && state.time - completedAt >= .8) {
-      completionShown = true; state.paused = true; controls.reset(); persist()
-      celebrationAge = 0; party.showModal(); sound.play('success')
-    }
+  // Let the last cone and payment land and fade before celebrating, so none freezes under the cheer.
+  if (floorComplete(state) && !completionShown && !state.paused && !state.events.some(e => e.kind === 'pay')) {
+    completionShown = true; state.paused = true; controls.reset(); persist()
+    celebrationAge = 0; party.showModal(); sound.play('success')
   }
   // Only the brief celebration moves while the shop is paused. Its clock
   // stops while hidden or confirming reset; it never advances money or time.
@@ -114,8 +111,8 @@ function frame(now: number) {
   const message = ready ? floorHint(state) : 'Loading your shop…'
   if (hint.textContent !== message) hint.textContent = message
   cash.textContent = String(state.save.cash)
-  milestone.textContent = floorComplete(state) ? 'PARTY COMPLETE!'
-    : state.save.party ? `PARTY ${state.save.partyServed ?? 0}/${FLOOR.party.guests}`
+  // The dialog proclaims the finish once; the HUD keeps an honest count through free play.
+  milestone.textContent = state.save.party ? `PARTY ${state.save.partyServed ?? 0}/${FLOOR.party.guests}`
     : state.save.helper ? 'A TEAM OF TWO' : state.save.patio ? 'PATIO OPEN!' : 'YOUR LITTLE SHOP'
   saveClock += dt
   if (saveClock >= 1) { saveClock = 0; persist() }

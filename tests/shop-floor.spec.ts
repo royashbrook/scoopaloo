@@ -158,14 +158,33 @@ test('idle life respects reduced motion and a new-shop reset touches only the pr
 test('party payoff moves on the floor, not the simulation, and later pauses are ordinary', async ({ page }) => {
   // Focused presentation fixture only. The full earned-money route above still
   // proves the sixth friend is reachable through real controls from zero.
-  await page.addInitScript(() => localStorage.setItem('scoopaloo.shop-floor.v1', JSON.stringify({
-    version: 1, cash: 0, served: 10, patio: true, helper: true, party: true, partyServed: 5,
-    player: { x: 285, y: 835, cones: 1 },
-  })))
+  await page.addInitScript(() => {
+    localStorage.setItem('scoopaloo.shop-floor.v1', JSON.stringify({
+      version: 1, cash: 0, served: 10, patio: true, helper: true, party: true, partyServed: 5,
+      player: { x: 285, y: 835, cones: 1 },
+    }))
+    const draws: string[] = []
+    const drawImage = CanvasRenderingContext2D.prototype.drawImage as (...args: unknown[]) => void
+    CanvasRenderingContext2D.prototype.drawImage = function (this: CanvasRenderingContext2D, ...args: unknown[]) {
+      draws.push(`${(args[0] as HTMLImageElement).src} ${args.length === 9 ? args[7] : args[3]}`)
+      return drawImage.apply(this, args)
+    } as typeof CanvasRenderingContext2D.prototype.drawImage
+    Object.assign(window, { __draws: draws })
+  })
   await page.goto('/shop-floor.html')
   const party = page.getByRole('dialog', { name: 'PARTY COMPLETE!' })
   await expect(party).toBeVisible()
   const complete = await snapshot(page)
+  // The sixth friend is on the bench, not also walking out, and no +$20 hangs over the cheer.
+  expect(complete.customers.filter(c => c.lane === 2)).toEqual([])
+  expect(complete.events.filter(e => e.kind === 'pay')).toEqual([])
+  // The cheering bench draws over the player standing at the party ring.
+  const frame = await page.evaluate(() => new Promise<string[]>(done => {
+    const draws = (window as any).__draws as string[]
+    requestAnimationFrame(() => { draws.length = 0; requestAnimationFrame(() => done([...draws])) })
+  }))
+  const afterPlayer = frame.slice(frame.findLastIndex(draw => draw.includes('player-walk')) + 1)
+  expect(afterPlayer.filter(draw => draw.endsWith(' 48'))).toHaveLength(6)
   const picture = () => page.locator('canvas').evaluate(el => (el as HTMLCanvasElement).toDataURL())
   const before = await picture()
   await page.waitForTimeout(250)
@@ -178,6 +197,7 @@ test('party payoff moves on the floor, not the simulation, and later pauses are 
   await expect(party).toBeVisible()
   expect(await snapshot(page)).toEqual(complete)
   await page.getByRole('button', { name: 'KEEP SERVING', exact: true }).click()
+  await expect(page.locator('#milestone')).toHaveText('PARTY 6/6')
   await page.getByRole('button', { name: 'Pause shop' }).click()
   await expect(page.getByRole('dialog', { name: 'SHOP PAUSED' })).toBeVisible()
   await expect(party).not.toBeVisible()

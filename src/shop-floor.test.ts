@@ -68,6 +68,7 @@ describe('continuous shop opening, without teleporting or seeding money', () => 
       walk(state, FLOOR.counters[2])
       for (let ticks = 0; (state.save.partyServed ?? 0) < target && ticks < 1200; ticks++) stepFloor(state, 1 / 60)
       expect(state.save.partyServed).toBe(target)
+      expect(state.customers.some(c => c.lane === 2 && c.leaving)).toBe(false) // a served friend sits, not exits
     }
     expect(floorComplete(state)).toBe(true)
     expect(state.save.cash).toBe(state.save.served * FLOOR.price - 40 - 60 - 160)
