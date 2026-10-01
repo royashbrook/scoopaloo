@@ -85,6 +85,8 @@ export class FloorRenderer {
     actors.push({ y: state.player.y, draw: () => this.actor(state.player, false, state.time) })
     if (state.save.helper) actors.push({ y: state.helper.y, draw: () => this.actor(state.helper, true, state.time) })
     actors.sort((a, b) => a.y - b.y).forEach(actor => actor.draw())
+    // The cheer is the moment's subject: the friends' heads and hearts draw over a player at the ring.
+    if (celebrationAge !== null && state.save.party) this.benchGuests(state, celebrationAge, 'upper')
     if (celebrationAge !== null && !this.art.reducedMotion && celebrationAge < 2.4) {
       const { x, y } = FLOOR.counters[2]
       c.save(); c.globalAlpha = Math.min(1, (2.4 - celebrationAge) * 2)
@@ -178,16 +180,7 @@ export class FloorRenderer {
     const served = state.save.partyServed ?? 0
     this.shadow(x, y - 26, 82)
     this.box(x - 125, y - 58, 250, 19, '#ffe1a5', 8, '#9c765c')
-    // Each served friend joins the bench. The completed room stays populated
-    // after KEEP SERVING or a reload, not just during the win panel.
-    for (let n = 0; n < served; n++) {
-      const spot = x - 105 + n * 42
-      const cheer = celebrationAge !== null && celebrationAge < 2.4 && !this.art.reducedMotion
-        ? Math.max(0, Math.sin(celebrationAge * 9 - n * .7)) * 9 : 0
-      this.sprite(n % 4, 1, spot - 24, y - 119 - cheer, 48, 63)
-      this.cone(spot + 12, y - 75 - cheer, 22)
-      if (floorComplete(state)) this.sprite(1, 3, spot - 10, y - 146 - cheer, 20, 18)
-    }
+    this.benchGuests(state, celebrationAge, celebrationAge === null ? undefined : 'lower')
     this.box(x - 55, y - 44, 16, 32, '#aa765d', 4)
     this.box(x + 39, y - 44, 16, 32, '#aa765d', 4)
     this.box(x - 85, y - 76, 170, 35, '#ef9eb0', 12)
@@ -198,6 +191,25 @@ export class FloorRenderer {
     }
     this.ring(x, y, 60, state.player.cones > 0 && served < FLOOR.party.guests)
     this.text(floorComplete(state) ? 'THANK YOU!' : `PARTY ${served}/${FLOOR.party.guests}`, x, y + 43, 22)
+  }
+
+  // Each served friend joins the bench. The completed room stays populated
+  // after KEEP SERVING or a reload, not just during the win panel. During the
+  // cheer they draw in two parts split above the table's hearts, so the tabletop
+  // still seats them while the upper part stays visible over the player.
+  private benchGuests(state: FloorState, celebrationAge: number | null, part?: 'upper' | 'lower') {
+    const c = this.ctx, { x, y } = FLOOR.counters[2]
+    c.save()
+    if (part) { c.beginPath(); c.rect(x - 130, part === 'upper' ? 0 : y - 82, 260, part === 'upper' ? y - 82 : 100); c.clip() }
+    for (let n = 0; n < (state.save.partyServed ?? 0); n++) {
+      const spot = x - 105 + n * 42
+      const cheer = celebrationAge !== null && celebrationAge < 2.4 && !this.art.reducedMotion
+        ? Math.max(0, Math.sin(celebrationAge * 9 - n * .7)) * 9 : 0
+      this.sprite(n % 4, 1, spot - 24, y - 119 - cheer, 48, 63)
+      this.cone(spot + 12, y - 75 - cheer, 22)
+      if (floorComplete(state)) this.sprite(1, 3, spot - 10, y - 146 - cheer, 20, 18)
+    }
+    c.restore()
   }
 
   private doorway(x: number, y: number, open = true) {

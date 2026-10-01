@@ -139,7 +139,11 @@ function interact(state: FloorState, actor: Walker, dt: number, helper = false):
   customer.age = 0
   state.save.cash += FLOOR.price
   state.save.served++
-  if (customer.lane === 2) state.save.partyServed = (state.save.partyServed ?? 0) + 1
+  // A served party friend takes a bench seat at once instead of also walking out.
+  if (customer.lane === 2) {
+    state.save.partyServed = (state.save.partyServed ?? 0) + 1
+    state.customers = state.customers.filter(c => c !== customer)
+  }
   if (helper) state.helperServed++
   state.events.push({ kind: 'pay', x: FLOOR.counters[customer.lane].x, y: customer.y - 100,
     from: { x: actor.x, y: actor.y - 45 }, age: 0, helper })

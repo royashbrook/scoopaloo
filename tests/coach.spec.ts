@@ -151,6 +151,8 @@ async function expectReadyFits(page: Page): Promise<void> {
 }
 
 async function expectPlayingFits(page: Page): Promise<void> {
+  // the panel lays out a frame after START SHIFT; measure it once it has a width, then exactly
+  await expect.poll(() => page.locator('.order-panel').evaluate(e => e.getBoundingClientRect().width)).toBeGreaterThan(0)
   const layout = await page.evaluate(() => {
     const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect()
     const panel = box('.order-panel')
